@@ -286,20 +286,20 @@
     <div class="summary-row">
       <div class="summary-item">
         <p class="summary-label">Billed</p>
-        <p class="summary-value">₹16,220</p>
+        <p class="summary-value">₹10,460</p>
       </div>
       <div class="summary-divider"></div>
       <div class="summary-item">
         <p class="summary-label">Received</p>
-        <p class="summary-value paid">₹5,000</p>
+        <p class="summary-value paid">₹0</p>
       </div>
       <div class="summary-divider"></div>
       <div class="summary-item">
         <p class="summary-label">Outstanding</p>
-        <p class="summary-value due">₹11,220</p>
+        <p class="summary-value due">₹10,460</p>
       </div>
     </div>
-    <p class="summary-updated">as of 23 Aug 2026 · 1 customer on the books</p>
+    <p class="summary-updated">as of 19 Aug 2026 · 1 customer on the books</p>
   </div>
 
   <div class="cards" id="cards"></div>
@@ -309,60 +309,56 @@
 <script>
 const data = [
   {
-    name: "SRS Hostels",
-    billed: 16220,
-    paid: 5000,
-    due: 11220,
-    status: "pending",
-    txns: [
+    "name": "SRS Hostels",
+    "billed": 10460,
+    "paid": 0,
+    "due": 10460,
+    "status": "pending",
+    "txns": [
       {
-        date: "19 Aug 2026",
-        title: "Bill",
-        type: "bill",
-        amount: 10460,
-        balanceAfter: 10460,
-        items: [
-          ["Bendi (Okra)", "65 kg × 40 = 2600"],
-          ["Chikkudu (Flat beans)", "20 kg × 60 = 1200"],
-          ["Tomata (Tomato)", "2 bags × 400 = 800"],
-          ["Onion", "54 kg × 50 = 2700"],
-          ["Mashroom (Mushroom)", "20 pkt × 60 = 1200"],
-          ["Kothimeera (Coriander)", "30 pcs × 25 = 750"],
-          ["Pudeena (Mint)", "40 × 25 = 1000"],
-          ["Karivepak (Curry leaves)", "2 kg × 50 = 100"],
-          ["Hamali (loading)", "110"]
-        ]
-      },
-      {
-        date: "21 Aug 2026",
-        title: "Bill No. 5800",
-        type: "bill",
-        amount: 1400,
-        balanceAfter: 11860,
-        items: [
-          ["Potato", "47 kg @130/10kg = 611"],
-          ["Mirchi (Chili)", "15 kg @40/10kg = 600"],
-          ["Palakura (Spinach)", "150"],
-          ["Hamali (loading)", "40"]
-        ]
-      },
-      {
-        date: "22 Aug 2026",
-        title: "Payment received",
-        type: "payment",
-        amount: 5000,
-        balanceAfter: 6860,
-        items: []
-      },
-      {
-        date: "23 Aug 2026",
-        title: "New bill",
-        type: "bill",
-        amount: 4360,
-        balanceAfter: 11220,
-        items: [
-          ["Items", "written in Telugu script — send names to itemize"]
-        ]
+        "title": "Bill",
+        "type": "bill",
+        "amount": 10460.0,
+        "items": [
+          [
+            "Bendi (Okra)",
+            "65 kg × 40 = 2600"
+          ],
+          [
+            "Chikkudu (Flat beans)",
+            "20 kg × 60 = 1200"
+          ],
+          [
+            "Tomata (Tomato)",
+            "2 bags × 400 = 800"
+          ],
+          [
+            "Onion",
+            "54 kg × 50 = 2700"
+          ],
+          [
+            "Mashroom (Mushroom)",
+            "20 pkt × 60 = 1200"
+          ],
+          [
+            "Kothimeera (Coriander)",
+            "30 pcs × 25 = 750"
+          ],
+          [
+            "Pudeena (Mint)",
+            "40 × 25 = 1000"
+          ],
+          [
+            "Karivepak (Curry leaves)",
+            "2 kg × 50 = 100"
+          ],
+          [
+            "Hamali (loading)",
+            "110"
+          ]
+        ],
+        "balanceAfter": 10460.0,
+        "date": "19 Aug 2026"
       }
     ]
   }
