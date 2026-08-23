@@ -286,20 +286,20 @@
     <div class="summary-row">
       <div class="summary-item">
         <p class="summary-label">Billed</p>
-        <p class="summary-value">₹10,460</p>
+        <p class="summary-value">₹16,220</p>
       </div>
       <div class="summary-divider"></div>
       <div class="summary-item">
         <p class="summary-label">Received</p>
-        <p class="summary-value paid">₹0</p>
+        <p class="summary-value paid">₹5,000</p>
       </div>
       <div class="summary-divider"></div>
       <div class="summary-item">
         <p class="summary-label">Outstanding</p>
-        <p class="summary-value due">₹10,460</p>
+        <p class="summary-value due">₹11,220</p>
       </div>
     </div>
-    <p class="summary-updated">as of 19 Aug 2026 · 1 customer on the books</p>
+    <p class="summary-updated">as of 23 Aug 2026 · 1 customer on the books</p>
   </div>
 
   <div class="cards" id="cards"></div>
@@ -310,9 +310,9 @@
 const data = [
   {
     "name": "SRS Hostels",
-    "billed": 10460,
-    "paid": 0,
-    "due": 10460,
+    "billed": 16220,
+    "paid": 5000,
+    "due": 11220,
     "status": "pending",
     "txns": [
       {
@@ -359,6 +359,52 @@ const data = [
         ],
         "balanceAfter": 10460.0,
         "date": "19 Aug 2026"
+      },
+      {
+        "title": "Bill No. 5800",
+        "type": "bill",
+        "amount": 1400.0,
+        "items": [
+          [
+            "Potato",
+            "47 kg @130/10kg = 611"
+          ],
+          [
+            "Mirchi (Chili)",
+            "15 kg @40/10kg = 600"
+          ],
+          [
+            "Palakura (Spinach)",
+            "150"
+          ],
+          [
+            "Hamali (loading)",
+            "40"
+          ]
+        ],
+        "balanceAfter": 11860.0,
+        "date": "21 Aug 2026"
+      },
+      {
+        "title": "Payment received",
+        "type": "payment",
+        "amount": 5000.0,
+        "items": [],
+        "balanceAfter": 6860.0,
+        "date": "22 Aug 2026"
+      },
+      {
+        "title": "Bill",
+        "type": "bill",
+        "amount": 4360.0,
+        "items": [
+          [
+            "Items",
+            "written in Telugu script — send names to itemize"
+          ]
+        ],
+        "balanceAfter": 11220.0,
+        "date": "23 Aug 2026"
       }
     ]
   }
