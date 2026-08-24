@@ -139,3 +139,21 @@ export async function saveBill(bill: BillData): Promise<void> {
     `;
   }
 }
+
+export async function recordPayment(customerName: string, date: string, amount: number, notes: string): Promise<void> {
+  const sql = getSql();
+
+  const [customer] = await sql`
+    INSERT INTO customers (name)
+    VALUES (${customerName})
+    ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+    RETURNING id
+  `;
+
+  if (!customer) throw new Error('Could not upsert customer');
+
+  await sql`
+    INSERT INTO transactions (customer_id, date, bill_no, bill_amount, amount_paid, notes, image_path)
+    VALUES (${customer.id}, ${date}, NULL, 0, ${amount}, ${notes || 'Payment received'}, NULL)
+  `;
+}

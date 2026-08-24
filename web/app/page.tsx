@@ -29,12 +29,20 @@ export default async function Home() {
             {configured ? 'Live from Neon' : 'Preview from local CSV'}
           </p>
         </div>
-        <a
-          href="/upload"
-          className="rounded-lg bg-[#8b2e2e] px-4 py-2 text-white hover:bg-[#6b2222]"
-        >
-          Upload bill
-        </a>
+        <div className="flex gap-2">
+          <a
+            href="/payment"
+            className="rounded-lg bg-[#2d6b4f] px-4 py-2 text-white hover:bg-[#22513a]"
+          >
+            Record payment
+          </a>
+          <a
+            href="/upload"
+            className="rounded-lg bg-[#8b2e2e] px-4 py-2 text-white hover:bg-[#6b2222]"
+          >
+            Upload bill
+          </a>
+        </div>
       </header>
 
       <section className="mb-8 grid grid-cols-3 gap-4">
