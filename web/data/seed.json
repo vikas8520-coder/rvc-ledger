@@ -1,0 +1,155 @@
+[
+  {
+    "name": "SRS Hostels",
+    "billed": 16220.0,
+    "paid": 5000.0,
+    "due": 11220.0,
+    "status": "pending",
+    "txns": [
+      {
+        "title": "Bill",
+        "type": "bill",
+        "amount": 10460.0,
+        "balanceAfter": 10460.0,
+        "date": "2026-08-19",
+        "items": [
+          [
+            "Bendi (Okra)",
+            "65 kg × 40 = 2600"
+          ],
+          [
+            "Chikkudu (Flat beans)",
+            "20 kg × 60 = 1200"
+          ],
+          [
+            "Tomata (Tomato)",
+            "2 bags × 400 = 800"
+          ],
+          [
+            "Onion",
+            "54 kg × 50 = 2700"
+          ],
+          [
+            "Mashroom (Mushroom)",
+            "20 pkt × 60 = 1200"
+          ],
+          [
+            "Kothimeera (Coriander)",
+            "30 pcs × 25 = 750"
+          ],
+          [
+            "Pudeena (Mint)",
+            "40 × 25 = 1000"
+          ],
+          [
+            "Karivepak (Curry leaves)",
+            "2 kg × 50 = 100"
+          ],
+          [
+            "Hamali (loading)",
+            "110"
+          ]
+        ]
+      },
+      {
+        "title": "Bill No. 5800",
+        "type": "bill",
+        "amount": 1400.0,
+        "balanceAfter": 11860.0,
+        "date": "2026-08-21",
+        "items": [
+          [
+            "Potato",
+            "47 kg @130/10kg = 611"
+          ],
+          [
+            "Mirchi (Chili)",
+            "15 kg @40/10kg = 600"
+          ],
+          [
+            "Palakura (Spinach)",
+            "150"
+          ],
+          [
+            "Hamali (loading)",
+            "40"
+          ]
+        ]
+      },
+      {
+        "title": "Payment received",
+        "type": "payment",
+        "amount": 5000.0,
+        "balanceAfter": 6860.0,
+        "date": "2026-08-22",
+        "items": [
+          [
+            "Dosakaya (Yellow cucumber)",
+            "30 kg × 20 = 600"
+          ],
+          [
+            "Mirchi (Chili)",
+            "10 kg × 40 = 400"
+          ],
+          [
+            "Ginger",
+            "5 kg × 250 = 1250"
+          ],
+          [
+            "Garlic",
+            "5 kg × 250 = 1250"
+          ],
+          [
+            "Tomato",
+            "1 tray = 350"
+          ],
+          [
+            "Chanagadda (Sweet potato)",
+            "15 kg × 30 = 450"
+          ],
+          [
+            "Hamali (loading)",
+            "60"
+          ]
+        ]
+      },
+      {
+        "title": "Bill",
+        "type": "bill",
+        "amount": 4360.0,
+        "balanceAfter": 11220.0,
+        "date": "2026-08-22",
+        "items": [
+          [
+            "Dosakaya (Yellow cucumber)",
+            "30 kg × 20 = 600"
+          ],
+          [
+            "Mirchi (Chili)",
+            "10 kg × 40 = 400"
+          ],
+          [
+            "Ginger",
+            "5 kg × 250 = 1250"
+          ],
+          [
+            "Garlic",
+            "5 kg × 250 = 1250"
+          ],
+          [
+            "Tomato",
+            "1 tray = 350"
+          ],
+          [
+            "Chanagadda (Sweet potato)",
+            "15 kg × 30 = 450"
+          ],
+          [
+            "Hamali (loading)",
+            "60"
+          ]
+        ]
+      }
+    ]
+  }
+]
