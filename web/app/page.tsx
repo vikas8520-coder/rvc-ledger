@@ -1,5 +1,6 @@
 import { getCustomers, isDbConfigured } from '@/lib/db';
 import { Customer } from '@/lib/types';
+import DeleteButton from './components/DeleteButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,9 +99,10 @@ export default async function Home() {
                       ))}
                     </ul>
                   )}
-                  <p className="mt-1 text-right text-xs text-[#8a7a6a]">
-                    balance after: {fmt(t.balanceAfter)}
-                  </p>
+                  <div className="mt-1 flex items-center justify-end gap-3 text-xs">
+                    <span className="text-[#8a7a6a]">balance after: {fmt(t.balanceAfter)}</span>
+                    <DeleteButton id={t.id} />
+                  </div>
                 </div>
               ))}
             </div>

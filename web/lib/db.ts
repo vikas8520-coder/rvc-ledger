@@ -157,3 +157,9 @@ export async function recordPayment(customerName: string, date: string, amount: 
     VALUES (${customer.id}, ${date}, NULL, 0, ${amount}, ${notes || 'Payment received'}, NULL)
   `;
 }
+
+export async function deleteTransaction(id: string): Promise<void> {
+  const sql = getSql();
+  await sql`DELETE FROM bill_items WHERE transaction_id = ${id}`;
+  await sql`DELETE FROM transactions WHERE id = ${id}`;
+}
