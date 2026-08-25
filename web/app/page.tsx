@@ -1,8 +1,10 @@
-import { getCustomers, isDbConfigured } from '@/lib/db';
+'use client';
+
+import { useEffect, useState } from 'react';
 import { Customer } from '@/lib/types';
 import DeleteButton from './components/DeleteButton';
-
-export const dynamic = 'force-dynamic';
+import LanguageSwitcher from './components/LanguageSwitcher';
+import { useI18n } from './components/I18nProvider';
 
 function fmt(n: number): string {
   return '₹' + n.toLocaleString('en-IN');
@@ -14,55 +16,85 @@ function fmtDate(d: string): string {
   return dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-export default async function Home() {
-  const customers: Customer[] = await getCustomers().catch(() => []);
+export default function Home() {
+  const { t } = useI18n();
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [configured, setConfigured] = useState(true);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/dashboard')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setCustomers(data);
+          setConfigured(true);
+        } else if (data.customers) {
+          setCustomers(data.customers);
+          setConfigured(data.configured ?? true);
+        }
+      })
+      .catch(() => setConfigured(false))
+      .finally(() => setLoading(false));
+  }, []);
+
   const totalBilled = customers.reduce((s, c) => s + c.billed, 0);
   const totalPaid = customers.reduce((s, c) => s + c.paid, 0);
   const totalDue = customers.reduce((s, c) => s + c.due, 0);
-  const configured = isDbConfigured();
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-[#f5f0e6] p-6 text-[#3a2f2f]">
+        <p className="text-center text-[#8a7a6a]">{t('loading')}</p>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-[#f5f0e6] p-6 text-[#3a2f2f]">
       <header className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">RVC Ledger</h1>
+          <h1 className="text-2xl font-bold">{t('appTitle')}</h1>
           <p className="text-sm text-[#8a7a6a]">
-            {configured ? 'Live from Neon' : 'Preview from local CSV'}
+            {configured ? t('liveFrom') : 'Preview from local CSV'}
           </p>
         </div>
-        <div className="flex gap-2">
-          <a
-            href="/payment"
-            className="rounded-lg bg-[#2d6b4f] px-4 py-2 text-white hover:bg-[#22513a]"
-          >
-            Record payment
-          </a>
-          <a
-            href="/upload"
-            className="rounded-lg bg-[#8b2e2e] px-4 py-2 text-white hover:bg-[#6b2222]"
-          >
-            Upload bill
-          </a>
+        <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+          <LanguageSwitcher />
+          <div className="flex gap-2">
+            <a
+              href="/payment"
+              className="rounded-lg bg-[#2d6b4f] px-4 py-2 text-white hover:bg-[#22513a]"
+            >
+              {t('recordPayment')}
+            </a>
+            <a
+              href="/upload"
+              className="rounded-lg bg-[#8b2e2e] px-4 py-2 text-white hover:bg-[#6b2222]"
+            >
+              {t('uploadBill')}
+            </a>
+          </div>
         </div>
       </header>
 
       <section className="mb-8 grid grid-cols-3 gap-4">
         <div className="rounded-2xl bg-[#e8e0d2] p-4 text-center">
-          <p className="text-xs uppercase tracking-wide text-[#7a6a5a]">Billed</p>
+          <p className="text-xs uppercase tracking-wide text-[#7a6a5a]">{t('billed')}</p>
           <p className="text-2xl font-bold">{fmt(totalBilled)}</p>
         </div>
         <div className="rounded-2xl bg-[#e8e0d2] p-4 text-center">
-          <p className="text-xs uppercase tracking-wide text-[#7a6a5a]">Paid</p>
+          <p className="text-xs uppercase tracking-wide text-[#7a6a5a]">{t('paid')}</p>
           <p className="text-2xl font-bold">{fmt(totalPaid)}</p>
         </div>
         <div className="rounded-2xl bg-[#e8e0d2] p-4 text-center">
-          <p className="text-xs uppercase tracking-wide text-[#7a6a5a]">Due</p>
+          <p className="text-xs uppercase tracking-wide text-[#7a6a5a]">{t('due')}</p>
           <p className="text-2xl font-bold text-[#8b2e2e]">{fmt(totalDue)}</p>
         </div>
       </section>
 
       {customers.length === 0 && (
-        <p className="text-center text-[#8a7a6a]">No bills yet. Upload your first bill to get started.</p>
+        <p className="text-center text-[#8a7a6a]">{t('noCustomers')}</p>
       )}
 
       <section className="space-y-4">
@@ -71,27 +103,27 @@ export default async function Home() {
             <div className="mb-2 flex items-center justify-between border-b border-[#d9d0c2] pb-2">
               <h2 className="text-lg font-semibold">{cust.name}</h2>
               <div className="text-right text-sm">
-                <p>Billed: {fmt(cust.billed)}</p>
-                <p>Paid: {fmt(cust.paid)}</p>
-                <p className="font-semibold text-[#8b2e2e]">Due: {fmt(cust.due)}</p>
+                <p>{t('billed')}: {fmt(cust.billed)}</p>
+                <p>{t('paid')}: {fmt(cust.paid)}</p>
+                <p className="font-semibold text-[#8b2e2e]">{t('due')}: {fmt(cust.due)}</p>
               </div>
             </div>
             <div className="space-y-3">
-              {cust.txns.map((t) => (
-                <div key={t.id} className="rounded-xl bg-[#f5f0e6] p-3">
+              {cust.txns.map((txn) => (
+                <div key={txn.id} className="rounded-xl bg-[#f5f0e6] p-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-[#7a6a5a]">{fmtDate(t.date)}</p>
-                      <p className="font-medium">{t.title}</p>
+                      <p className="text-sm text-[#7a6a5a]">{fmtDate(txn.date)}</p>
+                      <p className="font-medium">{txn.title}</p>
                     </div>
-                    <p className={`font-semibold ${t.type === 'payment' ? 'text-[#2d6b4f]' : 'text-[#3a2f2f]'}`}>
-                      {t.type === 'payment' ? '−' : '+'}
-                      {fmt(t.amount)}
+                    <p className={`font-semibold ${txn.type === 'payment' ? 'text-[#2d6b4f]' : 'text-[#3a2f2f]'}`}>
+                      {txn.type === 'payment' ? '−' : '+'}
+                      {fmt(txn.amount)}
                     </p>
                   </div>
-                  {t.items.length > 0 && (
+                  {txn.items.length > 0 && (
                     <ul className="mt-2 space-y-1 border-t border-[#e8e0d2] pt-2 text-sm">
-                      {t.items.map(([name, detail], idx) => (
+                      {txn.items.map(([name, detail], idx) => (
                         <li key={idx} className="flex justify-between">
                           <span>{name}</span>
                           <span>{detail}</span>
@@ -100,8 +132,8 @@ export default async function Home() {
                     </ul>
                   )}
                   <div className="mt-1 flex items-center justify-end gap-3 text-xs">
-                    <span className="text-[#8a7a6a]">balance after: {fmt(t.balanceAfter)}</span>
-                    <DeleteButton id={t.id} />
+                    <span className="text-[#8a7a6a]">{t('balanceAfter')}: {fmt(txn.balanceAfter)}</span>
+                    <DeleteButton id={txn.id} />
                   </div>
                 </div>
               ))}

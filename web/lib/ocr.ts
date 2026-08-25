@@ -37,11 +37,12 @@ export async function resizeImage(file: File, maxWidth = 1600): Promise<HTMLCanv
 
 export async function recognizeBill(
   file: File,
+  langs: string,
   onProgress?: (msg: OcrProgress) => void
 ): Promise<string> {
   const canvas = await resizeImage(file, 1600);
 
-  const worker = await createWorker('eng+tel+hin', 1, {
+  const worker = await createWorker(langs, 1, {
     langPath: 'https://tessdata.projectnaptha.com/4.0.0_best',
     logger: (m: LoggerMessage) => {
       if (onProgress) {

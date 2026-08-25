@@ -7,6 +7,8 @@ import { ParsedBill } from '@/lib/parser';
 import { BillItem } from '@/lib/types';
 import { classifyScript } from '@/lib/catalog';
 import { distance } from 'fastest-levenshtein';
+import LanguageSwitcher from '../components/LanguageSwitcher';
+import { useI18n } from '../components/I18nProvider';
 
 function fmt(n: number): string {
   return '₹' + n.toLocaleString('en-IN');
@@ -21,6 +23,7 @@ interface EditableItem {
 }
 
 export default function UploadPage() {
+  const { t, ocrLangs } = useI18n();
   const [step, setStep] = useState<'idle' | 'ocr' | 'review' | 'saving' | 'done'>('idle');
   const [file, setFile] = useState<File | null>(null);
   const [progress, setProgress] = useState<OcrProgress | null>(null);
@@ -110,7 +113,7 @@ export default function UploadPage() {
     setProgress(null);
     setSaveError('');
     try {
-      const text = await recognizeBill(f, setProgress);
+      const text = await recognizeBill(f, ocrLangs, setProgress);
       setOcrText(text);
       const parsed = parseBillText(text);
 
@@ -214,21 +217,24 @@ export default function UploadPage() {
   return (
     <main className="min-h-screen bg-[#f5f0e6] p-6 text-[#3a2f2f]">
       <header className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Upload bill</h1>
-        <a href="/" className="text-[#8b2e2e]">← Dashboard</a>
+        <h1 className="text-2xl font-bold">{t('uploadBill')}</h1>
+        <div className="flex items-center gap-4">
+          <LanguageSwitcher />
+          <a href="/" className="text-[#8b2e2e]">{t('backToDashboard')}</a>
+        </div>
       </header>
 
       {step === 'idle' && (
         <label className="block cursor-pointer rounded-2xl border-2 border-dashed border-[#c9c0b2] bg-[#e8e0d2] p-10 text-center">
           <input type="file" accept="image/*" className="hidden" onChange={handleFile} />
-          <p className="text-lg font-medium">Tap to choose a bill photo</p>
-          <p className="text-sm text-[#8a7a6a]">PNG or JPG</p>
+          <p className="text-lg font-medium">{t('tapToChooseBill')}</p>
+          <p className="text-sm text-[#8a7a6a]">{t('pngOrJpg')}</p>
         </label>
       )}
 
       {step === 'ocr' && (
         <div className="rounded-2xl bg-[#e8e0d2] p-6 text-center">
-          <p className="mb-2 font-medium">Reading the bill with tesseract.js…</p>
+          <p className="mb-2 font-medium">{t('readingBill')}</p>
           {progress && (
             <div>
               <p className="text-sm text-[#7a6a5a]">{progress.status}</p>
@@ -248,7 +254,7 @@ export default function UploadPage() {
           <section className="rounded-2xl bg-[#e8e0d2] p-4">
             <div className="grid gap-3 sm:grid-cols-3">
               <div>
-                <label className="text-sm text-[#7a6a5a]">Customer</label>
+                <label className="text-sm text-[#7a6a5a]">{t('customer')}</label>
                 <select
                   value={customerSelect}
                   onChange={(e) => handleCustomerSelect(e.target.value)}
@@ -259,38 +265,38 @@ export default function UploadPage() {
                       {c}
                     </option>
                   ))}
-                  <option value="__new__">+ New customer</option>
+                  <option value="__new__">+ {t('newCustomer')}</option>
                 </select>
                 {customerSelect === '__new__' && (
                   <input
                     value={customerInput}
                     onChange={(e) => handleCustomerInput(e.target.value)}
-                    placeholder="Type customer name"
+                    placeholder={t('typeCustomerName')}
                     className="mt-2 w-full rounded-lg border border-[#c9c0b2] bg-[#f5f0e6] p-2"
                   />
                 )}
 
                 {isExistingCustomer && (
-                  <p className="mt-1 text-xs text-[#2d6b4f]">Existing customer — will add to this account.</p>
+                  <p className="mt-1 text-xs text-[#2d6b4f]">{t('existingCustomer')}</p>
                 )}
 
                 {!isExistingCustomer && customer.trim() && fuzzy && (
                   <div className="mt-2 rounded-lg bg-[#fff9e6] p-2 text-sm">
                     <p className="text-[#8a7a6a]">
-                      Did you mean <strong>{fuzzy.name}</strong>?
+                      {t('didYouMean')} <strong>{fuzzy.name}</strong>?
                     </p>
                     <div className="mt-1 flex gap-2">
                       <button
                         onClick={() => handleCustomerSelect(fuzzy.name)}
                         className="rounded bg-[#2d6b4f] px-2 py-1 text-xs text-white"
                       >
-                        Yes, use {fuzzy.name}
+                        {t('yesUse')} {fuzzy.name}
                       </button>
                       <button
                         onClick={() => setNewCustomerConfirmed(true)}
                         className="rounded bg-[#8b2e2e] px-2 py-1 text-xs text-white"
                       >
-                        No, create new
+                        {t('noCreateNew')}
                       </button>
                     </div>
                   </div>
@@ -305,13 +311,13 @@ export default function UploadPage() {
                       onChange={(e) => setNewCustomerConfirmed(e.target.checked)}
                     />
                     <label htmlFor="newCustomer" className="text-[#8a7a6a]">
-                      This is a new customer. Save as <strong>{customer}</strong>.
+                      {t('saveAsNewCustomer')} <strong>{customer}</strong>.
                     </label>
                   </div>
                 )}
               </div>
               <div>
-                <label className="text-sm text-[#7a6a5a]">Date</label>
+                <label className="text-sm text-[#7a6a5a]">{t('date')}</label>
                 <input
                   type="date"
                   value={date}
@@ -320,7 +326,7 @@ export default function UploadPage() {
                 />
               </div>
               <div>
-                <label className="text-sm text-[#7a6a5a]">Bill No.</label>
+                <label className="text-sm text-[#7a6a5a]">{t('billNo')}</label>
                 <input
                   value={billNo}
                   onChange={(e) => setBillNo(e.target.value)}
@@ -329,12 +335,12 @@ export default function UploadPage() {
               </div>
             </div>
             <div className="mt-3 text-right">
-              <p className="text-2xl font-bold">Total: {fmt(total)}</p>
+              <p className="text-2xl font-bold">{t('total')}: {fmt(total)}</p>
             </div>
           </section>
 
           <section className="rounded-2xl bg-[#e8e0d2] p-4">
-            <h2 className="mb-3 font-semibold">Items</h2>
+            <h2 className="mb-3 font-semibold">{t('items')}</h2>
             <div className="space-y-2">
               {items.map((it, idx) => (
                 <div key={idx} className="grid gap-2 rounded-xl bg-[#f5f0e6] p-3 sm:grid-cols-12">
@@ -342,32 +348,32 @@ export default function UploadPage() {
                     value={it.raw}
                     onChange={(e) => updateItem(idx, 'raw', e.target.value)}
                     className="col-span-3 rounded border border-[#d9d0c2] bg-white p-2 text-sm"
-                    placeholder="Raw name"
+                    placeholder={t('rawName')}
                   />
                   <input
                     value={it.confirmed}
                     onChange={(e) => updateItem(idx, 'confirmed', e.target.value)}
                     className="col-span-4 rounded border border-[#d9d0c2] bg-white p-2 text-sm"
-                    placeholder="Confirmed name"
+                    placeholder={t('confirmedName')}
                   />
                   <input
                     value={it.qty}
                     onChange={(e) => updateItem(idx, 'qty', e.target.value)}
                     className="col-span-2 rounded border border-[#d9d0c2] bg-white p-2 text-sm"
-                    placeholder="qty"
+                    placeholder={t('qty')}
                   />
                   <input
                     value={it.rate}
                     onChange={(e) => updateItem(idx, 'rate', e.target.value)}
                     className="col-span-1 rounded border border-[#d9d0c2] bg-white p-2 text-sm"
-                    placeholder="rate"
+                    placeholder={t('rate')}
                   />
                   <input
                     type="number"
                     value={it.amount}
                     onChange={(e) => updateItem(idx, 'amount', e.target.value)}
                     className="col-span-1 rounded border border-[#d9d0c2] bg-white p-2 text-sm"
-                    placeholder="amt"
+                    placeholder={t('amt')}
                   />
                   <button
                     onClick={() => removeItem(idx)}
@@ -380,25 +386,25 @@ export default function UploadPage() {
             </div>
 
             <div className="mt-4 rounded-xl bg-[#f5f0e6] p-3">
-              <p className="mb-2 text-sm text-[#7a6a5a]">Add a manual item (e.g. &quot;Bendi 10 kg 40 400&quot;)</p>
+              <p className="mb-2 text-sm text-[#7a6a5a]">{t('addManualItem')}</p>
               <div className="grid gap-2 sm:grid-cols-12">
                 <input
                   value={manualName}
                   onChange={(e) => setManualName(e.target.value)}
                   className="col-span-4 rounded border border-[#d9d0c2] bg-white p-2 text-sm"
-                  placeholder="Item name"
+                  placeholder={t('itemName')}
                 />
                 <input
                   value={manualLine}
                   onChange={(e) => setManualLine(e.target.value)}
                   className="col-span-6 rounded border border-[#d9d0c2] bg-white p-2 text-sm"
-                  placeholder="qty rate amount"
+                  placeholder={t('qtyRateAmount')}
                 />
                 <button
                   onClick={addUnparsed}
                   className="col-span-2 rounded bg-[#2d6b4f] text-sm text-white"
                 >
-                  Add
+                  {t('add')}
                 </button>
               </div>
             </div>
@@ -406,7 +412,7 @@ export default function UploadPage() {
 
           {unparsed.length > 0 && (
             <section className="rounded-2xl bg-[#e8e0d2] p-4">
-              <h2 className="mb-2 text-sm font-semibold text-[#8a7a6a]">OCR could not read these lines</h2>
+              <h2 className="mb-2 text-sm font-semibold text-[#8a7a6a]">{t('ocrCouldNotRead')}</h2>
               <ul className="text-sm text-[#7a6a5a]">
                 {unparsed.map((line, i) => (
                   <li key={i}>{line}</li>
@@ -420,7 +426,7 @@ export default function UploadPage() {
             disabled={!canSave}
             className="w-full rounded-xl bg-[#8b2e2e] p-4 font-semibold text-white disabled:opacity-50"
           >
-            Save bill
+            {t('saveBill')}
           </button>
           {saveError && <p className="text-center text-[#8b2e2e]">{saveError}</p>}
         </div>
@@ -428,14 +434,14 @@ export default function UploadPage() {
 
       {step === 'saving' && (
         <div className="rounded-2xl bg-[#e8e0d2] p-6 text-center">
-          <p className="font-medium">Saving…</p>
+          <p className="font-medium">{t('saving')}</p>
         </div>
       )}
 
       {step === 'done' && (
         <div className="rounded-2xl bg-[#e8e0d2] p-6 text-center">
-          <p className="text-xl font-bold">Saved!</p>
-          <a href="/" className="mt-4 inline-block rounded bg-[#8b2e2e] px-4 py-2 text-white">View dashboard</a>
+          <p className="text-xl font-bold">{t('saved')}</p>
+          <a href="/" className="mt-4 inline-block rounded bg-[#8b2e2e] px-4 py-2 text-white">{t('viewDashboard')}</a>
         </div>
       )}
     </main>

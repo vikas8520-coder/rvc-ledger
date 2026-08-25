@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import LanguageSwitcher from '../components/LanguageSwitcher';
+import { useI18n } from '../components/I18nProvider';
 
 function today() {
   const d = new Date();
@@ -11,6 +13,7 @@ function today() {
 }
 
 export default function PaymentPage() {
+  const { t } = useI18n();
   const [customers, setCustomers] = useState<string[]>([]);
   const [customer, setCustomer] = useState('');
   const [date, setDate] = useState(today());
@@ -53,13 +56,16 @@ export default function PaymentPage() {
   return (
     <main className="min-h-screen bg-[#f5f0e6] p-6 text-[#3a2f2f]">
       <header className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Record payment</h1>
-        <a href="/" className="text-[#8b2e2e]">← Dashboard</a>
+        <h1 className="text-2xl font-bold">{t('recordPayment')}</h1>
+        <div className="flex items-center gap-4">
+          <LanguageSwitcher />
+          <a href="/" className="text-[#8b2e2e]">{t('backToDashboard')}</a>
+        </div>
       </header>
 
       <form onSubmit={handleSubmit} className="max-w-md space-y-4 rounded-2xl bg-[#e8e0d2] p-6">
         <div>
-          <label className="text-sm text-[#7a6a5a]">Customer</label>
+          <label className="text-sm text-[#7a6a5a]">{t('customer')}</label>
           <select
             value={customer}
             onChange={(e) => setCustomer(e.target.value)}
@@ -74,7 +80,7 @@ export default function PaymentPage() {
         </div>
 
         <div>
-          <label className="text-sm text-[#7a6a5a]">Date</label>
+          <label className="text-sm text-[#7a6a5a]">{t('date')}</label>
           <input
             type="date"
             value={date}
@@ -84,7 +90,7 @@ export default function PaymentPage() {
         </div>
 
         <div>
-          <label className="text-sm text-[#7a6a5a]">Amount received (₹)</label>
+          <label className="text-sm text-[#7a6a5a]">{t('amountReceived')}</label>
           <input
             type="number"
             value={amount}
@@ -95,7 +101,7 @@ export default function PaymentPage() {
         </div>
 
         <div>
-          <label className="text-sm text-[#7a6a5a]">Notes (optional)</label>
+          <label className="text-sm text-[#7a6a5a]">{t('notes')}</label>
           <input
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -109,11 +115,11 @@ export default function PaymentPage() {
           disabled={!customer || !date || !amount || status === 'saving'}
           className="w-full rounded-xl bg-[#2d6b4f] p-3 font-semibold text-white disabled:opacity-50"
         >
-          {status === 'saving' ? 'Saving…' : 'Record payment'}
+          {status === 'saving' ? t('saving') : t('recordPayment')}
         </button>
 
         {status === 'done' && (
-          <p className="text-center text-[#2d6b4f]">Payment recorded.</p>
+          <p className="text-center text-[#2d6b4f]">{t('paymentRecorded')}</p>
         )}
         {status === 'error' && <p className="text-center text-[#8b2e2e]">{error}</p>}
       </form>
