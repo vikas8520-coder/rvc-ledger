@@ -131,14 +131,28 @@ export default function Home() {
                     </p>
                   </div>
                   {txn.items.length > 0 && (
-                    <ul className="mt-2 space-y-1 border-t border-[#e8e0d2] pt-2 text-sm">
-                      {txn.items.map(([name, detail], idx) => (
-                        <li key={idx} className="flex justify-between">
-                          <span>{localizeName(name, uiLang)}</span>
-                          <span>{detail}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="mt-2 overflow-x-auto border-t border-[#e8e0d2] pt-2">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-[#8a7a6a]">
+                            <th className="py-1">{t('itemName')}</th>
+                            <th className="py-1 text-right">{t('qty')}</th>
+                            <th className="py-1 text-right">{t('rate')}</th>
+                            <th className="py-1 text-right">{t('amt')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {txn.items.map((it, idx) => (
+                            <tr key={idx} className="border-t border-[#e8e0d2]">
+                              <td className="py-1">{localizeName(it.name, uiLang)}</td>
+                              <td className="py-1 text-right">{it.qty}</td>
+                              <td className="py-1 text-right">{it.rate}</td>
+                              <td className="py-1 text-right">{fmt(it.amount)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                   <div className="mt-1 flex items-center justify-end gap-3 text-xs">
                     <span className="text-[#8a7a6a]">{t('balanceAfter')}: {fmt(txn.balanceAfter)}</span>

@@ -37,6 +37,14 @@ export interface Customer {
   txns: TxnView[];
 }
 
+export interface TxnItemView {
+  name: string;
+  qty: string | null;
+  rate: string | null;
+  amount: number;
+  display: string;
+}
+
 export interface TxnView {
   id: string;
   title: string;
@@ -45,5 +53,5 @@ export interface TxnView {
   balanceAfter: number;
   date: string;
   billNo?: string | null;
-  items: [string, string][];
+  items: TxnItemView[];
 }

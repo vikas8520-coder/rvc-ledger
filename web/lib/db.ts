@@ -81,7 +81,13 @@ export async function getCustomers(): Promise<Customer[]> {
           else if (qty) detail = `${qty} = ${it.amount}`;
           else detail = String(it.amount);
         }
-        return [it.confirmed_name, detail] as [string, string];
+        return {
+          name: it.confirmed_name,
+          qty: it.qty,
+          rate: it.rate,
+          amount: Number(it.amount),
+          display: detail,
+        };
       });
 
       return {
