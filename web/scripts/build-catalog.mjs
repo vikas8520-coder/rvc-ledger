@@ -1,0 +1,128 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const base = path.join(__dirname, '..');
+
+const existing = JSON.parse(fs.readFileSync(path.join(base, 'data', 'vegetable_catalog.json'), 'utf-8'));
+
+const additions = {
+  hindi_latin: {
+    aloo: 'Potato',
+    aaloo: 'Potato',
+    aalu: 'Potato',
+    aaloo: 'Potato',
+    tamatar: 'Tomato',
+    tamaatar: 'Tomato',
+    pyaz: 'Onion',
+    pyaaj: 'Onion',
+    pyaaz: 'Onion',
+    palak: 'Spinach',
+    bhindi: 'Okra',
+    bhendi: 'Okra',
+    mirch: 'Chili',
+    mirchi: 'Chili',
+    adrak: 'Ginger',
+    adarak: 'Ginger',
+    lahsun: 'Garlic',
+    lehsun: 'Garlic',
+    gobhi: 'Cauliflower',
+    phoolgobhi: 'Cauliflower',
+    pattagobhi: 'Cabbage',
+    kaddu: 'Pumpkin',
+    lauki: 'Bottle gourd',
+    loki: 'Bottle gourd',
+    karela: 'Bitter gourd',
+    torai: 'Ridge gourd',
+    tori: 'Ridge gourd',
+    turai: 'Ridge gourd',
+    gajar: 'Carrot',
+    gaajar: 'Carrot',
+    mooli: 'Radish',
+    muli: 'Radish',
+    moolee: 'Radish',
+    matar: 'Peas',
+    baingan: 'Brinjal',
+    kheera: 'Cucumber',
+    khira: 'Cucumber',
+    dhaniya: 'Coriander',
+    dhania: 'Coriander',
+    methi: 'Fenugreek leaves',
+    shimlamirch: 'Capsicum',
+    harimirch: 'Green chili',
+    lalmirch: 'Red chili',
+    chukandar: 'Beetroot',
+    shaljam: 'Turnip',
+    kathal: 'Jackfruit',
+    arbi: 'Taro root',
+    parval: 'Pointed gourd',
+    tinda: 'Tinda',
+    gheeya: 'Bottle gourd',
+    shalgam: 'Turnip',
+    chukandhar: 'Beetroot',
+  },
+  hindi_script: {
+    'आलू': 'Potato',
+    'टमाटर': 'Tomato',
+    'प्याज़': 'Onion',
+    'प्याज': 'Onion',
+    'पालक': 'Spinach',
+    'भिंडी': 'Okra',
+    'भिन्डी': 'Okra',
+    'मिर्च': 'Chili',
+    'अदरक': 'Ginger',
+    'लहसुन': 'Garlic',
+    'फूलगोभी': 'Cauliflower',
+    'पत्तागोभी': 'Cabbage',
+    'कद्दू': 'Pumpkin',
+    'लौकी': 'Bottle gourd',
+    'घीया': 'Bottle gourd',
+    'करेला': 'Bitter gourd',
+    'तोरई': 'Ridge gourd',
+    'तुरई': 'Ridge gourd',
+    'गाजर': 'Carrot',
+    'मूली': 'Radish',
+    'मटर': 'Peas',
+    'बैंगन': 'Brinjal',
+    'बैंगन': 'Brinjal',
+    'खीरा': 'Cucumber',
+    'धनिया': 'Coriander',
+    'मेथी': 'Fenugreek leaves',
+    'शिमला मिर्च': 'Capsicum',
+    'हरी मिर्च': 'Green chili',
+    'लाल मिर्च': 'Red chili',
+    'चुकंदर': 'Beetroot',
+    'शलजम': 'Turnip',
+    'परवल': 'Pointed gourd',
+  },
+  telangana_latin: {
+    alugadda: 'Potato',
+    puntikura: 'Roselle leaves',
+    gongura: 'Roselle leaves',
+    mullakada: 'Radish',
+  },
+  telangana_script: {
+    'ఆలుగడ్డ': 'Potato',
+    'పుంటికూర': 'Roselle leaves',
+    'ముల్లకాడ': 'Radish',
+  },
+  andhra_latin: {
+    bangaladumpa: 'Potato',
+    vankaya: 'Brinjal',
+    gongura: 'Roselle leaves',
+    mullangi: 'Radish',
+  },
+  andhra_script: {
+    'బంగాళదుంప': 'Potato',
+    'గోంగూర': 'Roselle leaves',
+    'ములంగి': 'Radish',
+  },
+};
+
+const out = { ...existing, ...additions };
+
+fs.writeFileSync(path.join(base, 'data', 'vegetable_catalog.json'), JSON.stringify(out, null, 2) + '\n');
+fs.writeFileSync(path.join(base, 'public', 'vegetable_catalog.json'), JSON.stringify(out, null, 2) + '\n');
+
+console.log('Catalog built.');

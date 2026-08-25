@@ -41,7 +41,8 @@ export async function recognizeBill(
 ): Promise<string> {
   const canvas = await resizeImage(file, 1600);
 
-  const worker = await createWorker('eng+tel', 1, {
+  const worker = await createWorker('eng+tel+hin', 1, {
+    langPath: 'https://tessdata.projectnaptha.com/4.0.0_best',
     logger: (m: LoggerMessage) => {
       if (onProgress) {
         onProgress({ status: m.status, progress: typeof m.progress === 'number' ? m.progress : 0 });

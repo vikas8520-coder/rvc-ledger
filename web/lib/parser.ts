@@ -1,4 +1,4 @@
-import { classifyScript, teluguInText, toTitle } from './catalog';
+import { classifyScript, toTitle } from './catalog';
 import { BillItem } from './types';
 
 const MONTHS: Record<string, number> = {
@@ -118,7 +118,7 @@ export function parseItemLine(line: string): BillItem | null {
   if (!m) return null;
 
   const name = m[1].trim();
-  if (!/[a-zA-Z\u0C00-\u0C7F]/.test(name)) return null;
+  if (!/[a-zA-Z\u0C00-\u0C7F\u0900-\u097F]/.test(name)) return null;
 
   const qty = m[2].replace(/,/g, '');
   const unit = m[3];
