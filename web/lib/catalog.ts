@@ -39,6 +39,32 @@ for (const section of SECTIONS) {
   }
 }
 
+export const LATIN_TO_TELUGU = new Map<string, string>();
+export const LATIN_TO_HINDI = new Map<string, string>();
+
+function addLatin(key: string, meaning: string | null) {
+  if (!meaning) return;
+  if (hindiInText(key) || teluguInText(key)) return;
+  const normKey = key.toLowerCase().trim().replace(/[.,;:!?]$/, '');
+  if (normKey.includes(' ')) return;
+  const normMeaning = meaning.toLowerCase().trim();
+  if (!LATIN_TO_TELUGU.has(normKey)) {
+    const tel = ENGLISH_TO_TELUGU.get(normMeaning);
+    if (tel) LATIN_TO_TELUGU.set(normKey, tel);
+  }
+  if (!LATIN_TO_HINDI.has(normKey)) {
+    const hin = ENGLISH_TO_HINDI.get(normMeaning);
+    if (hin) LATIN_TO_HINDI.set(normKey, hin);
+  }
+}
+
+for (const section of SECTIONS) {
+  if (!section.endsWith('_latin')) continue;
+  for (const [k, meaning] of Object.entries(CATALOG[section] || {})) {
+    addLatin(k, meaning);
+  }
+}
+
 export function teluguInText(text: string): boolean {
   return /[\u0C00-\u0C7F]/.test(text);
 }
@@ -199,10 +225,26 @@ export function extractEnglish(confirmed: string): string {
   return confirmed.trim();
 }
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export function localizeName(confirmed: string, lang: 'en' | 'te' | 'hi'): string {
   if (lang === 'en') return confirmed;
   const meaning = extractEnglish(confirmed).toLowerCase();
   const map = lang === 'te' ? ENGLISH_TO_TELUGU : ENGLISH_TO_HINDI;
-  return map.get(meaning) || confirmed;
+  const latinMap = lang === 'te' ? LATIN_TO_TELUGU : LATIN_TO_HINDI;
+
+  // Whole confirmed name is a known English meaning
+  if (map.has(meaning)) return map.get(meaning)!;
+
+  // First word is a known Latin or English raw name (e.g. "Mirchi 1 47")
+  const first = confirmed.trim().split(/\s+/)[0].toLowerCase().replace(/[.,;:!?]$/, '');
+  if (latinMap.has(first)) {
+    const localized = latinMap.get(first)!;
+    return confirmed.replace(new RegExp(`^${escapeRegExp(first)}\\b`, 'i'), localized);
+  }
+
+  return confirmed;
 }
 
