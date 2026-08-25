@@ -1,3 +1,5 @@
+import type { ChargeCode, ChargeKind, MarketMeta } from './market';
+
 export interface BillItem {
   raw_text: string;
   confirmed_name: string;
@@ -5,6 +7,8 @@ export interface BillItem {
   rate: string | null;
   amount: number;
   display?: string;
+  kind?: ChargeKind;
+  chargeCode?: ChargeCode | null;
 }
 
 export interface BillData {
@@ -14,6 +18,7 @@ export interface BillData {
   total: number;
   items: BillItem[];
   imagePath?: string;
+  market?: MarketMeta;
 }
 
 export interface Transaction {
@@ -43,6 +48,8 @@ export interface TxnItemView {
   rate: string | null;
   amount: number;
   display: string;
+  kind?: ChargeKind;
+  chargeCode?: ChargeCode | null;
 }
 
 export interface TxnView {
@@ -54,4 +61,5 @@ export interface TxnView {
   date: string;
   billNo?: string | null;
   items: TxnItemView[];
+  market?: Partial<MarketMeta>;
 }

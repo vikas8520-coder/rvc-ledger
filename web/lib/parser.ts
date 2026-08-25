@@ -1,5 +1,18 @@
 import { classifyScript, toTitle } from './catalog';
 import { BillItem } from './types';
+import {
+  detectCharge,
+  detectMarketYard,
+  extractBillNoLoose,
+  extractLotNo,
+  extractVehicleNo,
+  isHeaderLine,
+  looksLikeGarbageName,
+  normalizeUnit,
+  UNIT_PATTERN,
+  yardById,
+  type MarketMeta,
+} from './market';
 
 const MONTHS: Record<string, number> = {
   jan: 1, january: 1,
@@ -15,22 +28,6 @@ const MONTHS: Record<string, number> = {
   nov: 11, november: 11,
   dec: 12, december: 12,
 };
-
-const UNIT_WORDS = new Set([
-  'kg', 'g', 'gram', 'grams',
-  'bag', 'bags', 'pkt', 'packet', 'packets',
-  'pcs', 'pieces', 'bunch', 'bunches',
-  'basket', 'baskets', 'box', 'boxes',
-  'load', 'loads', 'bundle', 'bundles', 'crate', 'crates', 'tray', 'trays',
-]);
-
-function isUnitWord(token: string): string | null {
-  const t = token.toLowerCase().replace(/[.,;]$/, '');
-  if (UNIT_WORDS.has(t) || (t.endsWith('s') && UNIT_WORDS.has(t.slice(0, -1)))) {
-    return token.toLowerCase();
-  }
-  return null;
-}
 
 export function parseDate(line: string): string | null {
   const m1 = line.match(/(\d{1,2})[/\.\-](\d{1,2})[/\.\-](\d{2,4})/);
@@ -71,11 +68,7 @@ export function extractDate(text: string): string | null {
 }
 
 export function extractBillNo(text: string): string | null {
-  for (const line of text.split('\n')) {
-    const m = line.match(/bill\s*no\.?\s*:?\s*(\d+)/i);
-    if (m) return m[1];
-  }
-  return null;
+  return extractBillNoLoose(text);
 }
 
 export function extractTotal(text: string): number | null {
@@ -101,35 +94,43 @@ export function parseItemLine(line: string): BillItem | null {
 
   const low = line.toLowerCase();
   if (/\b(total|grand total|bill total)\b/.test(low)) return null;
-  if (/\b(hamali|loading|hammali)\b\s*$/.test(low)) {
+  if (isHeaderLine(line)) return null;
+
+  const charge = detectCharge(line);
+  if (charge) {
     return {
-      raw_text: 'Hamali',
-      confirmed_name: 'Hamali (loading)',
+      raw_text: line,
+      confirmed_name: charge.name,
       qty: null,
       rate: null,
-      amount: 0,
+      amount: charge.amount,
+      kind: 'charge',
+      chargeCode: charge.code,
+      display: String(charge.amount),
     };
   }
 
-  const pattern =
-    /^(.+?)\s+(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)\s*(kg|g|grams?|bags?|pkt|packets?|pcs|pieces?|bunch(?:es)?|basket(?:es)?|baskets?|box(?:es)?|load(?:s)?|bundle(?:s)?|crate(?:es)?|crate(?:s)?|tray|trays)?\s*(?:[xX/]([\d./]+\s*(?:kg|g|grams?|bags?|pkt|packets?|pcs|pieces?|bunch(?:es)?|basket(?:es)?|baskets?|box(?:es)?|load(?:s)?|bundle(?:s)?|crate(?:s)?|tray|trays)?))?\s*(?:=|-)?\s*(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)?\s*$/i;
+  const pattern = new RegExp(
+    `^(.+?)\\s+(\\d{1,3}(?:,\\d{3})+|\\d+(?:\\.\\d+)?)\\s*(${UNIT_PATTERN})?\\s*(?:[xX/]([\\d./]+\\s*(?:${UNIT_PATTERN})?))?\\s*(?:=|-)?\\s*(\\d{1,3}(?:,\\d{3})+|\\d+(?:\\.\\d+)?)?\\s*$`,
+    'i'
+  );
 
   const m = line.match(pattern);
   if (!m) return null;
 
   const name = m[1].trim();
-  if (!/[a-zA-Z\u0C00-\u0C7F\u0900-\u097F]/.test(name)) return null;
+  if (looksLikeGarbageName(name)) return null;
 
   const qty = m[2].replace(/,/g, '');
-  const unit = m[3];
+  const unit = normalizeUnit(m[3]);
   const rate = m[4];
   const amount = m[5];
 
   let qtyStr: string | null = null;
   if (unit) {
-    qtyStr = `${parseInt(qty, 10)} ${unit.toLowerCase()}`;
+    qtyStr = `${parseFloat(qty)} ${unit}`;
   } else {
-    qtyStr = String(parseInt(qty, 10));
+    qtyStr = String(parseFloat(qty));
   }
 
   let rateStr: string | null = null;
@@ -150,7 +151,7 @@ export function parseItemLine(line: string): BillItem | null {
     rateStr = null;
   }
 
-  const { script, guess } = classifyScript(name);
+  const { guess } = classifyScript(name);
   const confirmed = guess || toTitle(name);
 
   return {
@@ -160,6 +161,8 @@ export function parseItemLine(line: string): BillItem | null {
     rate: rateStr,
     amount: amountVal,
     display: buildDisplay(qtyStr, rateStr, amountVal),
+    kind: 'item',
+    chargeCode: null,
   };
 }
 
@@ -176,6 +179,7 @@ export interface ParsedBill {
   items: BillItem[];
   unparsedLines: string[];
   ocrText: string;
+  market: MarketMeta;
 }
 
 export function parseBillText(text: string): ParsedBill {
@@ -189,8 +193,10 @@ export function parseBillText(text: string): ParsedBill {
 
   for (const line of lines) {
     if (parseDate(line)) continue;
-    if (/bill\s*no\.?\s*:?\s*\d+/i.test(line)) continue;
+    if (/(?:bill|parcha|patti|invoice)\s*(?:no\.?|number|#)?\s*:?\s*[A-Z0-9\-\/]+/i.test(line)) continue;
+    if (/\blot\s*(?:no\.?|number|#)?\s*:?/i.test(line)) continue;
     if (/\b(total|grand total|bill total)\b/i.test(line)) continue;
+    if (isHeaderLine(line)) continue;
     if (!/\d/.test(line)) continue;
 
     const item = parseItemLine(line);
@@ -205,6 +211,9 @@ export function parseBillText(text: string): ParsedBill {
   const itemTotal = items.reduce((s, i) => s + i.amount, 0);
   if (total === null) total = itemTotal;
 
+  const yardId = detectMarketYard(text) || 'bowenpally';
+  const yard = yardById(yardId);
+
   return {
     date: extractDate(text),
     billNo: extractBillNo(text),
@@ -212,5 +221,12 @@ export function parseBillText(text: string): ParsedBill {
     items,
     unparsedLines,
     ocrText: text,
+    market: {
+      marketType: yard?.type || 'apmc',
+      marketYard: yardId,
+      sellerName: '',
+      lotNo: extractLotNo(text) || '',
+      vehicleNo: extractVehicleNo(text) || '',
+    },
   };
 }

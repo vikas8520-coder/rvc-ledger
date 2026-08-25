@@ -3,9 +3,21 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { recognizeBill, OcrProgress } from '@/lib/ocr';
 import { parseBillText, buildDisplay } from '@/lib/parser';
-import { ParsedBill } from '@/lib/parser';
 import { BillItem } from '@/lib/types';
 import { classifyScript } from '@/lib/catalog';
+import {
+  MARKET_YARDS,
+  EMPTY_MARKET,
+  apmcCess,
+  apmcFee,
+  chargeLabel,
+  commissionOn,
+  goodsTotal,
+  yardById,
+  type ChargeCode,
+  type ChargeKind,
+  type MarketMeta,
+} from '@/lib/market';
 import { distance } from 'fastest-levenshtein';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useI18n } from '../components/I18nProvider';
@@ -20,6 +32,8 @@ interface EditableItem {
   qty: string;
   rate: string;
   amount: number;
+  kind?: ChargeKind;
+  chargeCode?: ChargeCode | null;
 }
 
 export default function UploadPage() {
@@ -43,6 +57,8 @@ export default function UploadPage() {
   const [manualName, setManualName] = useState('');
   const [manualLine, setManualLine] = useState('');
   const [saveError, setSaveError] = useState('');
+  const [market, setMarket] = useState<MarketMeta>(EMPTY_MARKET);
+  const [commissionPct, setCommissionPct] = useState('4');
 
   useEffect(() => {
     fetch('/api/customers')
@@ -120,6 +136,7 @@ export default function UploadPage() {
       setDate(parsed.date || '');
       setBillNo(parsed.billNo || '');
       setTotal(parsed.total);
+      setMarket(parsed.market || EMPTY_MARKET);
 
       const editable = parsed.items.map((it) => ({
         raw: it.raw_text,
@@ -127,6 +144,8 @@ export default function UploadPage() {
         qty: it.qty || '',
         rate: it.rate || '',
         amount: it.amount,
+        kind: it.kind || 'item',
+        chargeCode: it.chargeCode || null,
       }));
 
       // Add empty manual rows for unparsed lines
@@ -181,6 +200,30 @@ export default function UploadPage() {
     recalc(next);
   };
 
+  const updateMarket = (patch: Partial<MarketMeta>) => {
+    setMarket((prev) => {
+      const next = { ...prev, ...patch };
+      if (patch.marketYard) {
+        const yard = yardById(patch.marketYard);
+        if (yard) next.marketType = yard.type;
+      }
+      return next;
+    });
+  };
+
+  const addCharge = (code: ChargeCode, amount: number, extra?: string) => {
+    const name = chargeLabel(code, extra);
+    const next = [
+      ...items,
+      { raw: name, confirmed: name, qty: '', rate: extra || '', amount, kind: 'charge' as const, chargeCode: code },
+    ];
+    setItems(next);
+    recalc(next);
+  };
+
+  const goods = goodsTotal(items);
+  const chargesSum = items.filter((it) => it.kind === 'charge').reduce((s, it) => s + (Number(it.amount) || 0), 0);
+
   const handleSave = async () => {
     setStep('saving');
     setSaveError('');
@@ -192,6 +235,8 @@ export default function UploadPage() {
         rate: it.rate || null,
         amount: it.amount,
         display: buildDisplay(it.qty || null, it.rate || null, it.amount),
+        kind: it.kind || 'item',
+        chargeCode: it.chargeCode || null,
       }));
 
       const res = await fetch('/api/bills', {
@@ -203,6 +248,7 @@ export default function UploadPage() {
           billNo,
           total,
           items: billItems,
+          market,
         }),
       });
       const data = await res.json();
@@ -334,7 +380,59 @@ export default function UploadPage() {
                 />
               </div>
             </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <div>
+                <label className="text-sm text-[#7a6a5a]">{t('marketYard')}</label>
+                <select
+                  value={market.marketYard}
+                  onChange={(e) => updateMarket({ marketYard: e.target.value })}
+                  className="w-full rounded-lg border border-[#c9c0b2] bg-[#f5f0e6] p-2"
+                >
+                  {MARKET_YARDS.map((y) => (
+                    <option key={y.id} value={y.id}>{y.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm text-[#7a6a5a]">{t('marketType')}</label>
+                <select
+                  value={market.marketType}
+                  onChange={(e) => updateMarket({ marketType: e.target.value as MarketMeta['marketType'] })}
+                  className="w-full rounded-lg border border-[#c9c0b2] bg-[#f5f0e6] p-2"
+                >
+                  <option value="apmc">{t('apmc')}</option>
+                  <option value="rythu">{t('rythu')}</option>
+                  <option value="local">{t('local')}</option>
+                  <option value="other">{t('other')}</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm text-[#7a6a5a]">{t('seller')}</label>
+                <input
+                  value={market.sellerName}
+                  onChange={(e) => updateMarket({ sellerName: e.target.value })}
+                  className="w-full rounded-lg border border-[#c9c0b2] bg-[#f5f0e6] p-2"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-[#7a6a5a]">{t('lotNo')}</label>
+                <input
+                  value={market.lotNo}
+                  onChange={(e) => updateMarket({ lotNo: e.target.value })}
+                  className="w-full rounded-lg border border-[#c9c0b2] bg-[#f5f0e6] p-2"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-[#7a6a5a]">{t('vehicleNo')}</label>
+                <input
+                  value={market.vehicleNo}
+                  onChange={(e) => updateMarket({ vehicleNo: e.target.value })}
+                  className="w-full rounded-lg border border-[#c9c0b2] bg-[#f5f0e6] p-2"
+                />
+              </div>
+            </div>
             <div className="mt-3 text-right">
+              <p className="text-sm text-[#7a6a5a]">{t('goods')}: {fmt(goods)} · {t('charges')}: {fmt(chargesSum)}</p>
               <p className="text-2xl font-bold">{t('total')}: {fmt(total)}</p>
             </div>
           </section>
@@ -353,7 +451,7 @@ export default function UploadPage() {
                   <input
                     value={it.confirmed}
                     onChange={(e) => updateItem(idx, 'confirmed', e.target.value)}
-                    className="col-span-4 rounded border border-[#d9d0c2] bg-white p-2 text-sm"
+                    className={`col-span-4 rounded border bg-white p-2 text-sm ${it.kind === 'charge' ? 'border-[#c4a574] italic' : 'border-[#d9d0c2]'}`}
                     placeholder={t('confirmedName')}
                   />
                   <input
@@ -386,6 +484,51 @@ export default function UploadPage() {
             </div>
 
             <div className="mt-4 rounded-xl bg-[#f5f0e6] p-3">
+              <p className="mb-2 text-sm text-[#7a6a5a]">{t('chargesHelp')}</p>
+              <div className="mb-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => addCharge('hamali', 0)}
+                  className="rounded bg-[#8b2e2e] px-3 py-1 text-xs text-white"
+                >
+                  {t('addHamali')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addCharge('market_fee', apmcFee(goods), '1%')}
+                  className="rounded bg-[#8b2e2e] px-3 py-1 text-xs text-white"
+                >
+                  {t('addMarketFee')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addCharge('cess', apmcCess(apmcFee(goods)), '0.5%')}
+                  className="rounded bg-[#8b2e2e] px-3 py-1 text-xs text-white"
+                >
+                  {t('addCess')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addCharge('commission', commissionOn(goods, Number(commissionPct) || 0), `${commissionPct}%`)}
+                  className="rounded bg-[#8b2e2e] px-3 py-1 text-xs text-white"
+                >
+                  {t('addCommission')}
+                </button>
+                <input
+                  value={commissionPct}
+                  onChange={(e) => setCommissionPct(e.target.value)}
+                  className="w-16 rounded border border-[#d9d0c2] bg-white px-2 py-1 text-xs"
+                  title={t('commission')}
+                />
+                <span className="self-center text-xs text-[#7a6a5a]">%</span>
+                <button
+                  type="button"
+                  onClick={() => addCharge('weighing', 0)}
+                  className="rounded bg-[#8b2e2e] px-3 py-1 text-xs text-white"
+                >
+                  {t('addWeighing')}
+                </button>
+              </div>
               <p className="mb-2 text-sm text-[#7a6a5a]">{t('addManualItem')}</p>
               <div className="grid gap-2 sm:grid-cols-12">
                 <input

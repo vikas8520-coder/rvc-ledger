@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS bill_items (
   rate TEXT,
   amount NUMERIC(12,2) DEFAULT 0,
   display TEXT,
+  kind TEXT DEFAULT 'item',
+  charge_code TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 

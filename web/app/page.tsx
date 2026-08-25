@@ -7,6 +7,7 @@ import LanguageSwitcher from './components/LanguageSwitcher';
 import { useI18n } from './components/I18nProvider';
 import { getUiLang } from '@/lib/i18n';
 import { localizeName } from '@/lib/catalog';
+import { yardById } from '@/lib/market';
 
 function fmt(n: number): string {
   return '₹' + n.toLocaleString('en-IN');
@@ -124,6 +125,13 @@ export default function Home() {
                     <div>
                       <p className="text-sm text-[#7a6a5a]">{fmtDate(txn.date)}</p>
                       <p className="font-medium">{txnTitle(txn)}</p>
+                      {txn.market?.marketYard && (
+                        <p className="text-xs text-[#8a7a6a]">
+                          {yardById(txn.market.marketYard)?.name || txn.market.marketYard}
+                          {txn.market.lotNo ? ` · ${t('lotNo')} ${txn.market.lotNo}` : ''}
+                          {txn.market.vehicleNo ? ` · ${txn.market.vehicleNo}` : ''}
+                        </p>
+                      )}
                     </div>
                     <p className={`font-semibold ${txn.type === 'payment' ? 'text-[#2d6b4f]' : 'text-[#3a2f2f]'}`}>
                       {txn.type === 'payment' ? '−' : '+'}
@@ -143,7 +151,10 @@ export default function Home() {
                         </thead>
                         <tbody>
                           {txn.items.map((it, idx) => (
-                            <tr key={idx} className="border-t border-[#e8e0d2]">
+                            <tr
+                              key={idx}
+                              className={`border-t border-[#e8e0d2] ${it.kind === 'charge' ? 'italic text-[#6b5344]' : ''}`}
+                            >
                               <td className="py-1">{localizeName(it.name, uiLang)}</td>
                               <td className="py-1 text-right">{it.qty}</td>
                               <td className="py-1 text-right">{it.rate}</td>
