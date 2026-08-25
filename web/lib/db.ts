@@ -91,6 +91,7 @@ export async function getCustomers(): Promise<Customer[]> {
         amount,
         balanceAfter: balance,
         date: toDateStr(t.date),
+        billNo: t.bill_no,
         items: txnItems,
       };
     });

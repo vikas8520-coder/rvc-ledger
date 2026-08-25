@@ -44,5 +44,6 @@ export interface TxnView {
   amount: number;
   balanceAfter: number;
   date: string;
+  billNo?: string | null;
   items: [string, string][];
 }

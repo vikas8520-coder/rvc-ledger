@@ -5,6 +5,8 @@ import { Customer } from '@/lib/types';
 import DeleteButton from './components/DeleteButton';
 import LanguageSwitcher from './components/LanguageSwitcher';
 import { useI18n } from './components/I18nProvider';
+import { getUiLang } from '@/lib/i18n';
+import { localizeName } from '@/lib/catalog';
 
 function fmt(n: number): string {
   return '₹' + n.toLocaleString('en-IN');
@@ -17,7 +19,8 @@ function fmtDate(d: string): string {
 }
 
 export default function Home() {
-  const { t } = useI18n();
+  const { lang, t } = useI18n();
+  const uiLang = getUiLang(lang);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [configured, setConfigured] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -41,6 +44,12 @@ export default function Home() {
   const totalBilled = customers.reduce((s, c) => s + c.billed, 0);
   const totalPaid = customers.reduce((s, c) => s + c.paid, 0);
   const totalDue = customers.reduce((s, c) => s + c.due, 0);
+
+  const txnTitle = (txn: Customer['txns'][number]) => {
+    if (txn.type === 'payment') return t('paymentReceived');
+    if (txn.billNo) return `${t('billNo')} ${txn.billNo}`;
+    return t('bill');
+  };
 
   if (loading) {
     return (
@@ -114,7 +123,7 @@ export default function Home() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-[#7a6a5a]">{fmtDate(txn.date)}</p>
-                      <p className="font-medium">{txn.title}</p>
+                      <p className="font-medium">{txnTitle(txn)}</p>
                     </div>
                     <p className={`font-semibold ${txn.type === 'payment' ? 'text-[#2d6b4f]' : 'text-[#3a2f2f]'}`}>
                       {txn.type === 'payment' ? '−' : '+'}
@@ -125,7 +134,7 @@ export default function Home() {
                     <ul className="mt-2 space-y-1 border-t border-[#e8e0d2] pt-2 text-sm">
                       {txn.items.map(([name, detail], idx) => (
                         <li key={idx} className="flex justify-between">
-                          <span>{name}</span>
+                          <span>{localizeName(name, uiLang)}</span>
                           <span>{detail}</span>
                         </li>
                       ))}

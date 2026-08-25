@@ -84,6 +84,7 @@
     "కాకరకాయ": "Bitter gourd",
     "ఉల్లిపాయ": "Onion",
     "చనగడ్డ": "Sweet potato",
+    "పొన్నగంటి": "Water amaranth",
     "ఆలుగడ్డ": "Potato",
     "అల్లం": "Ginger",
     "వెల్లుల్లి": "Garlic",
@@ -99,7 +100,13 @@
     "మెంతికూర": "Fenugreek leaves",
     "గోంగూర": "Roselle leaves",
     "తొటకూర": "Amaranthus",
-    "చుక్కకూర": "Amaranthus"
+    "చుక్కకూర": "Amaranthus",
+    "మష్రూం": "Mushroom",
+    "బటానీలు": "Peas",
+    "సొజా": "Turnip",
+    "పనసపండు": "Jackfruit",
+    "చేమదుంప": "Taro root",
+    "ముక్కల దోసకాయ": "Pointed gourd"
   },
   "hindi_latin": {
     "aloo": "Potato",
@@ -185,7 +192,11 @@
     "लाल मिर्च": "Red chili",
     "चुकंदर": "Beetroot",
     "शलजम": "Turnip",
-    "परवल": "Pointed gourd"
+    "परवल": "Pointed gourd",
+    "मशरूम": "Mushroom",
+    "सोजा": "Turnip",
+    "पनस": "Jackfruit",
+    "अरबी": "Taro root"
   },
   "telangana_latin": {
     "alugadda": "Potato",

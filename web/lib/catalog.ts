@@ -18,9 +18,24 @@ const CATALOG: Record<SectionKey, Record<string, string | null>> = {
 } as Record<SectionKey, Record<string, string | null>>;
 
 export const ENGLISH_WORDS = new Set<string>();
+export const ENGLISH_TO_TELUGU = new Map<string, string>();
+export const ENGLISH_TO_HINDI = new Map<string, string>();
+
+function addReverse(meaning: string | null, key: string) {
+  if (!meaning) return;
+  const norm = meaning.toLowerCase().trim();
+  if (hindiInText(key) && !ENGLISH_TO_HINDI.has(norm)) {
+    ENGLISH_TO_HINDI.set(norm, key);
+  }
+  if (teluguInText(key) && !ENGLISH_TO_TELUGU.has(norm)) {
+    ENGLISH_TO_TELUGU.set(norm, key);
+  }
+  ENGLISH_WORDS.add(norm);
+}
+
 for (const section of SECTIONS) {
-  for (const v of Object.values(CATALOG[section] || {})) {
-    if (v) ENGLISH_WORDS.add(v.toLowerCase());
+  for (const [k, meaning] of Object.entries(CATALOG[section] || {})) {
+    addReverse(meaning, k);
   }
 }
 
@@ -177,3 +192,17 @@ export function classifyScript(name: string): Classification {
 
   return { script: 'other_uncertain', dialect: null, guess: null };
 }
+
+export function extractEnglish(confirmed: string): string {
+  const m = confirmed.match(/\(([^)]+)\)$/);
+  if (m) return m[1].trim();
+  return confirmed.trim();
+}
+
+export function localizeName(confirmed: string, lang: 'en' | 'te' | 'hi'): string {
+  if (lang === 'en') return confirmed;
+  const meaning = extractEnglish(confirmed).toLowerCase();
+  const map = lang === 'te' ? ENGLISH_TO_TELUGU : ENGLISH_TO_HINDI;
+  return map.get(meaning) || confirmed;
+}
+
