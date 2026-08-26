@@ -33,24 +33,14 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <Link href="/customers" className="text-xs text-[#8b2e2e] hover:underline">
-            ← {t('allCustomers')}
-          </Link>
-          <h1 className="text-xl font-bold">{customer.name}</h1>
-          <p className="text-xs text-[#7a6a5a]">
-            {t('bills')} {bills} · {t('payments')} {payments}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Link href="/payment" className="rounded-md bg-[#2d6b4f] px-3 py-1.5 text-sm text-white">
-            {t('recordPayment')}
-          </Link>
-          <Link href="/upload" className="rounded-md bg-[#8b2e2e] px-3 py-1.5 text-sm text-white">
-            {t('uploadBill')}
-          </Link>
-        </div>
+      <div>
+        <Link href="/customers" className="text-xs text-[#8b2e2e] hover:underline">
+          ← {t('allCustomers')}
+        </Link>
+        <h1 className="text-xl font-bold">{customer.name}</h1>
+        <p className="text-xs text-[#7a6a5a]">
+          {t('bills')} {bills} · {t('payments')} {payments}
+        </p>
       </div>
 
       <section className="grid grid-cols-3 gap-2">
