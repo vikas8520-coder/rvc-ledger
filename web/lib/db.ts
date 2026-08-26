@@ -28,6 +28,7 @@ async function ensureSchema() {
   const sql = getSql();
   await sql`ALTER TABLE bill_items ADD COLUMN IF NOT EXISTS kind TEXT DEFAULT 'item'`;
   await sql`ALTER TABLE bill_items ADD COLUMN IF NOT EXISTS charge_code TEXT`;
+  await sql`ALTER TABLE customers ADD COLUMN IF NOT EXISTS phone TEXT`;
   schemaReady = true;
 }
 
@@ -93,7 +94,7 @@ export async function getCustomers(): Promise<Customer[]> {
   await ensureSchema();
   const sql = getSql();
 
-  const customers = await sql`SELECT id, name FROM customers ORDER BY name`;
+  const customers = await sql`SELECT id, name, phone FROM customers ORDER BY name`;
   const txns = await sql`SELECT * FROM transactions ORDER BY date, created_at`;
   const items = await sql`SELECT * FROM bill_items`;
 
@@ -171,6 +172,7 @@ export async function getCustomers(): Promise<Customer[]> {
     customersOut.push({
       id: c.id as string,
       name: c.name as string,
+      phone: (c.phone as string | null) ?? null,
       billed,
       paid,
       due: billed - paid,
@@ -230,6 +232,12 @@ export async function recordPayment(customerName: string, date: string, amount: 
     INSERT INTO transactions (customer_id, date, bill_no, bill_amount, amount_paid, notes, image_path)
     VALUES (${customer.id}, ${date}, NULL, 0, ${amount}, ${notes || 'Payment received'}, NULL)
   `;
+}
+
+export async function setCustomerPhone(id: string, phone: string): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`UPDATE customers SET phone = ${phone || null} WHERE id = ${id}`;
 }
 
 export async function deleteTransaction(id: string): Promise<void> {

@@ -36,6 +36,7 @@ export interface Transaction {
 export interface Customer {
   id: string;
   name: string;
+  phone?: string | null;
   billed: number;
   paid: number;
   due: number;

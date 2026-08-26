@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { useI18n } from './components/I18nProvider';
 import { useDashboard } from './components/useDashboard';
 import TxnCard from './components/TxnCard';
+import AgingBadge from './components/AgingBadge';
 import { fmt, thisMonthKey } from '@/lib/format';
+import { computeAging } from '@/lib/statement';
 
 export default function Home() {
   const { t } = useI18n();
@@ -66,7 +68,10 @@ export default function Home() {
             {topDues.map((c) => (
               <li key={c.id}>
                 <Link href={`/customers/${c.id}`} className="flex items-center justify-between gap-2 py-2 hover:opacity-80">
-                  <span className="truncate font-medium">{c.name}</span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate font-medium">{c.name}</span>
+                    <AgingBadge aging={computeAging(c.txns)} />
+                  </span>
                   <span className="shrink-0 text-sm font-semibold text-[#8b2e2e]">{fmt(c.due)}</span>
                 </Link>
               </li>
