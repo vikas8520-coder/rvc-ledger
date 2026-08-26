@@ -138,15 +138,15 @@ export default function Home() {
                       {fmt(txn.amount)}
                     </p>
                   </div>
-                  {txn.items.length > 0 && (
+                  {txn.type === 'bill' && txn.items.length > 0 && (
                     <div className="mt-2 overflow-x-auto border-t border-[#e8e0d2] pt-2">
-                      <table className="w-full text-sm">
+                      <table className="w-full text-sm tabular-nums">
                         <thead>
                           <tr className="text-left text-[#8a7a6a]">
-                            <th className="py-1">{t('itemName')}</th>
-                            <th className="py-1 text-right">{t('qty')}</th>
-                            <th className="py-1 text-right">{t('rate')}</th>
-                            <th className="py-1 text-right">{t('amt')}</th>
+                            <th className="py-1 pr-3 font-normal">{t('itemName')}</th>
+                            <th className="w-24 py-1 text-right font-normal">{t('qty')}</th>
+                            <th className="w-24 py-1 text-right font-normal">{t('rate')}</th>
+                            <th className="w-28 py-1 text-right font-normal">{t('amt')}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -155,10 +155,10 @@ export default function Home() {
                               key={idx}
                               className={`border-t border-[#e8e0d2] ${it.kind === 'charge' ? 'italic text-[#6b5344]' : ''}`}
                             >
-                              <td className="py-1">{localizeName(it.name, uiLang)}</td>
-                              <td className="py-1 text-right">{it.qty}</td>
-                              <td className="py-1 text-right">{it.rate}</td>
-                              <td className="py-1 text-right">{fmt(it.amount)}</td>
+                              <td className="py-1 pr-3">{localizeName(it.name, uiLang)}</td>
+                              <td className="w-24 py-1 whitespace-nowrap text-right">{it.qty || ''}</td>
+                              <td className="w-24 py-1 whitespace-nowrap text-right">{it.rate || ''}</td>
+                              <td className="w-28 py-1 whitespace-nowrap text-right">{fmt(it.amount)}</td>
                             </tr>
                           ))}
                         </tbody>

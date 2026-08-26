@@ -200,6 +200,36 @@ export function decodeMarketNotes(notes: string | null | undefined): Partial<Mar
   return {};
 }
 
+export function parseDisplay(display: string | null | undefined): {
+  qty: string | null;
+  rate: string | null;
+  amount: number | null;
+} {
+  if (!display) return { qty: null, rate: null, amount: null };
+  const text = display.replace(/\s+/g, ' ').trim();
+  let m = text.match(/^(.+?)\s*[×xX@]\s*(.+?)\s*=\s*([\d,.]+)$/);
+  if (m) {
+    return {
+      qty: m[1].trim(),
+      rate: m[2].trim(),
+      amount: parseFloat(m[3].replace(/,/g, '')),
+    };
+  }
+  m = text.match(/^(.+?)\s*=\s*([\d,.]+)$/);
+  if (m) {
+    return {
+      qty: m[1].trim(),
+      rate: null,
+      amount: parseFloat(m[2].replace(/,/g, '')),
+    };
+  }
+  const n = parseFloat(text.replace(/,/g, ''));
+  if (!Number.isNaN(n) && /^[\d,.]+$/.test(text)) {
+    return { qty: null, rate: null, amount: n };
+  }
+  return { qty: null, rate: null, amount: null };
+}
+
 export function chargeLabel(code: ChargeCode, extra?: string): string {
   switch (code) {
     case 'hamali':

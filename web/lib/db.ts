@@ -1,6 +1,6 @@
 import { neon, NeonQueryFunction } from '@neondatabase/serverless';
 import { Customer, BillData, BillItem, TxnView } from './types';
-import { decodeMarketNotes, encodeMarketNotes, detectCharge, type ChargeKind } from './market';
+import { decodeMarketNotes, encodeMarketNotes, detectCharge, parseDisplay, type ChargeKind } from './market';
 import seed from '../data/seed.json';
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -139,11 +139,13 @@ export async function getCustomers(): Promise<Customer[]> {
           else detail = String(it.amount);
         }
         const inferred = inferItemKind(it);
+        const parsed = parseDisplay(detail);
+        const amount = Number(it.amount) || parsed.amount || 0;
         return {
           name: it.confirmed_name,
-          qty: it.qty,
-          rate: it.rate,
-          amount: Number(it.amount),
+          qty: it.qty || parsed.qty,
+          rate: it.rate || parsed.rate,
+          amount,
           display: detail,
           kind: inferred.kind,
           chargeCode: inferred.chargeCode,
