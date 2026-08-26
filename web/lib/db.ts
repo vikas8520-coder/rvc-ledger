@@ -1,5 +1,5 @@
 import { neon, NeonQueryFunction } from '@neondatabase/serverless';
-import { Customer, BillData, BillItem, TxnView, PurchaseData, PurchaseView, Supplier, WastageEntry, CatalogItem, StockLevel } from './types';
+import { Customer, BillData, BillItem, TxnView, PurchaseData, PurchaseView, Supplier, WastageEntry, CatalogItem, StockLevel, ExpenseEntry } from './types';
 import { decodeMarketNotes, encodeMarketNotes, detectCharge, parseDisplay, type ChargeKind } from './market';
 import seed from '../data/seed.json';
 
@@ -104,6 +104,17 @@ async function ensureSchema() {
       created_at TIMESTAMPTZ DEFAULT now()
     )
   `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS expenses (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      date DATE NOT NULL,
+      category TEXT NOT NULL,
+      description TEXT,
+      amount NUMERIC(12,2) NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `;
+  await sql`ALTER TABLE customers ADD COLUMN IF NOT EXISTS credit_limit NUMERIC(12,2)`;
   schemaReady = true;
 }
 
@@ -179,7 +190,7 @@ export async function getCustomers(): Promise<Customer[]> {
   await ensureSchema();
   const sql = getSql();
 
-  const customers = await sql`SELECT id, name, phone FROM customers ORDER BY name`;
+  const customers = await sql`SELECT id, name, phone, credit_limit FROM customers ORDER BY name`;
   const txns = await sql`SELECT * FROM transactions ORDER BY date, created_at`;
   const items = await sql`SELECT * FROM bill_items`;
 
@@ -258,6 +269,7 @@ export async function getCustomers(): Promise<Customer[]> {
       id: c.id as string,
       name: c.name as string,
       phone: (c.phone as string | null) ?? null,
+      creditLimit: c.credit_limit !== null && c.credit_limit !== undefined ? Number(c.credit_limit) : null,
       billed,
       paid,
       due: billed - paid,
@@ -685,4 +697,77 @@ export async function getStock(): Promise<StockLevel[]> {
     }))
     .filter((s) => s.qty !== 0)
     .sort((a, b) => b.qty - a.qty);
+}
+
+/* ---- Expenses ---- */
+
+export async function getExpenses(): Promise<ExpenseEntry[]> {
+  if (!isDbConfigured()) return [];
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql`SELECT * FROM expenses ORDER BY date DESC, created_at DESC`;
+  return (rows as any[]).map((r) => ({
+    id: r.id as string,
+    date: toDateOnly(r.date),
+    category: r.category as string,
+    description: (r.description as string) || '',
+    amount: Number(r.amount) || 0,
+  }));
+}
+
+export async function saveExpense(entry: Omit<ExpenseEntry, 'id'>): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`
+    INSERT INTO expenses (date, category, description, amount)
+    VALUES (${entry.date}, ${entry.category}, ${entry.description || null}, ${entry.amount})
+  `;
+}
+
+export async function deleteExpense(id: string): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`DELETE FROM expenses WHERE id = ${id}`;
+}
+
+/* ---- Customer credit limit ---- */
+
+export async function setCustomerCreditLimit(id: string, limit: number | null): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`UPDATE customers SET credit_limit = ${limit} WHERE id = ${id}`;
+}
+
+/* ---- Data backup/restore ---- */
+
+export async function exportAllData() {
+  await ensureSchema();
+  const sql = getSql();
+  const [customers, transactions, billItems, purchases, purchaseItems, suppliers, supplierPayments, wastage, catalogItems, catalogAliases, expenses] = await Promise.all([
+    sql`SELECT id, name, phone, credit_limit FROM customers ORDER BY name`,
+    sql`SELECT * FROM transactions ORDER BY date, created_at`,
+    sql`SELECT * FROM bill_items ORDER BY transaction_id, id`,
+    sql`SELECT * FROM purchases ORDER BY date, created_at`,
+    sql`SELECT * FROM purchase_items ORDER BY purchase_id, id`,
+    sql`SELECT * FROM suppliers ORDER BY name`,
+    sql`SELECT * FROM supplier_payments ORDER BY date, created_at`,
+    sql`SELECT * FROM wastage ORDER BY date, created_at`,
+    sql`SELECT * FROM catalog_items ORDER BY name`,
+    sql`SELECT * FROM catalog_aliases ORDER BY item_id, id`,
+    sql`SELECT * FROM expenses ORDER BY date, created_at`,
+  ]);
+  return {
+    exportedAt: new Date().toISOString(),
+    customers,
+    transactions,
+    billItems,
+    purchases,
+    purchaseItems,
+    suppliers,
+    supplierPayments,
+    wastage,
+    catalogItems,
+    catalogAliases,
+    expenses,
+  };
 }

@@ -40,6 +40,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <Link href="/wastage" className={`rounded-md px-3 py-1.5 ${tabClass('/wastage')}`}>
                 {t('navWastage')}
               </Link>
+              <Link href="/expenses" className={`rounded-md px-3 py-1.5 ${tabClass('/expenses')}`}>
+                {t('navExpenses')}
+              </Link>
               <Link href="/catalog" className={`rounded-md px-3 py-1.5 ${tabClass('/catalog')}`}>
                 {t('navCatalog')}
               </Link>
@@ -48,6 +51,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               </Link>
               <Link href="/reports" className={`rounded-md px-3 py-1.5 ${tabClass('/reports')}`}>
                 {t('navReports')}
+              </Link>
+              <Link href="/settings" className={`rounded-md px-3 py-1.5 ${tabClass('/settings')}`}>
+                {t('settings')}
               </Link>
             </nav>
           </div>

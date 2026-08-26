@@ -95,6 +95,14 @@ export interface StockLevel {
   lastRate: number | null;
 }
 
+export interface ExpenseEntry {
+  id: string;
+  date: string;
+  category: string;
+  description: string;
+  amount: number;
+}
+
 export interface Transaction {
   id: string;
   customer_id: string;
@@ -111,6 +119,7 @@ export interface Customer {
   id: string;
   name: string;
   phone?: string | null;
+  creditLimit?: number | null;
   billed: number;
   paid: number;
   due: number;
