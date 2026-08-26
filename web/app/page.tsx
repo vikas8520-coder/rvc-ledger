@@ -16,7 +16,7 @@ function fmt(n: number): string {
 function fmtDate(d: string): string {
   const [y, m, day] = d.split('-').map(Number);
   const dt = new Date(y, m - 1, day);
-  return dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  return dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
 export default function Home() {
@@ -54,118 +54,108 @@ export default function Home() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[#f5f0e6] p-6 text-[#3a2f2f]">
-        <p className="text-center text-[#8a7a6a]">{t('loading')}</p>
+      <main className="min-h-screen bg-[#f5f0e6] text-[#3a2f2f]">
+        <p className="px-3 py-8 text-center text-sm text-[#8a7a6a]">{t('loading')}</p>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f0e6] p-6 text-[#3a2f2f]">
-      <header className="mb-8 flex items-center justify-between">
+    <main className="min-h-screen bg-[#f5f0e6] text-[#3a2f2f]">
+      <div className="mx-auto max-w-5xl px-3 py-4 sm:px-5">
+      <header className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold">{t('appTitle')}</h1>
-          <p className="text-sm text-[#8a7a6a]">
+          <h1 className="text-xl font-bold sm:text-2xl">{t('appTitle')}</h1>
+          <p className="text-xs text-[#8a7a6a]">
             {configured ? t('liveFrom') : 'Preview from local CSV'}
           </p>
         </div>
-        <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <LanguageSwitcher />
-          <div className="flex gap-2">
-            <a
-              href="/payment"
-              className="rounded-lg bg-[#2d6b4f] px-4 py-2 text-white hover:bg-[#22513a]"
-            >
-              {t('recordPayment')}
-            </a>
-            <a
-              href="/upload"
-              className="rounded-lg bg-[#8b2e2e] px-4 py-2 text-white hover:bg-[#6b2222]"
-            >
-              {t('uploadBill')}
-            </a>
-          </div>
+          <a
+            href="/payment"
+            className="rounded-md bg-[#2d6b4f] px-3 py-1.5 text-sm text-white hover:bg-[#22513a]"
+          >
+            {t('recordPayment')}
+          </a>
+          <a
+            href="/upload"
+            className="rounded-md bg-[#8b2e2e] px-3 py-1.5 text-sm text-white hover:bg-[#6b2222]"
+          >
+            {t('uploadBill')}
+          </a>
         </div>
       </header>
 
-      <section className="mb-8 grid grid-cols-3 gap-4">
-        <div className="rounded-2xl bg-[#e8e0d2] p-4 text-center">
-          <p className="text-xs uppercase tracking-wide text-[#7a6a5a]">{t('billed')}</p>
-          <p className="text-2xl font-bold">{fmt(totalBilled)}</p>
+      <section className="mb-4 grid grid-cols-3 gap-2">
+        <div className="rounded-lg bg-[#e8e0d2] px-2 py-2 text-center sm:px-3">
+          <p className="text-[10px] uppercase tracking-wide text-[#7a6a5a] sm:text-xs">{t('billed')}</p>
+          <p className="text-sm font-bold sm:text-lg">{fmt(totalBilled)}</p>
         </div>
-        <div className="rounded-2xl bg-[#e8e0d2] p-4 text-center">
-          <p className="text-xs uppercase tracking-wide text-[#7a6a5a]">{t('paid')}</p>
-          <p className="text-2xl font-bold">{fmt(totalPaid)}</p>
+        <div className="rounded-lg bg-[#e8e0d2] px-2 py-2 text-center sm:px-3">
+          <p className="text-[10px] uppercase tracking-wide text-[#7a6a5a] sm:text-xs">{t('paid')}</p>
+          <p className="text-sm font-bold sm:text-lg">{fmt(totalPaid)}</p>
         </div>
-        <div className="rounded-2xl bg-[#e8e0d2] p-4 text-center">
-          <p className="text-xs uppercase tracking-wide text-[#7a6a5a]">{t('due')}</p>
-          <p className="text-2xl font-bold text-[#8b2e2e]">{fmt(totalDue)}</p>
+        <div className="rounded-lg bg-[#e8e0d2] px-2 py-2 text-center sm:px-3">
+          <p className="text-[10px] uppercase tracking-wide text-[#7a6a5a] sm:text-xs">{t('due')}</p>
+          <p className="text-sm font-bold text-[#8b2e2e] sm:text-lg">{fmt(totalDue)}</p>
         </div>
       </section>
 
       {customers.length === 0 && (
-        <p className="text-center text-[#8a7a6a]">{t('noCustomers')}</p>
+        <p className="text-center text-sm text-[#8a7a6a]">{t('noCustomers')}</p>
       )}
 
-      <section className="space-y-4">
+      <section className="grid gap-3 md:grid-cols-2">
         {customers.map((cust) => (
-          <div key={cust.id} className="rounded-2xl bg-[#e8e0d2] p-4">
-            <div className="mb-2 flex items-center justify-between border-b border-[#d9d0c2] pb-2">
-              <h2 className="text-lg font-semibold">{cust.name}</h2>
-              <div className="text-right text-sm">
-                <p>{t('billed')}: {fmt(cust.billed)}</p>
-                <p>{t('paid')}: {fmt(cust.paid)}</p>
-                <p className="font-semibold text-[#8b2e2e]">{t('due')}: {fmt(cust.due)}</p>
-              </div>
+          <div key={cust.id} className="rounded-lg bg-[#e8e0d2] p-3">
+            <div className="mb-2 flex items-baseline justify-between gap-2 border-b border-[#d9d0c2] pb-1.5">
+              <h2 className="truncate text-base font-semibold">{cust.name}</h2>
+              <p className="shrink-0 text-xs">
+                <span className="text-[#7a6a5a]">{t('due')}</span>{' '}
+                <span className="font-semibold text-[#8b2e2e]">{fmt(cust.due)}</span>
+              </p>
             </div>
-            <div className="space-y-3">
+            <p className="mb-2 text-[11px] text-[#7a6a5a]">
+              {t('billed')} {fmt(cust.billed)} · {t('paid')} {fmt(cust.paid)}
+            </p>
+            <div className="space-y-2">
               {cust.txns.map((txn) => (
-                <div key={txn.id} className="rounded-xl bg-[#f5f0e6] p-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-[#7a6a5a]">{fmtDate(txn.date)}</p>
-                      <p className="font-medium">{txnTitle(txn)}</p>
-                      {txn.market?.marketYard && (
-                        <p className="text-xs text-[#8a7a6a]">
-                          {yardById(txn.market.marketYard)?.name || txn.market.marketYard}
-                          {txn.market.lotNo ? ` · ${t('lotNo')} ${txn.market.lotNo}` : ''}
-                          {txn.market.vehicleNo ? ` · ${txn.market.vehicleNo}` : ''}
-                        </p>
-                      )}
+                <div key={txn.id} className="rounded-md bg-[#f5f0e6] p-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[11px] text-[#7a6a5a]">
+                        {fmtDate(txn.date)}
+                        {txn.market?.marketYard
+                          ? ` · ${yardById(txn.market.marketYard)?.name || txn.market.marketYard}`
+                          : ''}
+                      </p>
+                      <p className="text-sm font-medium leading-tight">{txnTitle(txn)}</p>
                     </div>
-                    <p className={`font-semibold ${txn.type === 'payment' ? 'text-[#2d6b4f]' : 'text-[#3a2f2f]'}`}>
+                    <p className={`shrink-0 text-sm font-semibold ${txn.type === 'payment' ? 'text-[#2d6b4f]' : 'text-[#3a2f2f]'}`}>
                       {txn.type === 'payment' ? '−' : '+'}
                       {fmt(txn.amount)}
                     </p>
                   </div>
                   {txn.type === 'bill' && txn.items.length > 0 && (
-                    <div className="mt-2 overflow-x-auto border-t border-[#e8e0d2] pt-2">
-                      <table className="w-full text-sm tabular-nums">
-                        <thead>
-                          <tr className="text-left text-[#8a7a6a]">
-                            <th className="py-1 pr-3 font-normal">{t('itemName')}</th>
-                            <th className="w-24 py-1 text-right font-normal">{t('qty')}</th>
-                            <th className="w-24 py-1 text-right font-normal">{t('rate')}</th>
-                            <th className="w-28 py-1 text-right font-normal">{t('amt')}</th>
+                    <table className="mt-1.5 w-full text-[12px] tabular-nums leading-5">
+                      <tbody>
+                        {txn.items.map((it, idx) => (
+                          <tr
+                            key={idx}
+                            className={it.kind === 'charge' ? 'italic text-[#6b5344]' : ''}
+                          >
+                            <td className="pr-2 align-top">{localizeName(it.name, uiLang)}</td>
+                            <td className="whitespace-nowrap pr-2 text-right text-[#7a6a5a]">
+                              {[it.qty, it.rate].filter(Boolean).join(' × ')}
+                            </td>
+                            <td className="whitespace-nowrap text-right">{fmt(it.amount)}</td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {txn.items.map((it, idx) => (
-                            <tr
-                              key={idx}
-                              className={`border-t border-[#e8e0d2] ${it.kind === 'charge' ? 'italic text-[#6b5344]' : ''}`}
-                            >
-                              <td className="py-1 pr-3">{localizeName(it.name, uiLang)}</td>
-                              <td className="w-24 py-1 whitespace-nowrap text-right">{it.qty || ''}</td>
-                              <td className="w-24 py-1 whitespace-nowrap text-right">{it.rate || ''}</td>
-                              <td className="w-28 py-1 whitespace-nowrap text-right">{fmt(it.amount)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                        ))}
+                      </tbody>
+                    </table>
                   )}
-                  <div className="mt-1 flex items-center justify-end gap-3 text-xs">
+                  <div className="mt-1 flex items-center justify-end gap-2 text-[11px]">
                     <span className="text-[#8a7a6a]">{t('balanceAfter')}: {fmt(txn.balanceAfter)}</span>
                     <DeleteButton id={txn.id} />
                   </div>
@@ -175,6 +165,7 @@ export default function Home() {
           </div>
         ))}
       </section>
+      </div>
     </main>
   );
 }
