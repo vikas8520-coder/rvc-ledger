@@ -1,4 +1,4 @@
-import { Customer, TxnView } from './types';
+import { Customer, TxnView, Supplier } from './types';
 import { fmt, fmtDate } from './format';
 
 export interface AgingInfo {
@@ -187,4 +187,52 @@ export function downloadCsv(filename: string, csv: string): void {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+/* ---- Supplier helpers ---- */
+
+export function supplierStatementText(supplier: Supplier, shopName = 'RVC'): string {
+  const lines: string[] = [];
+  lines.push(`${shopName} — Supplier: ${supplier.name}`);
+  lines.push('');
+
+  for (const e of [...supplier.entries].reverse()) {
+    const label = e.type === 'payment' ? 'Payment' : e.billNo ? `Purchase ${e.billNo}` : 'Purchase';
+    const sign = e.type === 'payment' ? '-' : '+';
+    lines.push(`${fmtDate(e.date)}  ${label}  ${sign}${fmt(e.amount)}`);
+  }
+
+  lines.push('');
+  lines.push(`Purchased: ${fmt(supplier.purchased)}`);
+  lines.push(`Paid: ${fmt(supplier.paid)}`);
+  lines.push(`Balance: ${fmt(supplier.balance)}`);
+  return lines.join('\n');
+}
+
+export function supplierCsv(supplier: Supplier): string {
+  const rows: string[][] = [
+    ['Date', 'Type', 'Bill No', 'Amount', 'Balance after'],
+  ];
+  for (const e of [...supplier.entries].reverse()) {
+    rows.push([
+      e.date,
+      e.type === 'payment' ? 'Payment' : 'Purchase',
+      e.billNo || '',
+      String(e.amount),
+      String(e.balanceAfter),
+    ]);
+  }
+  rows.push([]);
+  rows.push(['Purchased', String(supplier.purchased)]);
+  rows.push(['Paid', String(supplier.paid)]);
+  rows.push(['Balance', String(supplier.balance)]);
+  return rows.map((r) => r.map(csvCell).join(',')).join('\n');
+}
+
+export function suppliersCsv(suppliers: Supplier[]): string {
+  const rows: string[][] = [['Supplier', 'Phone', 'Purchased', 'Paid', 'Balance']];
+  for (const s of suppliers) {
+    rows.push([s.name, s.phone || '', String(s.purchased), String(s.paid), String(s.balance)]);
+  }
+  return rows.map((r) => r.map(csvCell).join(',')).join('\n');
 }

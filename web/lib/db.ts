@@ -1,5 +1,5 @@
 import { neon, NeonQueryFunction } from '@neondatabase/serverless';
-import { Customer, BillData, BillItem, TxnView, PurchaseData, PurchaseView } from './types';
+import { Customer, BillData, BillItem, TxnView, PurchaseData, PurchaseView, Supplier, WastageEntry } from './types';
 import { decodeMarketNotes, encodeMarketNotes, detectCharge, parseDisplay, type ChargeKind } from './market';
 import seed from '../data/seed.json';
 
@@ -50,6 +50,37 @@ async function ensureSchema() {
       amount NUMERIC(12,2) DEFAULT 0,
       kind TEXT DEFAULT 'item',
       charge_code TEXT,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS suppliers (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT UNIQUE,
+      phone TEXT,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS supplier_payments (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      supplier_id UUID REFERENCES suppliers(id) ON DELETE CASCADE,
+      date DATE NOT NULL,
+      amount NUMERIC(12,2) NOT NULL,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `;
+  await sql`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS supplier_id UUID REFERENCES suppliers(id)`;
+  await sql`
+    CREATE TABLE IF NOT EXISTS wastage (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      date DATE NOT NULL,
+      item_name TEXT NOT NULL,
+      qty TEXT,
+      unit TEXT,
+      reason TEXT,
+      est_cost NUMERIC(12,2) DEFAULT 0,
       created_at TIMESTAMPTZ DEFAULT now()
     )
   `;
@@ -305,10 +336,21 @@ export async function savePurchase(purchase: PurchaseData): Promise<void> {
   await ensureSchema();
   const sql = getSql();
 
+  let supplierId: string | null = null;
+  if (purchase.supplier?.trim()) {
+    const [sup] = await sql`
+      INSERT INTO suppliers (name)
+      VALUES (${purchase.supplier.trim()})
+      ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+      RETURNING id
+    `;
+    supplierId = sup?.id as string;
+  }
+
   const notes = purchase.market ? encodeMarketNotes(purchase.market) : null;
   const [row] = await sql`
-    INSERT INTO purchases (date, supplier, bill_no, total, notes)
-    VALUES (${purchase.date}, ${purchase.supplier || null}, ${purchase.billNo || null}, ${purchase.total}, ${notes})
+    INSERT INTO purchases (date, supplier, bill_no, total, notes, supplier_id)
+    VALUES (${purchase.date}, ${purchase.supplier || null}, ${purchase.billNo || null}, ${purchase.total}, ${notes}, ${supplierId})
     RETURNING id
   `;
   if (!row) throw new Error('Could not insert purchase');
@@ -341,4 +383,138 @@ export async function deleteTransaction(id: string): Promise<void> {
   const sql = getSql();
   await sql`DELETE FROM bill_items WHERE transaction_id = ${id}`;
   await sql`DELETE FROM transactions WHERE id = ${id}`;
+}
+
+export async function getSuppliers(): Promise<Supplier[]> {
+  if (!isDbConfigured()) return [];
+  await ensureSchema();
+  const sql = getSql();
+
+  const suppliers = await sql`SELECT id, name, phone FROM suppliers ORDER BY name`;
+  const purchases = await sql`SELECT id, supplier_id, date, bill_no, total FROM purchases WHERE supplier_id IS NOT NULL ORDER BY date, created_at`;
+  const payments = await sql`SELECT * FROM supplier_payments ORDER BY date, created_at`;
+  const items = await sql`SELECT * FROM purchase_items`;
+
+  const itemsByPurchase = new Map<string, any[]>();
+  for (const it of items) {
+    const arr = itemsByPurchase.get(it.purchase_id as string) || [];
+    arr.push(it);
+    itemsByPurchase.set(it.purchase_id as string, arr);
+  }
+
+  const out: Supplier[] = [];
+  for (const s of suppliers) {
+    const sid = s.id as string;
+    const sPurchases = (purchases as any[]).filter((p) => p.supplier_id === sid);
+    const sPayments = (payments as any[]).filter((p) => p.supplier_id === sid);
+
+    const entries: Supplier['entries'] = [];
+    for (const p of sPurchases) {
+      entries.push({
+        id: p.id as string,
+        type: 'purchase' as const,
+        date: toDateOnly(p.date),
+        amount: Number(p.total),
+        balanceAfter: 0,
+        billNo: (p.bill_no as string) || null,
+        items: (itemsByPurchase.get(p.id as string) || []).map((it) => ({
+          name: it.name as string,
+          qty: (it.qty as string) || null,
+          rate: (it.rate as string) || null,
+          amount: Number(it.amount),
+          display: [it.qty, it.rate].filter(Boolean).join(' × ') || String(it.amount),
+          kind: (it.kind as any) || 'item',
+          chargeCode: (it.charge_code as any) || null,
+        })),
+      });
+    }
+    for (const pm of sPayments) {
+      entries.push({
+        id: pm.id as string,
+        type: 'payment' as const,
+        date: toDateOnly(pm.date),
+        amount: Number(pm.amount),
+        balanceAfter: 0,
+        notes: (pm.notes as string) || null,
+      });
+    }
+
+    entries.sort((a, b) => a.date.localeCompare(b.date));
+    let balance = 0;
+    for (const e of entries) {
+      balance += e.type === 'purchase' ? e.amount : -e.amount;
+      e.balanceAfter = balance;
+    }
+    entries.reverse();
+
+    const purchased = sPurchases.reduce((s: number, p: any) => s + Number(p.total), 0);
+    const paid = sPayments.reduce((s: number, p: any) => s + Number(p.amount), 0);
+
+    out.push({
+      id: sid,
+      name: s.name as string,
+      phone: (s.phone as string | null) ?? null,
+      purchased,
+      paid,
+      balance: purchased - paid,
+      entries,
+    });
+  }
+
+  return out;
+}
+
+export async function recordSupplierPayment(supplierName: string, date: string, amount: number, notes: string): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+
+  const [sup] = await sql`
+    INSERT INTO suppliers (name)
+    VALUES (${supplierName.trim()})
+    ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+    RETURNING id
+  `;
+  if (!sup) throw new Error('Could not upsert supplier');
+
+  await sql`
+    INSERT INTO supplier_payments (supplier_id, date, amount, notes)
+    VALUES (${sup.id}, ${date}, ${amount}, ${notes || null})
+  `;
+}
+
+export async function setSupplierPhone(id: string, phone: string): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`UPDATE suppliers SET phone = ${phone || null} WHERE id = ${id}`;
+}
+
+export async function getWastage(): Promise<WastageEntry[]> {
+  if (!isDbConfigured()) return [];
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql`SELECT * FROM wastage ORDER BY date DESC, created_at DESC`;
+  return (rows as any[]).map((r) => ({
+    id: r.id as string,
+    date: toDateOnly(r.date),
+    itemName: r.item_name as string,
+    qty: (r.qty as string) || null,
+    unit: (r.unit as string) || null,
+    reason: (r.reason as string) || '',
+    estCost: Number(r.est_cost) || 0,
+  }));
+}
+
+export async function saveWastage(entry: Omit<WastageEntry, 'id'>): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`
+    INSERT INTO wastage (date, item_name, qty, unit, reason, est_cost)
+    VALUES (${entry.date}, ${entry.itemName}, ${entry.qty || null}, ${entry.unit || null}, ${entry.reason || null}, ${entry.estCost})
+  `;
+}
+
+export async function deleteWastage(id: string): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`DELETE FROM wastage WHERE id = ${id}`;
 }

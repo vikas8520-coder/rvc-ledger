@@ -1,5 +1,5 @@
 import { Customer, PurchaseView } from './types';
-import { itemKey, parseQty, parseRate, qtyBasis } from './units';
+import { itemKey, parseQty, parseRate, qtyBasis, canonicalName } from './units';
 
 export interface MonthSummary {
   month: string;
@@ -148,7 +148,7 @@ export function itemStats(customers: Customer[], purchases: PurchaseView[]): Ite
 
     out.push({
       key,
-      name: sell?.name || buy?.name || key,
+      name: canonicalName(sell?.name || buy?.name || key),
       soldQty,
       soldUnit: sell?.unit ?? null,
       revenue: sell?.amount || 0,

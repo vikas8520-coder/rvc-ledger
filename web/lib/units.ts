@@ -1,4 +1,5 @@
 import { normalizeUnit } from './market';
+import { classifyScript, extractEnglish } from './catalog';
 
 export interface Qty {
   value: number;
@@ -69,8 +70,26 @@ export function qtyBasis(q: Qty | null): { unit: string; value: number } | null 
   return null;
 }
 
-/** Strips a parenthesised gloss so "Mirchi (Chili)" and "Mirchi" group together. */
+/**
+ * Resolves a name to its canonical English meaning via the catalog.
+ * Falls back to the raw name (lowercased, parenthesised gloss stripped)
+ * when no catalog match is found.
+ *
+ * "Mirchi" -> "chili", "మిర్చి" -> "chili", "Chili" -> "chili"
+ */
 export function itemKey(name: string): string {
-  const base = name.replace(/\(([^)]*)\)/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!name) return '';
+  const { guess } = classifyScript(name);
+  const base = guess ? extractEnglish(guess).toLowerCase() : name.replace(/\(([^)]*)\)/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
   return base || name.trim().toLowerCase();
+}
+
+/**
+ * Returns the canonical English title for display, resolving through
+ * the catalog when possible. Keeps the original name as fallback.
+ */
+export function canonicalName(name: string): string {
+  if (!name) return '';
+  const { guess } = classifyScript(name);
+  return guess || name;
 }

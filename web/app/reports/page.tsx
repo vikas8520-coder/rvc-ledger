@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../components/I18nProvider';
 import { fmt } from '@/lib/format';
-import { Customer, PurchaseView } from '@/lib/types';
+import { Customer, PurchaseView, WastageEntry } from '@/lib/types';
 import { monthlySummary, itemStats, topCustomers } from '@/lib/reports';
 
 function monthLabel(ym: string): string {
@@ -31,20 +31,24 @@ export default function ReportsPage() {
   const { t } = useI18n();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [purchases, setPurchases] = useState<PurchaseView[]>([]);
+  const [wastage, setWastage] = useState<WastageEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       fetch('/api/dashboard').then((r) => r.json()),
       fetch('/api/purchases').then((r) => r.json()),
+      fetch('/api/wastage').then((r) => r.json()),
     ])
-      .then(([dash, pur]) => {
+      .then(([dash, pur, wast]) => {
         setCustomers(dash.customers || []);
         setPurchases(pur.purchases || []);
+        setWastage(wast.entries || []);
       })
       .catch(() => {
         setCustomers([]);
         setPurchases([]);
+        setWastage([]);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -54,6 +58,8 @@ export default function ReportsPage() {
   const top = useMemo(() => topCustomers(customers, 5), [customers]);
 
   const totalEstProfit = items.reduce((s, i) => s + (i.estMargin || 0), 0);
+  const totalWastage = wastage.reduce((s, w) => s + w.estCost, 0);
+  const netEstProfit = totalEstProfit - totalWastage;
 
   const exportMonths = () => {
     const rows: (string | number)[][] = [[t('month'), t('billedSales'), t('collected'), t('purchased')]];
@@ -174,6 +180,18 @@ export default function ReportsPage() {
                     <td className="py-1.5" colSpan={5}>{t('estProfit')}</td>
                     <td className="py-1.5 text-right text-[#2d6b4f]">{fmt(totalEstProfit)}</td>
                   </tr>
+                  {totalWastage > 0 && (
+                    <>
+                      <tr className="text-[#8b2e2e]">
+                        <td className="py-1.5" colSpan={5}>{t('totalWastage')}</td>
+                        <td className="py-1.5 text-right">-{fmt(totalWastage)}</td>
+                      </tr>
+                      <tr className="border-t border-[#c9c0b2] font-semibold">
+                        <td className="py-1.5" colSpan={5}>{t('estProfit')} ({t('navWastage')})</td>
+                        <td className="py-1.5 text-right text-[#2d6b4f]">{fmt(netEstProfit)}</td>
+                      </tr>
+                    </>
+                  )}
                 </tfoot>
               )}
             </table>

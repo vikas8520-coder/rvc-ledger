@@ -44,6 +44,37 @@ export interface PurchaseView extends Omit<PurchaseData, 'market'> {
   market?: Partial<MarketMeta>;
 }
 
+export interface Supplier {
+  id: string;
+  name: string;
+  phone?: string | null;
+  purchased: number;
+  paid: number;
+  balance: number;
+  entries: SupplierEntry[];
+}
+
+export interface SupplierEntry {
+  id: string;
+  type: 'purchase' | 'payment';
+  date: string;
+  amount: number;
+  balanceAfter: number;
+  billNo?: string | null;
+  items?: TxnItemView[];
+  notes?: string | null;
+}
+
+export interface WastageEntry {
+  id: string;
+  date: string;
+  itemName: string;
+  qty: string | null;
+  unit: string | null;
+  reason: string;
+  estCost: number;
+}
+
 export interface Transaction {
   id: string;
   customer_id: string;
