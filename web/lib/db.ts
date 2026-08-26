@@ -1,5 +1,5 @@
 import { neon, NeonQueryFunction } from '@neondatabase/serverless';
-import { Customer, BillData, BillItem, TxnView } from './types';
+import { Customer, BillData, BillItem, TxnView, PurchaseData, PurchaseView } from './types';
 import { decodeMarketNotes, encodeMarketNotes, detectCharge, parseDisplay, type ChargeKind } from './market';
 import seed from '../data/seed.json';
 
@@ -29,7 +29,41 @@ async function ensureSchema() {
   await sql`ALTER TABLE bill_items ADD COLUMN IF NOT EXISTS kind TEXT DEFAULT 'item'`;
   await sql`ALTER TABLE bill_items ADD COLUMN IF NOT EXISTS charge_code TEXT`;
   await sql`ALTER TABLE customers ADD COLUMN IF NOT EXISTS phone TEXT`;
+  await sql`
+    CREATE TABLE IF NOT EXISTS purchases (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      date DATE NOT NULL,
+      supplier TEXT,
+      bill_no TEXT,
+      total NUMERIC(12,2) DEFAULT 0,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS purchase_items (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      purchase_id UUID REFERENCES purchases(id) ON DELETE CASCADE,
+      name TEXT,
+      qty TEXT,
+      rate TEXT,
+      amount NUMERIC(12,2) DEFAULT 0,
+      kind TEXT DEFAULT 'item',
+      charge_code TEXT,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `;
   schemaReady = true;
+}
+
+function toDateOnly(value: unknown): string {
+  if (!value) return '';
+  if (typeof value === 'string') return value.slice(0, 10);
+  const d = value as Date;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function inferItemKind(it: BillItem & { charge_code?: string | null; kind?: ChargeKind | null }): {
@@ -232,6 +266,69 @@ export async function recordPayment(customerName: string, date: string, amount: 
     INSERT INTO transactions (customer_id, date, bill_no, bill_amount, amount_paid, notes, image_path)
     VALUES (${customer.id}, ${date}, NULL, 0, ${amount}, ${notes || 'Payment received'}, NULL)
   `;
+}
+
+export async function getPurchases(): Promise<PurchaseView[]> {
+  if (!isDbConfigured()) return [];
+  await ensureSchema();
+  const sql = getSql();
+
+  const rows = await sql`SELECT * FROM purchases ORDER BY date DESC, created_at DESC`;
+  const items = await sql`SELECT * FROM purchase_items`;
+
+  const byPurchase = new Map<string, any[]>();
+  for (const it of items) {
+    const arr = byPurchase.get(it.purchase_id as string) || [];
+    arr.push(it);
+    byPurchase.set(it.purchase_id as string, arr);
+  }
+
+  return (rows as any[]).map((p) => ({
+    id: p.id as string,
+    date: toDateOnly(p.date),
+    supplier: (p.supplier as string) || '',
+    billNo: (p.bill_no as string) || null,
+    total: Number(p.total),
+    market: decodeMarketNotes(p.notes),
+    items: (byPurchase.get(p.id as string) || []).map((it) => ({
+      name: it.name as string,
+      qty: (it.qty as string) || null,
+      rate: (it.rate as string) || null,
+      amount: Number(it.amount),
+      kind: (it.kind as ChargeKind) || 'item',
+      chargeCode: (it.charge_code as any) || null,
+    })),
+  }));
+}
+
+export async function savePurchase(purchase: PurchaseData): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+
+  const notes = purchase.market ? encodeMarketNotes(purchase.market) : null;
+  const [row] = await sql`
+    INSERT INTO purchases (date, supplier, bill_no, total, notes)
+    VALUES (${purchase.date}, ${purchase.supplier || null}, ${purchase.billNo || null}, ${purchase.total}, ${notes})
+    RETURNING id
+  `;
+  if (!row) throw new Error('Could not insert purchase');
+
+  for (const it of purchase.items) {
+    const hit = it.kind ? null : detectCharge(it.name || '');
+    const kind = it.kind || (hit ? 'charge' : 'item');
+    const code = it.chargeCode ?? (hit ? hit.code : null);
+    await sql`
+      INSERT INTO purchase_items (purchase_id, name, qty, rate, amount, kind, charge_code)
+      VALUES (${row.id}, ${it.name}, ${it.qty}, ${it.rate}, ${it.amount}, ${kind}, ${code})
+    `;
+  }
+}
+
+export async function deletePurchase(id: string): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`DELETE FROM purchase_items WHERE purchase_id = ${id}`;
+  await sql`DELETE FROM purchases WHERE id = ${id}`;
 }
 
 export async function setCustomerPhone(id: string, phone: string): Promise<void> {

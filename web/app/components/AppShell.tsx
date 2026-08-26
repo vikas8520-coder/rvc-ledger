@@ -31,6 +31,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <Link href="/customers" className={`rounded-md px-3 py-1.5 ${tabClass('/customers')}`}>
                 {t('navCustomers')}
               </Link>
+              <Link href="/purchases" className={`rounded-md px-3 py-1.5 ${tabClass('/purchases')}`}>
+                {t('navPurchases')}
+              </Link>
+              <Link href="/reports" className={`rounded-md px-3 py-1.5 ${tabClass('/reports')}`}>
+                {t('navReports')}
+              </Link>
             </nav>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">

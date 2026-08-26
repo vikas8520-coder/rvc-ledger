@@ -35,6 +35,28 @@ CREATE TABLE IF NOT EXISTS bill_items (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS purchases (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  date DATE NOT NULL,
+  supplier TEXT,
+  bill_no TEXT,
+  total NUMERIC(12,2) DEFAULT 0,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS purchase_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  purchase_id UUID REFERENCES purchases(id) ON DELETE CASCADE,
+  name TEXT,
+  qty TEXT,
+  rate TEXT,
+  amount NUMERIC(12,2) DEFAULT 0,
+  kind TEXT DEFAULT 'item',
+  charge_code TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS learned_names (
   raw TEXT NOT NULL,
   meaning TEXT NOT NULL,

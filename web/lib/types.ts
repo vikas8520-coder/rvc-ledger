@@ -21,6 +21,29 @@ export interface BillData {
   market?: MarketMeta;
 }
 
+export interface PurchaseItem {
+  name: string;
+  qty: string | null;
+  rate: string | null;
+  amount: number;
+  kind?: ChargeKind;
+  chargeCode?: ChargeCode | null;
+}
+
+export interface PurchaseData {
+  date: string;
+  supplier: string;
+  billNo?: string | null;
+  total: number;
+  items: PurchaseItem[];
+  market?: MarketMeta;
+}
+
+export interface PurchaseView extends Omit<PurchaseData, 'market'> {
+  id: string;
+  market?: Partial<MarketMeta>;
+}
+
 export interface Transaction {
   id: string;
   customer_id: string;
