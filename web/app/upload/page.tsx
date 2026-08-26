@@ -19,7 +19,6 @@ import {
   type MarketMeta,
 } from '@/lib/market';
 import { distance } from 'fastest-levenshtein';
-import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useI18n } from '../components/I18nProvider';
 
 function fmt(n: number): string {
@@ -261,14 +260,8 @@ export default function UploadPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f5f0e6] p-6 text-[#3a2f2f]">
-      <header className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t('uploadBill')}</h1>
-        <div className="flex items-center gap-4">
-          <LanguageSwitcher />
-          <a href="/" className="text-[#8b2e2e]">{t('backToDashboard')}</a>
-        </div>
-      </header>
+    <div className="space-y-4">
+      <h1 className="text-xl font-bold">{t('uploadBill')}</h1>
 
       {step === 'idle' && (
         <label className="block cursor-pointer rounded-2xl border-2 border-dashed border-[#c9c0b2] bg-[#e8e0d2] p-10 text-center">
@@ -587,6 +580,6 @@ export default function UploadPage() {
           <a href="/" className="mt-4 inline-block rounded bg-[#8b2e2e] px-4 py-2 text-white">{t('viewDashboard')}</a>
         </div>
       )}
-    </main>
+    </div>
   );
 }

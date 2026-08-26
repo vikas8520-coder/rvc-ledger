@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useI18n } from '../components/I18nProvider';
 
 function today() {
@@ -54,14 +53,8 @@ export default function PaymentPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f5f0e6] p-6 text-[#3a2f2f]">
-      <header className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t('recordPayment')}</h1>
-        <div className="flex items-center gap-4">
-          <LanguageSwitcher />
-          <a href="/" className="text-[#8b2e2e]">{t('backToDashboard')}</a>
-        </div>
-      </header>
+    <div className="space-y-4">
+      <h1 className="text-xl font-bold">{t('recordPayment')}</h1>
 
       <form onSubmit={handleSubmit} className="max-w-md space-y-4 rounded-2xl bg-[#e8e0d2] p-6">
         <div>
@@ -123,6 +116,6 @@ export default function PaymentPage() {
         )}
         {status === 'error' && <p className="text-center text-[#8b2e2e]">{error}</p>}
       </form>
-    </main>
+    </div>
   );
 }
