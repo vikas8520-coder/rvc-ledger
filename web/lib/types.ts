@@ -75,6 +75,26 @@ export interface WastageEntry {
   estCost: number;
 }
 
+export interface CatalogItem {
+  id: string;
+  name: string;
+  defaultUnit: string | null;
+  defaultSellPrice: number | null;
+  teluguName: string | null;
+  hindiName: string | null;
+  active: boolean;
+  aliases: string[];
+}
+
+export interface StockLevel {
+  itemKey: string;
+  itemName: string;
+  unit: string | null;
+  qty: number;
+  lastPurchaseDate: string | null;
+  lastRate: number | null;
+}
+
 export interface Transaction {
   id: string;
   customer_id: string;

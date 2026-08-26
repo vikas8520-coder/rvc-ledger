@@ -1,5 +1,5 @@
 import { neon, NeonQueryFunction } from '@neondatabase/serverless';
-import { Customer, BillData, BillItem, TxnView, PurchaseData, PurchaseView, Supplier, WastageEntry } from './types';
+import { Customer, BillData, BillItem, TxnView, PurchaseData, PurchaseView, Supplier, WastageEntry, CatalogItem, StockLevel } from './types';
 import { decodeMarketNotes, encodeMarketNotes, detectCharge, parseDisplay, type ChargeKind } from './market';
 import seed from '../data/seed.json';
 
@@ -81,6 +81,26 @@ async function ensureSchema() {
       unit TEXT,
       reason TEXT,
       est_cost NUMERIC(12,2) DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS catalog_items (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT UNIQUE NOT NULL,
+      default_unit TEXT,
+      default_sell_price NUMERIC(12,2),
+      telugu_name TEXT,
+      hindi_name TEXT,
+      active BOOLEAN DEFAULT true,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS catalog_aliases (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      item_id UUID REFERENCES catalog_items(id) ON DELETE CASCADE,
+      alias TEXT NOT NULL,
       created_at TIMESTAMPTZ DEFAULT now()
     )
   `;
@@ -517,4 +537,152 @@ export async function deleteWastage(id: string): Promise<void> {
   await ensureSchema();
   const sql = getSql();
   await sql`DELETE FROM wastage WHERE id = ${id}`;
+}
+
+/* ---- Item catalog ---- */
+
+export async function getCatalog(): Promise<CatalogItem[]> {
+  if (!isDbConfigured()) return [];
+  await ensureSchema();
+  const sql = getSql();
+  const items = await sql`SELECT * FROM catalog_items ORDER BY name`;
+  const aliases = await sql`SELECT * FROM catalog_aliases`;
+
+  const aliasesByItem = new Map<string, string[]>();
+  for (const a of aliases) {
+    const arr = aliasesByItem.get(a.item_id as string) || [];
+    arr.push(a.alias as string);
+    aliasesByItem.set(a.item_id as string, arr);
+  }
+
+  return (items as any[]).map((it) => ({
+    id: it.id as string,
+    name: it.name as string,
+    defaultUnit: (it.default_unit as string) || null,
+    defaultSellPrice: it.default_sell_price !== null ? Number(it.default_sell_price) : null,
+    teluguName: (it.telugu_name as string) || null,
+    hindiName: (it.hindi_name as string) || null,
+    active: it.active !== false,
+    aliases: aliasesByItem.get(it.id as string) || [],
+  }));
+}
+
+export async function saveCatalogItem(item: Omit<CatalogItem, 'id'> & { id?: string }): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+
+  if (item.id) {
+    await sql`
+      UPDATE catalog_items
+      SET name = ${item.name},
+          default_unit = ${item.defaultUnit || null},
+          default_sell_price = ${item.defaultSellPrice || null},
+          telugu_name = ${item.teluguName || null},
+          hindi_name = ${item.hindiName || null},
+          active = ${item.active}
+      WHERE id = ${item.id}
+    `;
+    await sql`DELETE FROM catalog_aliases WHERE item_id = ${item.id}`;
+    for (const alias of item.aliases) {
+      await sql`INSERT INTO catalog_aliases (item_id, alias) VALUES (${item.id}, ${alias})`;
+    }
+  } else {
+    const [row] = await sql`
+      INSERT INTO catalog_items (name, default_unit, default_sell_price, telugu_name, hindi_name, active)
+      VALUES (${item.name}, ${item.defaultUnit || null}, ${item.defaultSellPrice || null}, ${item.teluguName || null}, ${item.hindiName || null}, ${item.active})
+      RETURNING id
+    `;
+    if (!row) throw new Error('Could not insert catalog item');
+    for (const alias of item.aliases) {
+      await sql`INSERT INTO catalog_aliases (item_id, alias) VALUES (${row.id}, ${alias})`;
+    }
+  }
+}
+
+export async function deleteCatalogItem(id: string): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`DELETE FROM catalog_aliases WHERE item_id = ${id}`;
+  await sql`DELETE FROM catalog_items WHERE id = ${id}`;
+}
+
+/* ---- Stock levels ---- */
+
+export async function getStock(): Promise<StockLevel[]> {
+  if (!isDbConfigured()) return [];
+  await ensureSchema();
+  const sql = getSql();
+
+  // Aggregate purchased quantities from purchase_items
+  const purchases = await sql`
+    SELECT pi.name, pi.qty, pi.rate, p.date
+    FROM purchase_items pi
+    JOIN purchases p ON pi.purchase_id = p.id
+    WHERE pi.kind = 'item' OR pi.kind IS NULL
+    ORDER BY p.date DESC
+  `;
+
+  // Aggregate sold quantities from bill_items
+  const sales = await sql`
+    SELECT bi.confirmed_name as name, bi.qty, t.date
+    FROM bill_items bi
+    JOIN transactions t ON bi.transaction_id = t.id
+    WHERE bi.kind = 'item' OR bi.kind IS NULL
+  `;
+
+  // Aggregate wastage
+  const wastage = await sql`SELECT item_name as name, qty, unit FROM wastage`;
+
+  const stock = new Map<string, { name: string; qty: number; unit: string | null; lastDate: string | null; lastRate: number | null }>();
+
+  const { parseQty, qtyBasis, parseRate, itemKey } = await import('./units');
+
+  for (const p of purchases as any[]) {
+    const key = itemKey(p.name);
+    if (!key) continue;
+    const basis = qtyBasis(parseQty(p.qty));
+    const entry = stock.get(key) || { name: p.name, qty: 0, unit: basis?.unit || null, lastDate: null, lastRate: null };
+    if (basis) {
+      entry.qty += basis.value;
+      entry.unit = basis.unit;
+    }
+    const rate = parseRate(p.rate);
+    if (rate && (!entry.lastDate || String(p.date).slice(0, 10) >= entry.lastDate)) {
+      entry.lastRate = rate.value;
+      entry.lastDate = String(p.date).slice(0, 10);
+    }
+    stock.set(key, entry);
+  }
+
+  for (const s of sales as any[]) {
+    const key = itemKey(s.name);
+    if (!key) continue;
+    const basis = qtyBasis(parseQty(s.qty));
+    const entry = stock.get(key);
+    if (entry && basis) {
+      entry.qty -= basis.value;
+    }
+  }
+
+  for (const w of wastage as any[]) {
+    const key = itemKey(w.name);
+    if (!key) continue;
+    const basis = qtyBasis(parseQty(w.qty));
+    const entry = stock.get(key);
+    if (entry && basis) {
+      entry.qty -= basis.value;
+    }
+  }
+
+  return [...stock.entries()]
+    .map(([key, v]) => ({
+      itemKey: key,
+      itemName: v.name,
+      unit: v.unit,
+      qty: Math.round(v.qty * 100) / 100,
+      lastPurchaseDate: v.lastDate,
+      lastRate: v.lastRate,
+    }))
+    .filter((s) => s.qty !== 0)
+    .sort((a, b) => b.qty - a.qty);
 }
