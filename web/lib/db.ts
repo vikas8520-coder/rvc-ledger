@@ -242,6 +242,31 @@ export async function ensureDefaultShop(): Promise<string> {
   return shopId;
 }
 
+// Link a Clerk user to the default shop (for migrating existing single-shop users)
+export async function linkUserToDefaultShop(
+  clerkUserId: string,
+  email: string,
+  name: string,
+): Promise<string> {
+  await ensureSchema();
+  const sql = getSql();
+  const shopId = await ensureDefaultShop();
+
+  // Check if already linked
+  const existing = await sql`SELECT id FROM shop_users WHERE clerk_user_id = ${clerkUserId} LIMIT 1`;
+  if (existing.length > 0) {
+    // Update their shop_id to the default shop
+    await sql`UPDATE shop_users SET shop_id = ${shopId}, role = 'owner', name = ${name || null}, email = ${email || null} WHERE clerk_user_id = ${clerkUserId}`;
+    return shopId;
+  }
+
+  await sql`
+    INSERT INTO shop_users (clerk_user_id, shop_id, role, name, email)
+    VALUES (${clerkUserId}, ${shopId}, 'owner', ${name || null}, ${email || null})
+  `;
+  return shopId;
+}
+
 export async function getOrCreateShop(
   clerkUserId: string,
   email: string,

@@ -1,5 +1,5 @@
 import { auth, currentUser } from '@clerk/nextjs/server';
-import { getOrCreateShop, isDbConfigured } from './db';
+import { getOrCreateShop, linkUserToDefaultShop, isDbConfigured } from './db';
 
 export type AuthResult = {
   shopId: string | null;
@@ -16,27 +16,23 @@ export async function getAuth(): Promise<AuthResult | null> {
   const { userId, isAuthenticated } = await auth();
   if (!isAuthenticated || !userId) return null;
 
-  // Check if this is a superadmin
-  if (SUPERADMIN_IDS.includes(userId)) {
-    const user = await currentUser();
-    return {
-      shopId: null, // superadmin has no single shop
-      role: 'superadmin',
-      userId,
-      email: user?.emailAddresses?.[0]?.emailAddress || '',
-      name: user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username || '',
-    };
-  }
-
-  // For regular users, look up their shop
-  if (!isDbConfigured()) {
-    return { shopId: null, role: 'owner', userId, email: '', name: '' };
-  }
-
   const user = await currentUser();
   const email = user?.emailAddresses?.[0]?.emailAddress || '';
   const name = user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username || '';
 
+  const isSuperadmin = SUPERADMIN_IDS.includes(userId);
+
+  if (!isDbConfigured()) {
+    return { shopId: null, role: isSuperadmin ? 'superadmin' : 'owner', userId, email, name };
+  }
+
+  // For superadmin: link them to the default RVC shop so they can use the app too
+  if (isSuperadmin) {
+    const shopId = await linkUserToDefaultShop(userId, email, name);
+    return { shopId, role: 'superadmin', userId, email, name };
+  }
+
+  // For regular users, look up their shop
   const { shopId, role } = await getOrCreateShop(userId, email, name);
   return { shopId, role: role as 'owner' | 'staff', userId, email, name };
 }
@@ -47,9 +43,6 @@ export async function requireShopAuth(): Promise<AuthResult> {
   const authResult = await getAuth();
   if (!authResult) {
     throw new AuthError(401, 'Unauthorized');
-  }
-  if (authResult.role === 'superadmin') {
-    throw new AuthError(403, 'Superadmin cannot access shop routes directly');
   }
   if (!authResult.shopId) {
     throw new AuthError(403, 'No shop found — complete onboarding');

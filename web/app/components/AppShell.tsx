@@ -24,16 +24,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       .then((r) => r.json())
       .then((d) => {
         if (!d.authenticated) return;
-        if (d.role === 'superadmin') {
-          if (!path.startsWith('/admin')) {
-            router.push('/admin');
-          }
-          setAuthState({ role: d.role, shopId: null });
-        } else if (!d.shopId) {
+        if (!d.shopId && d.role !== 'superadmin') {
           router.push('/onboarding');
-        } else {
-          setAuthState({ role: d.role, shopId: d.shopId });
         }
+        setAuthState({ role: d.role, shopId: d.shopId });
       })
       .catch(() => {});
   }, [isLoaded, user, isAuthPage, path, router]);
@@ -76,31 +70,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       : 'text-[#5a4a3a] hover:bg-[#e8e0d2]';
   };
 
-  // Superadmin sees admin nav
-  if (authState?.role === 'superadmin') {
-    return (
-      <div className="min-h-screen bg-[#f5f0e6] text-[#3a2f2f]">
-        <header className="sticky top-0 z-10 border-b border-[#d9d0c2] bg-[#f5f0e6]/95 backdrop-blur">
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-3 py-2 sm:px-5">
-            <div className="flex min-w-0 items-center gap-3">
-              <Link href="/admin" className="shrink-0 text-lg font-bold text-[#8b2e2e]">
-                RVC Admin
-              </Link>
-              <nav className="flex gap-1 text-sm">
-                <Link href="/admin" className={`rounded-md px-3 py-1.5 ${tabClass('/admin', true)}`}>
-                  Shops
-                </Link>
-              </nav>
-            </div>
-            <div className="flex items-center gap-2">
-              <UserButton />
-            </div>
-          </div>
-        </header>
-        <div className="mx-auto max-w-6xl px-3 py-4 sm:px-5">{children}</div>
-      </div>
-    );
-  }
+  // Superadmin sees normal nav + admin link
+  const isAdmin = authState?.role === 'superadmin';
 
   return (
     <div className="min-h-screen bg-[#f5f0e6] text-[#3a2f2f]">
@@ -141,6 +112,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <Link href="/settings" className={`rounded-md px-3 py-1.5 ${tabClass('/settings')}`}>
                 {t('settings')}
               </Link>
+              {isAdmin && (
+                <Link href="/admin" className={`rounded-md px-3 py-1.5 ${tabClass('/admin')}`}>
+                  Admin
+                </Link>
+              )}
             </nav>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
