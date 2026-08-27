@@ -122,6 +122,44 @@ async function ensureSchema() {
       updated_at TIMESTAMPTZ DEFAULT now()
     )
   `;
+
+  // ---- Multi-tenant schema ----
+  await sql`
+    CREATE TABLE IF NOT EXISTS shops (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT NOT NULL,
+      address TEXT,
+      phone TEXT,
+      active BOOLEAN DEFAULT true,
+      billing_status TEXT DEFAULT 'trial',
+      trial_ends DATE,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS shop_users (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      clerk_user_id TEXT UNIQUE NOT NULL,
+      shop_id UUID REFERENCES shops(id) ON DELETE CASCADE,
+      role TEXT NOT NULL DEFAULT 'owner',
+      name TEXT,
+      email TEXT,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `;
+  await sql`ALTER TABLE customers ADD COLUMN IF NOT EXISTS shop_id UUID`;
+  await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS shop_id UUID`;
+  await sql`ALTER TABLE bill_items ADD COLUMN IF NOT EXISTS shop_id UUID`;
+  await sql`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS shop_id UUID`;
+  await sql`ALTER TABLE purchase_items ADD COLUMN IF NOT EXISTS shop_id UUID`;
+  await sql`ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS shop_id UUID`;
+  await sql`ALTER TABLE supplier_payments ADD COLUMN IF NOT EXISTS shop_id UUID`;
+  await sql`ALTER TABLE wastage ADD COLUMN IF NOT EXISTS shop_id UUID`;
+  await sql`ALTER TABLE catalog_items ADD COLUMN IF NOT EXISTS shop_id UUID`;
+  await sql`ALTER TABLE catalog_aliases ADD COLUMN IF NOT EXISTS shop_id UUID`;
+  await sql`ALTER TABLE expenses ADD COLUMN IF NOT EXISTS shop_id UUID`;
+  await sql`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS shop_id UUID`;
+
   schemaReady = true;
 }
 
@@ -145,15 +183,6 @@ function inferItemKind(it: BillItem & { charge_code?: string | null; kind?: Char
   const hit = detectCharge(it.confirmed_name || it.raw_text || '');
   if (hit) return { kind: 'charge', chargeCode: hit.code };
   return { kind: 'item', chargeCode: null };
-}
-
-export async function getCustomerNames(): Promise<string[]> {
-  if (!isDbConfigured()) {
-    return (seed as unknown as Customer[]).map((c) => c.name);
-  }
-  const sql = getSql();
-  const rows = await sql`SELECT name FROM customers ORDER BY name`;
-  return rows.map((r) => r.name as string);
 }
 
 function normalizeSeedItems(raw: unknown): Customer['txns'][number]['items'] {
@@ -182,7 +211,117 @@ function normalizeSeedItems(raw: unknown): Customer['txns'][number]['items'] {
   });
 }
 
-export async function getCustomers(): Promise<Customer[]> {
+/* ---- Shop management ---- */
+
+export async function ensureDefaultShop(): Promise<string> {
+  await ensureSchema();
+  const sql = getSql();
+  const existing = await sql`SELECT id FROM shops LIMIT 1`;
+  let shopId: string;
+  if (existing.length > 0) {
+    shopId = (existing[0] as any).id as string;
+  } else {
+    const [row] = await sql`
+      INSERT INTO shops (name) VALUES ('RVC Vegetable Shop') RETURNING id
+    `;
+    if (!row) throw new Error('Could not create default shop');
+    shopId = (row as any).id as string;
+  }
+  await sql`UPDATE customers SET shop_id = ${shopId} WHERE shop_id IS NULL`;
+  await sql`UPDATE transactions SET shop_id = ${shopId} WHERE shop_id IS NULL`;
+  await sql`UPDATE bill_items SET shop_id = ${shopId} WHERE shop_id IS NULL`;
+  await sql`UPDATE purchases SET shop_id = ${shopId} WHERE shop_id IS NULL`;
+  await sql`UPDATE purchase_items SET shop_id = ${shopId} WHERE shop_id IS NULL`;
+  await sql`UPDATE suppliers SET shop_id = ${shopId} WHERE shop_id IS NULL`;
+  await sql`UPDATE supplier_payments SET shop_id = ${shopId} WHERE shop_id IS NULL`;
+  await sql`UPDATE wastage SET shop_id = ${shopId} WHERE shop_id IS NULL`;
+  await sql`UPDATE catalog_items SET shop_id = ${shopId} WHERE shop_id IS NULL`;
+  await sql`UPDATE catalog_aliases SET shop_id = ${shopId} WHERE shop_id IS NULL`;
+  await sql`UPDATE expenses SET shop_id = ${shopId} WHERE shop_id IS NULL`;
+  await sql`UPDATE app_settings SET shop_id = ${shopId} WHERE shop_id IS NULL`;
+  return shopId;
+}
+
+export async function getOrCreateShop(
+  clerkUserId: string,
+  email: string,
+  name: string,
+): Promise<{ shopId: string | null; role: string }> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql`
+    SELECT shop_id, role FROM shop_users WHERE clerk_user_id = ${clerkUserId} LIMIT 1
+  `;
+  if (rows.length > 0) {
+    const r = rows[0] as any;
+    return { shopId: (r.shop_id as string) ?? null, role: (r.role as string) ?? 'owner' };
+  }
+  return { shopId: null, role: 'owner' };
+}
+
+export async function createShop(
+  clerkUserId: string,
+  email: string,
+  name: string,
+  shopName: string,
+  shopAddress: string,
+  shopPhone: string,
+): Promise<string> {
+  await ensureSchema();
+  const sql = getSql();
+  const [shop] = await sql`
+    INSERT INTO shops (name, address, phone, trial_ends)
+    VALUES (${shopName}, ${shopAddress || null}, ${shopPhone || null}, now() + interval '30 days')
+    RETURNING id
+  `;
+  if (!shop) throw new Error('Could not create shop');
+  const shopId = (shop as any).id as string;
+  await sql`
+    INSERT INTO shop_users (clerk_user_id, shop_id, role, name, email)
+    VALUES (${clerkUserId}, ${shopId}, 'owner', ${name || null}, ${email || null})
+  `;
+  return shopId;
+}
+
+export async function getAllShops(): Promise<any[]> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql`SELECT * FROM shops ORDER BY created_at DESC`;
+  return rows as any[];
+}
+
+export async function getShopById(shopId: string): Promise<any | null> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql`SELECT * FROM shops WHERE id = ${shopId} LIMIT 1`;
+  return (rows[0] as any) ?? null;
+}
+
+export async function setShopBillingStatus(shopId: string, status: string): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`UPDATE shops SET billing_status = ${status} WHERE id = ${shopId}`;
+}
+
+export async function setShopActive(shopId: string, active: boolean): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`UPDATE shops SET active = ${active} WHERE id = ${shopId}`;
+}
+
+/* ---- Customers ---- */
+
+export async function getCustomerNames(shopId: string): Promise<string[]> {
+  if (!isDbConfigured()) {
+    return (seed as unknown as Customer[]).map((c) => c.name);
+  }
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql`SELECT name FROM customers WHERE shop_id = ${shopId} ORDER BY name`;
+  return rows.map((r) => r.name as string);
+}
+
+export async function getCustomers(shopId: string): Promise<Customer[]> {
   if (!isDbConfigured()) {
     return (seed as unknown as Customer[]).map((c) => ({
       ...c,
@@ -197,9 +336,9 @@ export async function getCustomers(): Promise<Customer[]> {
   await ensureSchema();
   const sql = getSql();
 
-  const customers = await sql`SELECT id, name, phone, credit_limit FROM customers ORDER BY name`;
-  const txns = await sql`SELECT * FROM transactions ORDER BY date, created_at`;
-  const items = await sql`SELECT * FROM bill_items`;
+  const customers = await sql`SELECT id, name, phone, credit_limit FROM customers WHERE shop_id = ${shopId} ORDER BY name`;
+  const txns = await sql`SELECT * FROM transactions WHERE shop_id = ${shopId} ORDER BY date, created_at`;
+  const items = await sql`SELECT * FROM bill_items WHERE shop_id = ${shopId}`;
 
   const itemsByTxn = new Map<string, BillItem[]>();
   for (const it of items) {
@@ -287,25 +426,25 @@ export async function getCustomers(): Promise<Customer[]> {
   return customersOut;
 }
 
-export async function saveBill(bill: BillData): Promise<void> {
+export async function saveBill(shopId: string, bill: BillData): Promise<void> {
   await ensureSchema();
   const sql = getSql();
 
-  // Upsert customer and insert transaction + items in one atomic batch
-  const [customer] = await sql`
-    INSERT INTO customers (name)
-    VALUES (${bill.customerName})
-    ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-    RETURNING id
-  `;
+  // Find or create customer scoped to this shop
+  let [customer] = await sql`SELECT id FROM customers WHERE name = ${bill.customerName} AND shop_id = ${shopId} LIMIT 1`;
+  if (!customer) {
+    [customer] = await sql`
+      INSERT INTO customers (name, shop_id) VALUES (${bill.customerName}, ${shopId}) RETURNING id
+    `;
+  }
 
   if (!customer) throw new Error('Could not upsert customer');
 
   const notes = bill.market ? encodeMarketNotes(bill.market) : null;
 
   const [transaction] = await sql`
-    INSERT INTO transactions (customer_id, date, bill_no, bill_amount, amount_paid, notes, image_path)
-    VALUES (${customer.id}, ${bill.date}, ${bill.billNo}, ${bill.total}, 0, ${notes}, ${bill.imagePath || null})
+    INSERT INTO transactions (customer_id, date, bill_no, bill_amount, amount_paid, notes, image_path, shop_id)
+    VALUES (${customer.id}, ${bill.date}, ${bill.billNo}, ${bill.total}, 0, ${notes}, ${bill.imagePath || null}, ${shopId})
     RETURNING id
   `;
 
@@ -314,37 +453,40 @@ export async function saveBill(bill: BillData): Promise<void> {
   for (const it of bill.items) {
     const inferred = inferItemKind(it);
     await sql`
-      INSERT INTO bill_items (transaction_id, raw_text, confirmed_name, qty, rate, amount, display, kind, charge_code)
-      VALUES (${transaction.id}, ${it.raw_text}, ${it.confirmed_name}, ${it.qty}, ${it.rate}, ${it.amount}, ${it.display}, ${inferred.kind}, ${inferred.chargeCode})
+      INSERT INTO bill_items (transaction_id, raw_text, confirmed_name, qty, rate, amount, display, kind, charge_code, shop_id)
+      VALUES (${transaction.id}, ${it.raw_text}, ${it.confirmed_name}, ${it.qty}, ${it.rate}, ${it.amount}, ${it.display}, ${inferred.kind}, ${inferred.chargeCode}, ${shopId})
     `;
   }
 }
 
-export async function recordPayment(customerName: string, date: string, amount: number, notes: string): Promise<void> {
+export async function recordPayment(shopId: string, customerName: string, date: string, amount: number, notes: string): Promise<void> {
+  await ensureSchema();
   const sql = getSql();
 
-  const [customer] = await sql`
-    INSERT INTO customers (name)
-    VALUES (${customerName})
-    ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-    RETURNING id
-  `;
+  let [customer] = await sql`SELECT id FROM customers WHERE name = ${customerName} AND shop_id = ${shopId} LIMIT 1`;
+  if (!customer) {
+    [customer] = await sql`
+      INSERT INTO customers (name, shop_id) VALUES (${customerName}, ${shopId}) RETURNING id
+    `;
+  }
 
   if (!customer) throw new Error('Could not upsert customer');
 
   await sql`
-    INSERT INTO transactions (customer_id, date, bill_no, bill_amount, amount_paid, notes, image_path)
-    VALUES (${customer.id}, ${date}, NULL, 0, ${amount}, ${notes || 'Payment received'}, NULL)
+    INSERT INTO transactions (customer_id, date, bill_no, bill_amount, amount_paid, notes, image_path, shop_id)
+    VALUES (${customer.id}, ${date}, NULL, 0, ${amount}, ${notes || 'Payment received'}, NULL, ${shopId})
   `;
 }
 
-export async function getPurchases(): Promise<PurchaseView[]> {
+/* ---- Purchases ---- */
+
+export async function getPurchases(shopId: string): Promise<PurchaseView[]> {
   if (!isDbConfigured()) return [];
   await ensureSchema();
   const sql = getSql();
 
-  const rows = await sql`SELECT * FROM purchases ORDER BY date DESC, created_at DESC`;
-  const items = await sql`SELECT * FROM purchase_items`;
+  const rows = await sql`SELECT * FROM purchases WHERE shop_id = ${shopId} ORDER BY date DESC, created_at DESC`;
+  const items = await sql`SELECT * FROM purchase_items WHERE shop_id = ${shopId}`;
 
   const byPurchase = new Map<string, any[]>();
   for (const it of items) {
@@ -371,25 +513,25 @@ export async function getPurchases(): Promise<PurchaseView[]> {
   }));
 }
 
-export async function savePurchase(purchase: PurchaseData): Promise<void> {
+export async function savePurchase(shopId: string, purchase: PurchaseData): Promise<void> {
   await ensureSchema();
   const sql = getSql();
 
   let supplierId: string | null = null;
   if (purchase.supplier?.trim()) {
-    const [sup] = await sql`
-      INSERT INTO suppliers (name)
-      VALUES (${purchase.supplier.trim()})
-      ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-      RETURNING id
-    `;
-    supplierId = sup?.id as string;
+    let [sup] = await sql`SELECT id FROM suppliers WHERE name = ${purchase.supplier.trim()} AND shop_id = ${shopId} LIMIT 1`;
+    if (!sup) {
+      [sup] = await sql`
+        INSERT INTO suppliers (name, shop_id) VALUES (${purchase.supplier.trim()}, ${shopId}) RETURNING id
+      `;
+    }
+    supplierId = (sup as any)?.id as string;
   }
 
   const notes = purchase.market ? encodeMarketNotes(purchase.market) : null;
   const [row] = await sql`
-    INSERT INTO purchases (date, supplier, bill_no, total, notes, supplier_id)
-    VALUES (${purchase.date}, ${purchase.supplier || null}, ${purchase.billNo || null}, ${purchase.total}, ${notes}, ${supplierId})
+    INSERT INTO purchases (date, supplier, bill_no, total, notes, supplier_id, shop_id)
+    VALUES (${purchase.date}, ${purchase.supplier || null}, ${purchase.billNo || null}, ${purchase.total}, ${notes}, ${supplierId}, ${shopId})
     RETURNING id
   `;
   if (!row) throw new Error('Could not insert purchase');
@@ -399,40 +541,43 @@ export async function savePurchase(purchase: PurchaseData): Promise<void> {
     const kind = it.kind || (hit ? 'charge' : 'item');
     const code = it.chargeCode ?? (hit ? hit.code : null);
     await sql`
-      INSERT INTO purchase_items (purchase_id, name, qty, rate, amount, kind, charge_code)
-      VALUES (${row.id}, ${it.name}, ${it.qty}, ${it.rate}, ${it.amount}, ${kind}, ${code})
+      INSERT INTO purchase_items (purchase_id, name, qty, rate, amount, kind, charge_code, shop_id)
+      VALUES (${row.id}, ${it.name}, ${it.qty}, ${it.rate}, ${it.amount}, ${kind}, ${code}, ${shopId})
     `;
   }
 }
 
-export async function deletePurchase(id: string): Promise<void> {
+export async function deletePurchase(shopId: string, id: string): Promise<void> {
   await ensureSchema();
   const sql = getSql();
-  await sql`DELETE FROM purchase_items WHERE purchase_id = ${id}`;
-  await sql`DELETE FROM purchases WHERE id = ${id}`;
+  await sql`DELETE FROM purchase_items WHERE purchase_id = ${id} AND shop_id = ${shopId}`;
+  await sql`DELETE FROM purchases WHERE id = ${id} AND shop_id = ${shopId}`;
 }
 
-export async function setCustomerPhone(id: string, phone: string): Promise<void> {
+export async function setCustomerPhone(shopId: string, id: string, phone: string): Promise<void> {
   await ensureSchema();
   const sql = getSql();
-  await sql`UPDATE customers SET phone = ${phone || null} WHERE id = ${id}`;
+  await sql`UPDATE customers SET phone = ${phone || null} WHERE id = ${id} AND shop_id = ${shopId}`;
 }
 
-export async function deleteTransaction(id: string): Promise<void> {
+export async function deleteTransaction(shopId: string, id: string): Promise<void> {
+  await ensureSchema();
   const sql = getSql();
-  await sql`DELETE FROM bill_items WHERE transaction_id = ${id}`;
-  await sql`DELETE FROM transactions WHERE id = ${id}`;
+  await sql`DELETE FROM bill_items WHERE transaction_id = ${id} AND shop_id = ${shopId}`;
+  await sql`DELETE FROM transactions WHERE id = ${id} AND shop_id = ${shopId}`;
 }
 
-export async function getSuppliers(): Promise<Supplier[]> {
+/* ---- Suppliers ---- */
+
+export async function getSuppliers(shopId: string): Promise<Supplier[]> {
   if (!isDbConfigured()) return [];
   await ensureSchema();
   const sql = getSql();
 
-  const suppliers = await sql`SELECT id, name, phone FROM suppliers ORDER BY name`;
-  const purchases = await sql`SELECT id, supplier_id, date, bill_no, total FROM purchases WHERE supplier_id IS NOT NULL ORDER BY date, created_at`;
-  const payments = await sql`SELECT * FROM supplier_payments ORDER BY date, created_at`;
-  const items = await sql`SELECT * FROM purchase_items`;
+  const suppliers = await sql`SELECT id, name, phone FROM suppliers WHERE shop_id = ${shopId} ORDER BY name`;
+  const purchases = await sql`SELECT id, supplier_id, date, bill_no, total FROM purchases WHERE supplier_id IS NOT NULL AND shop_id = ${shopId} ORDER BY date, created_at`;
+  const payments = await sql`SELECT * FROM supplier_payments WHERE shop_id = ${shopId} ORDER BY date, created_at`;
+  const items = await sql`SELECT * FROM purchase_items WHERE shop_id = ${shopId}`;
 
   const itemsByPurchase = new Map<string, any[]>();
   for (const it of items) {
@@ -503,35 +648,37 @@ export async function getSuppliers(): Promise<Supplier[]> {
   return out;
 }
 
-export async function recordSupplierPayment(supplierName: string, date: string, amount: number, notes: string): Promise<void> {
+export async function recordSupplierPayment(shopId: string, supplierName: string, date: string, amount: number, notes: string): Promise<void> {
   await ensureSchema();
   const sql = getSql();
 
-  const [sup] = await sql`
-    INSERT INTO suppliers (name)
-    VALUES (${supplierName.trim()})
-    ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-    RETURNING id
-  `;
+  let [sup] = await sql`SELECT id FROM suppliers WHERE name = ${supplierName.trim()} AND shop_id = ${shopId} LIMIT 1`;
+  if (!sup) {
+    [sup] = await sql`
+      INSERT INTO suppliers (name, shop_id) VALUES (${supplierName.trim()}, ${shopId}) RETURNING id
+    `;
+  }
   if (!sup) throw new Error('Could not upsert supplier');
 
   await sql`
-    INSERT INTO supplier_payments (supplier_id, date, amount, notes)
-    VALUES (${sup.id}, ${date}, ${amount}, ${notes || null})
+    INSERT INTO supplier_payments (supplier_id, date, amount, notes, shop_id)
+    VALUES (${sup.id}, ${date}, ${amount}, ${notes || null}, ${shopId})
   `;
 }
 
-export async function setSupplierPhone(id: string, phone: string): Promise<void> {
+export async function setSupplierPhone(shopId: string, id: string, phone: string): Promise<void> {
   await ensureSchema();
   const sql = getSql();
-  await sql`UPDATE suppliers SET phone = ${phone || null} WHERE id = ${id}`;
+  await sql`UPDATE suppliers SET phone = ${phone || null} WHERE id = ${id} AND shop_id = ${shopId}`;
 }
 
-export async function getWastage(): Promise<WastageEntry[]> {
+/* ---- Wastage ---- */
+
+export async function getWastage(shopId: string): Promise<WastageEntry[]> {
   if (!isDbConfigured()) return [];
   await ensureSchema();
   const sql = getSql();
-  const rows = await sql`SELECT * FROM wastage ORDER BY date DESC, created_at DESC`;
+  const rows = await sql`SELECT * FROM wastage WHERE shop_id = ${shopId} ORDER BY date DESC, created_at DESC`;
   return (rows as any[]).map((r) => ({
     id: r.id as string,
     date: toDateOnly(r.date),
@@ -543,29 +690,29 @@ export async function getWastage(): Promise<WastageEntry[]> {
   }));
 }
 
-export async function saveWastage(entry: Omit<WastageEntry, 'id'>): Promise<void> {
+export async function saveWastage(shopId: string, entry: Omit<WastageEntry, 'id'>): Promise<void> {
   await ensureSchema();
   const sql = getSql();
   await sql`
-    INSERT INTO wastage (date, item_name, qty, unit, reason, est_cost)
-    VALUES (${entry.date}, ${entry.itemName}, ${entry.qty || null}, ${entry.unit || null}, ${entry.reason || null}, ${entry.estCost})
+    INSERT INTO wastage (date, item_name, qty, unit, reason, est_cost, shop_id)
+    VALUES (${entry.date}, ${entry.itemName}, ${entry.qty || null}, ${entry.unit || null}, ${entry.reason || null}, ${entry.estCost}, ${shopId})
   `;
 }
 
-export async function deleteWastage(id: string): Promise<void> {
+export async function deleteWastage(shopId: string, id: string): Promise<void> {
   await ensureSchema();
   const sql = getSql();
-  await sql`DELETE FROM wastage WHERE id = ${id}`;
+  await sql`DELETE FROM wastage WHERE id = ${id} AND shop_id = ${shopId}`;
 }
 
 /* ---- Item catalog ---- */
 
-export async function getCatalog(): Promise<CatalogItem[]> {
+export async function getCatalog(shopId: string): Promise<CatalogItem[]> {
   if (!isDbConfigured()) return [];
   await ensureSchema();
   const sql = getSql();
-  const items = await sql`SELECT * FROM catalog_items ORDER BY name`;
-  const aliases = await sql`SELECT * FROM catalog_aliases`;
+  const items = await sql`SELECT * FROM catalog_items WHERE shop_id = ${shopId} ORDER BY name`;
+  const aliases = await sql`SELECT * FROM catalog_aliases WHERE shop_id = ${shopId}`;
 
   const aliasesByItem = new Map<string, string[]>();
   for (const a of aliases) {
@@ -586,7 +733,7 @@ export async function getCatalog(): Promise<CatalogItem[]> {
   }));
 }
 
-export async function saveCatalogItem(item: Omit<CatalogItem, 'id'> & { id?: string }): Promise<void> {
+export async function saveCatalogItem(shopId: string, item: Omit<CatalogItem, 'id'> & { id?: string }): Promise<void> {
   await ensureSchema();
   const sql = getSql();
 
@@ -599,35 +746,35 @@ export async function saveCatalogItem(item: Omit<CatalogItem, 'id'> & { id?: str
           telugu_name = ${item.teluguName || null},
           hindi_name = ${item.hindiName || null},
           active = ${item.active}
-      WHERE id = ${item.id}
+      WHERE id = ${item.id} AND shop_id = ${shopId}
     `;
-    await sql`DELETE FROM catalog_aliases WHERE item_id = ${item.id}`;
+    await sql`DELETE FROM catalog_aliases WHERE item_id = ${item.id} AND shop_id = ${shopId}`;
     for (const alias of item.aliases) {
-      await sql`INSERT INTO catalog_aliases (item_id, alias) VALUES (${item.id}, ${alias})`;
+      await sql`INSERT INTO catalog_aliases (item_id, alias, shop_id) VALUES (${item.id}, ${alias}, ${shopId})`;
     }
   } else {
     const [row] = await sql`
-      INSERT INTO catalog_items (name, default_unit, default_sell_price, telugu_name, hindi_name, active)
-      VALUES (${item.name}, ${item.defaultUnit || null}, ${item.defaultSellPrice || null}, ${item.teluguName || null}, ${item.hindiName || null}, ${item.active})
+      INSERT INTO catalog_items (name, default_unit, default_sell_price, telugu_name, hindi_name, active, shop_id)
+      VALUES (${item.name}, ${item.defaultUnit || null}, ${item.defaultSellPrice || null}, ${item.teluguName || null}, ${item.hindiName || null}, ${item.active}, ${shopId})
       RETURNING id
     `;
     if (!row) throw new Error('Could not insert catalog item');
     for (const alias of item.aliases) {
-      await sql`INSERT INTO catalog_aliases (item_id, alias) VALUES (${row.id}, ${alias})`;
+      await sql`INSERT INTO catalog_aliases (item_id, alias, shop_id) VALUES (${row.id}, ${alias}, ${shopId})`;
     }
   }
 }
 
-export async function deleteCatalogItem(id: string): Promise<void> {
+export async function deleteCatalogItem(shopId: string, id: string): Promise<void> {
   await ensureSchema();
   const sql = getSql();
-  await sql`DELETE FROM catalog_aliases WHERE item_id = ${id}`;
-  await sql`DELETE FROM catalog_items WHERE id = ${id}`;
+  await sql`DELETE FROM catalog_aliases WHERE item_id = ${id} AND shop_id = ${shopId}`;
+  await sql`DELETE FROM catalog_items WHERE id = ${id} AND shop_id = ${shopId}`;
 }
 
 /* ---- Stock levels ---- */
 
-export async function getStock(): Promise<StockLevel[]> {
+export async function getStock(shopId: string): Promise<StockLevel[]> {
   if (!isDbConfigured()) return [];
   await ensureSchema();
   const sql = getSql();
@@ -637,7 +784,7 @@ export async function getStock(): Promise<StockLevel[]> {
     SELECT pi.name, pi.qty, pi.rate, p.date
     FROM purchase_items pi
     JOIN purchases p ON pi.purchase_id = p.id
-    WHERE pi.kind = 'item' OR pi.kind IS NULL
+    WHERE (pi.kind = 'item' OR pi.kind IS NULL) AND pi.shop_id = ${shopId}
     ORDER BY p.date DESC
   `;
 
@@ -646,11 +793,11 @@ export async function getStock(): Promise<StockLevel[]> {
     SELECT bi.confirmed_name as name, bi.qty, t.date
     FROM bill_items bi
     JOIN transactions t ON bi.transaction_id = t.id
-    WHERE bi.kind = 'item' OR bi.kind IS NULL
+    WHERE (bi.kind = 'item' OR bi.kind IS NULL) AND bi.shop_id = ${shopId}
   `;
 
   // Aggregate wastage
-  const wastage = await sql`SELECT item_name as name, qty, unit FROM wastage`;
+  const wastage = await sql`SELECT item_name as name, qty, unit FROM wastage WHERE shop_id = ${shopId}`;
 
   const stock = new Map<string, { name: string; qty: number; unit: string | null; lastDate: string | null; lastRate: number | null }>();
 
@@ -708,11 +855,11 @@ export async function getStock(): Promise<StockLevel[]> {
 
 /* ---- Expenses ---- */
 
-export async function getExpenses(): Promise<ExpenseEntry[]> {
+export async function getExpenses(shopId: string): Promise<ExpenseEntry[]> {
   if (!isDbConfigured()) return [];
   await ensureSchema();
   const sql = getSql();
-  const rows = await sql`SELECT * FROM expenses ORDER BY date DESC, created_at DESC`;
+  const rows = await sql`SELECT * FROM expenses WHERE shop_id = ${shopId} ORDER BY date DESC, created_at DESC`;
   return (rows as any[]).map((r) => ({
     id: r.id as string,
     date: toDateOnly(r.date),
@@ -722,46 +869,46 @@ export async function getExpenses(): Promise<ExpenseEntry[]> {
   }));
 }
 
-export async function saveExpense(entry: Omit<ExpenseEntry, 'id'>): Promise<void> {
+export async function saveExpense(shopId: string, entry: Omit<ExpenseEntry, 'id'>): Promise<void> {
   await ensureSchema();
   const sql = getSql();
   await sql`
-    INSERT INTO expenses (date, category, description, amount)
-    VALUES (${entry.date}, ${entry.category}, ${entry.description || null}, ${entry.amount})
+    INSERT INTO expenses (date, category, description, amount, shop_id)
+    VALUES (${entry.date}, ${entry.category}, ${entry.description || null}, ${entry.amount}, ${shopId})
   `;
 }
 
-export async function deleteExpense(id: string): Promise<void> {
+export async function deleteExpense(shopId: string, id: string): Promise<void> {
   await ensureSchema();
   const sql = getSql();
-  await sql`DELETE FROM expenses WHERE id = ${id}`;
+  await sql`DELETE FROM expenses WHERE id = ${id} AND shop_id = ${shopId}`;
 }
 
 /* ---- Customer credit limit ---- */
 
-export async function setCustomerCreditLimit(id: string, limit: number | null): Promise<void> {
+export async function setCustomerCreditLimit(shopId: string, id: string, limit: number | null): Promise<void> {
   await ensureSchema();
   const sql = getSql();
-  await sql`UPDATE customers SET credit_limit = ${limit} WHERE id = ${id}`;
+  await sql`UPDATE customers SET credit_limit = ${limit} WHERE id = ${id} AND shop_id = ${shopId}`;
 }
 
 /* ---- Data backup/restore ---- */
 
-export async function exportAllData() {
+export async function exportAllData(shopId: string) {
   await ensureSchema();
   const sql = getSql();
   const [customers, transactions, billItems, purchases, purchaseItems, suppliers, supplierPayments, wastage, catalogItems, catalogAliases, expenses] = await Promise.all([
-    sql`SELECT id, name, phone, credit_limit FROM customers ORDER BY name`,
-    sql`SELECT * FROM transactions ORDER BY date, created_at`,
-    sql`SELECT * FROM bill_items ORDER BY transaction_id, id`,
-    sql`SELECT * FROM purchases ORDER BY date, created_at`,
-    sql`SELECT * FROM purchase_items ORDER BY purchase_id, id`,
-    sql`SELECT * FROM suppliers ORDER BY name`,
-    sql`SELECT * FROM supplier_payments ORDER BY date, created_at`,
-    sql`SELECT * FROM wastage ORDER BY date, created_at`,
-    sql`SELECT * FROM catalog_items ORDER BY name`,
-    sql`SELECT * FROM catalog_aliases ORDER BY item_id, id`,
-    sql`SELECT * FROM expenses ORDER BY date, created_at`,
+    sql`SELECT id, name, phone, credit_limit FROM customers WHERE shop_id = ${shopId} ORDER BY name`,
+    sql`SELECT * FROM transactions WHERE shop_id = ${shopId} ORDER BY date, created_at`,
+    sql`SELECT * FROM bill_items WHERE shop_id = ${shopId} ORDER BY transaction_id, id`,
+    sql`SELECT * FROM purchases WHERE shop_id = ${shopId} ORDER BY date, created_at`,
+    sql`SELECT * FROM purchase_items WHERE shop_id = ${shopId} ORDER BY purchase_id, id`,
+    sql`SELECT * FROM suppliers WHERE shop_id = ${shopId} ORDER BY name`,
+    sql`SELECT * FROM supplier_payments WHERE shop_id = ${shopId} ORDER BY date, created_at`,
+    sql`SELECT * FROM wastage WHERE shop_id = ${shopId} ORDER BY date, created_at`,
+    sql`SELECT * FROM catalog_items WHERE shop_id = ${shopId} ORDER BY name`,
+    sql`SELECT * FROM catalog_aliases WHERE shop_id = ${shopId} ORDER BY item_id, id`,
+    sql`SELECT * FROM expenses WHERE shop_id = ${shopId} ORDER BY date, created_at`,
   ]);
   return {
     exportedAt: new Date().toISOString(),
@@ -781,19 +928,19 @@ export async function exportAllData() {
 
 /* ---- App settings (key-value) ---- */
 
-export async function getSetting(key: string): Promise<string | null> {
+export async function getSetting(shopId: string, key: string): Promise<string | null> {
   if (!isDbConfigured()) return null;
   await ensureSchema();
   const sql = getSql();
-  const rows = await sql`SELECT value FROM app_settings WHERE key = ${key}`;
+  const rows = await sql`SELECT value FROM app_settings WHERE key = ${key} AND shop_id = ${shopId}`;
   return (rows[0] as any)?.value ?? null;
 }
 
-export async function getAllSettings(): Promise<Record<string, string>> {
+export async function getAllSettings(shopId: string): Promise<Record<string, string>> {
   if (!isDbConfigured()) return {};
   await ensureSchema();
   const sql = getSql();
-  const rows = await sql`SELECT key, value FROM app_settings`;
+  const rows = await sql`SELECT key, value FROM app_settings WHERE shop_id = ${shopId}`;
   const out: Record<string, string> = {};
   for (const r of rows as any[]) {
     out[r.key] = r.value;
@@ -801,19 +948,19 @@ export async function getAllSettings(): Promise<Record<string, string>> {
   return out;
 }
 
-export async function setSetting(key: string, value: string): Promise<void> {
+export async function setSetting(shopId: string, key: string, value: string): Promise<void> {
   await ensureSchema();
   const sql = getSql();
   await sql`
-    INSERT INTO app_settings (key, value, updated_at)
-    VALUES (${key}, ${value}, now())
-    ON CONFLICT (key) DO UPDATE SET value = ${value}, updated_at = now()
+    INSERT INTO app_settings (key, value, updated_at, shop_id)
+    VALUES (${key}, ${value}, now(), ${shopId})
+    ON CONFLICT (key) DO UPDATE SET value = ${value}, updated_at = now(), shop_id = ${shopId}
   `;
 }
 
 /* ---- Restore from backup ---- */
 
-export async function restoreAllData(data: any): Promise<{ restored: string[] }> {
+export async function restoreAllData(shopId: string, data: any): Promise<{ restored: string[] }> {
   await ensureSchema();
   const sql = getSql();
 
@@ -825,23 +972,23 @@ export async function restoreAllData(data: any): Promise<{ restored: string[] }>
     if (!Array.isArray(data[k])) throw new Error(`Invalid backup: missing ${k}`);
   }
 
-  // Wipe existing data in dependency order
-  await sql`DELETE FROM catalog_aliases`;
-  await sql`DELETE FROM catalog_items`;
-  await sql`DELETE FROM wastage`;
-  await sql`DELETE FROM supplier_payments`;
-  await sql`DELETE FROM purchase_items`;
-  await sql`DELETE FROM purchases`;
-  await sql`DELETE FROM bill_items`;
-  await sql`DELETE FROM transactions`;
-  await sql`DELETE FROM expenses`;
-  await sql`DELETE FROM customers`;
-  await sql`DELETE FROM suppliers`;
+  // Wipe existing data for this shop only, in dependency order
+  await sql`DELETE FROM catalog_aliases WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM catalog_items WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM wastage WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM supplier_payments WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM purchase_items WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM purchases WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM bill_items WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM transactions WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM expenses WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM customers WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM suppliers WHERE shop_id = ${shopId}`;
 
   // Restore customers first (other tables depend on them)
   if (Array.isArray(data.customers)) {
     for (const c of data.customers) {
-      await sql`INSERT INTO customers (id, name, phone, credit_limit) VALUES (${c.id}, ${c.name}, ${c.phone ?? null}, ${c.credit_limit ?? null}) ON CONFLICT (id) DO NOTHING`;
+      await sql`INSERT INTO customers (id, name, phone, credit_limit, shop_id) VALUES (${c.id}, ${c.name}, ${c.phone ?? null}, ${c.credit_limit ?? null}, ${shopId}) ON CONFLICT (id) DO NOTHING`;
     }
     restored.push(`customers (${data.customers.length})`);
   }
@@ -849,7 +996,7 @@ export async function restoreAllData(data: any): Promise<{ restored: string[] }>
   // Suppliers
   if (Array.isArray(data.suppliers)) {
     for (const s of data.suppliers) {
-      await sql`INSERT INTO suppliers (id, name, phone) VALUES (${s.id}, ${s.name}, ${s.phone ?? null}) ON CONFLICT (id) DO NOTHING`;
+      await sql`INSERT INTO suppliers (id, name, phone, shop_id) VALUES (${s.id}, ${s.name}, ${s.phone ?? null}, ${shopId}) ON CONFLICT (id) DO NOTHING`;
     }
     restored.push(`suppliers (${data.suppliers.length})`);
   }
@@ -857,7 +1004,7 @@ export async function restoreAllData(data: any): Promise<{ restored: string[] }>
   // Transactions
   if (Array.isArray(data.transactions)) {
     for (const t of data.transactions) {
-      await sql`INSERT INTO transactions (id, customer_id, date, type, amount, bill_no, market_notes, created_at) VALUES (${t.id}, ${t.customer_id}, ${t.date}, ${t.type}, ${t.amount}, ${t.bill_no ?? null}, ${t.market_notes ?? null}, ${t.created_at ?? new Date().toISOString()}) ON CONFLICT (id) DO NOTHING`;
+      await sql`INSERT INTO transactions (id, customer_id, date, type, amount, bill_no, market_notes, created_at, shop_id) VALUES (${t.id}, ${t.customer_id}, ${t.date}, ${t.type}, ${t.amount}, ${t.bill_no ?? null}, ${t.market_notes ?? null}, ${t.created_at ?? new Date().toISOString()}, ${shopId}) ON CONFLICT (id) DO NOTHING`;
     }
     restored.push(`transactions (${data.transactions.length})`);
   }
@@ -865,7 +1012,7 @@ export async function restoreAllData(data: any): Promise<{ restored: string[] }>
   // Bill items
   if (Array.isArray(data.billItems)) {
     for (const b of data.billItems) {
-      await sql`INSERT INTO bill_items (id, transaction_id, name, qty, rate, amount, display, kind, charge_code) VALUES (${b.id}, ${b.transaction_id}, ${b.name}, ${b.qty ?? null}, ${b.rate ?? null}, ${b.amount}, ${b.display ?? null}, ${b.kind ?? 'item'}, ${b.charge_code ?? null}) ON CONFLICT (id) DO NOTHING`;
+      await sql`INSERT INTO bill_items (id, transaction_id, name, qty, rate, amount, display, kind, charge_code, shop_id) VALUES (${b.id}, ${b.transaction_id}, ${b.name}, ${b.qty ?? null}, ${b.rate ?? null}, ${b.amount}, ${b.display ?? null}, ${b.kind ?? 'item'}, ${b.charge_code ?? null}, ${shopId}) ON CONFLICT (id) DO NOTHING`;
     }
     restored.push(`bill_items (${data.billItems.length})`);
   }
@@ -873,7 +1020,7 @@ export async function restoreAllData(data: any): Promise<{ restored: string[] }>
   // Purchases
   if (Array.isArray(data.purchases)) {
     for (const p of data.purchases) {
-      await sql`INSERT INTO purchases (id, date, supplier, supplier_id, bill_no, total, notes, created_at) VALUES (${p.id}, ${p.date}, ${p.supplier ?? null}, ${p.supplier_id ?? null}, ${p.bill_no ?? null}, ${p.total ?? 0}, ${p.notes ?? null}, ${p.created_at ?? new Date().toISOString()}) ON CONFLICT (id) DO NOTHING`;
+      await sql`INSERT INTO purchases (id, date, supplier, supplier_id, bill_no, total, notes, created_at, shop_id) VALUES (${p.id}, ${p.date}, ${p.supplier ?? null}, ${p.supplier_id ?? null}, ${p.bill_no ?? null}, ${p.total ?? 0}, ${p.notes ?? null}, ${p.created_at ?? new Date().toISOString()}, ${shopId}) ON CONFLICT (id) DO NOTHING`;
     }
     restored.push(`purchases (${data.purchases.length})`);
   }
@@ -881,7 +1028,7 @@ export async function restoreAllData(data: any): Promise<{ restored: string[] }>
   // Purchase items
   if (Array.isArray(data.purchaseItems)) {
     for (const pi of data.purchaseItems) {
-      await sql`INSERT INTO purchase_items (id, purchase_id, name, qty, rate, amount, kind, charge_code) VALUES (${pi.id}, ${pi.purchase_id}, ${pi.name}, ${pi.qty ?? null}, ${pi.rate ?? null}, ${pi.amount ?? 0}, ${pi.kind ?? 'item'}, ${pi.charge_code ?? null}) ON CONFLICT (id) DO NOTHING`;
+      await sql`INSERT INTO purchase_items (id, purchase_id, name, qty, rate, amount, kind, charge_code, shop_id) VALUES (${pi.id}, ${pi.purchase_id}, ${pi.name}, ${pi.qty ?? null}, ${pi.rate ?? null}, ${pi.amount ?? 0}, ${pi.kind ?? 'item'}, ${pi.charge_code ?? null}, ${shopId}) ON CONFLICT (id) DO NOTHING`;
     }
     restored.push(`purchase_items (${data.purchaseItems.length})`);
   }
@@ -889,7 +1036,7 @@ export async function restoreAllData(data: any): Promise<{ restored: string[] }>
   // Supplier payments
   if (Array.isArray(data.supplierPayments)) {
     for (const sp of data.supplierPayments) {
-      await sql`INSERT INTO supplier_payments (id, supplier_id, date, amount, notes) VALUES (${sp.id}, ${sp.supplier_id}, ${sp.date}, ${sp.amount}, ${sp.notes ?? null}) ON CONFLICT (id) DO NOTHING`;
+      await sql`INSERT INTO supplier_payments (id, supplier_id, date, amount, notes, shop_id) VALUES (${sp.id}, ${sp.supplier_id}, ${sp.date}, ${sp.amount}, ${sp.notes ?? null}, ${shopId}) ON CONFLICT (id) DO NOTHING`;
     }
     restored.push(`supplier_payments (${data.supplierPayments.length})`);
   }
@@ -897,7 +1044,7 @@ export async function restoreAllData(data: any): Promise<{ restored: string[] }>
   // Wastage
   if (Array.isArray(data.wastage)) {
     for (const w of data.wastage) {
-      await sql`INSERT INTO wastage (id, date, item_name, qty, unit, reason, est_cost) VALUES (${w.id}, ${w.date}, ${w.item_name}, ${w.qty ?? null}, ${w.unit ?? null}, ${w.reason ?? null}, ${w.est_cost ?? 0}) ON CONFLICT (id) DO NOTHING`;
+      await sql`INSERT INTO wastage (id, date, item_name, qty, unit, reason, est_cost, shop_id) VALUES (${w.id}, ${w.date}, ${w.item_name}, ${w.qty ?? null}, ${w.unit ?? null}, ${w.reason ?? null}, ${w.est_cost ?? 0}, ${shopId}) ON CONFLICT (id) DO NOTHING`;
     }
     restored.push(`wastage (${data.wastage.length})`);
   }
@@ -905,7 +1052,7 @@ export async function restoreAllData(data: any): Promise<{ restored: string[] }>
   // Catalog items
   if (Array.isArray(data.catalogItems)) {
     for (const ci of data.catalogItems) {
-      await sql`INSERT INTO catalog_items (id, name, default_unit, default_sell_price, telugu_name, hindi_name, active) VALUES (${ci.id}, ${ci.name}, ${ci.default_unit ?? null}, ${ci.default_sell_price ?? null}, ${ci.telugu_name ?? null}, ${ci.hindi_name ?? null}, ${ci.active ?? true}) ON CONFLICT (id) DO NOTHING`;
+      await sql`INSERT INTO catalog_items (id, name, default_unit, default_sell_price, telugu_name, hindi_name, active, shop_id) VALUES (${ci.id}, ${ci.name}, ${ci.default_unit ?? null}, ${ci.default_sell_price ?? null}, ${ci.telugu_name ?? null}, ${ci.hindi_name ?? null}, ${ci.active ?? true}, ${shopId}) ON CONFLICT (id) DO NOTHING`;
     }
     restored.push(`catalog_items (${data.catalogItems.length})`);
   }
@@ -913,7 +1060,7 @@ export async function restoreAllData(data: any): Promise<{ restored: string[] }>
   // Catalog aliases
   if (Array.isArray(data.catalogAliases)) {
     for (const ca of data.catalogAliases) {
-      await sql`INSERT INTO catalog_aliases (id, item_id, alias) VALUES (${ca.id}, ${ca.item_id}, ${ca.alias}) ON CONFLICT (id) DO NOTHING`;
+      await sql`INSERT INTO catalog_aliases (id, item_id, alias, shop_id) VALUES (${ca.id}, ${ca.item_id}, ${ca.alias}, ${shopId}) ON CONFLICT (id) DO NOTHING`;
     }
     restored.push(`catalog_aliases (${data.catalogAliases.length})`);
   }
@@ -921,7 +1068,7 @@ export async function restoreAllData(data: any): Promise<{ restored: string[] }>
   // Expenses
   if (Array.isArray(data.expenses)) {
     for (const e of data.expenses) {
-      await sql`INSERT INTO expenses (id, date, category, description, amount) VALUES (${e.id}, ${e.date}, ${e.category}, ${e.description ?? null}, ${e.amount}) ON CONFLICT (id) DO NOTHING`;
+      await sql`INSERT INTO expenses (id, date, category, description, amount, shop_id) VALUES (${e.id}, ${e.date}, ${e.category}, ${e.description ?? null}, ${e.amount}, ${shopId}) ON CONFLICT (id) DO NOTHING`;
     }
     restored.push(`expenses (${data.expenses.length})`);
   }
@@ -931,56 +1078,56 @@ export async function restoreAllData(data: any): Promise<{ restored: string[] }>
 
 /* ---- Clear old data ---- */
 
-export async function clearDataBefore(date: string): Promise<{ deleted: number }> {
+export async function clearDataBefore(shopId: string, date: string): Promise<{ deleted: number }> {
   await ensureSchema();
   const sql = getSql();
   // Delete bill_items for transactions before date
-  const oldTxns = await sql`SELECT id FROM transactions WHERE date < ${date}`;
+  const oldTxns = await sql`SELECT id FROM transactions WHERE date < ${date} AND shop_id = ${shopId}`;
   const txnIds = oldTxns.map((r: any) => r.id);
   let deleted = 0;
   if (txnIds.length > 0) {
     // Delete in batches
     for (const tid of txnIds) {
-      await sql`DELETE FROM bill_items WHERE transaction_id = ${tid}`;
+      await sql`DELETE FROM bill_items WHERE transaction_id = ${tid} AND shop_id = ${shopId}`;
     }
-    const result = await sql`DELETE FROM transactions WHERE date < ${date}`;
+    await sql`DELETE FROM transactions WHERE date < ${date} AND shop_id = ${shopId}`;
     deleted += txnIds.length;
   }
   // Also clear old purchases, wastage, expenses, supplier payments
-  await sql`DELETE FROM purchase_items WHERE purchase_id IN (SELECT id FROM purchases WHERE date < ${date})`;
-  await sql`DELETE FROM purchases WHERE date < ${date}`;
-  await sql`DELETE FROM wastage WHERE date < ${date}`;
-  await sql`DELETE FROM expenses WHERE date < ${date}`;
-  await sql`DELETE FROM supplier_payments WHERE date < ${date}`;
+  await sql`DELETE FROM purchase_items WHERE purchase_id IN (SELECT id FROM purchases WHERE date < ${date} AND shop_id = ${shopId}) AND shop_id = ${shopId}`;
+  await sql`DELETE FROM purchases WHERE date < ${date} AND shop_id = ${shopId}`;
+  await sql`DELETE FROM wastage WHERE date < ${date} AND shop_id = ${shopId}`;
+  await sql`DELETE FROM expenses WHERE date < ${date} AND shop_id = ${shopId}`;
+  await sql`DELETE FROM supplier_payments WHERE date < ${date} AND shop_id = ${shopId}`;
   return { deleted };
 }
 
-export async function clearAllData(): Promise<{ deleted: number }> {
+export async function clearAllData(shopId: string): Promise<{ deleted: number }> {
   await ensureSchema();
   const sql = getSql();
   const counts = await Promise.all([
-    sql`SELECT count(*)::int as c FROM bill_items`,
-    sql`SELECT count(*)::int as c FROM transactions`,
-    sql`SELECT count(*)::int as c FROM purchase_items`,
-    sql`SELECT count(*)::int as c FROM purchases`,
-    sql`SELECT count(*)::int as c FROM wastage`,
-    sql`SELECT count(*)::int as c FROM expenses`,
-    sql`SELECT count(*)::int as c FROM supplier_payments`,
-    sql`SELECT count(*)::int as c FROM catalog_aliases`,
-    sql`SELECT count(*)::int as c FROM catalog_items`,
+    sql`SELECT count(*)::int as c FROM bill_items WHERE shop_id = ${shopId}`,
+    sql`SELECT count(*)::int as c FROM transactions WHERE shop_id = ${shopId}`,
+    sql`SELECT count(*)::int as c FROM purchase_items WHERE shop_id = ${shopId}`,
+    sql`SELECT count(*)::int as c FROM purchases WHERE shop_id = ${shopId}`,
+    sql`SELECT count(*)::int as c FROM wastage WHERE shop_id = ${shopId}`,
+    sql`SELECT count(*)::int as c FROM expenses WHERE shop_id = ${shopId}`,
+    sql`SELECT count(*)::int as c FROM supplier_payments WHERE shop_id = ${shopId}`,
+    sql`SELECT count(*)::int as c FROM catalog_aliases WHERE shop_id = ${shopId}`,
+    sql`SELECT count(*)::int as c FROM catalog_items WHERE shop_id = ${shopId}`,
   ]);
   let deleted = 0;
   for (const c of counts) deleted += (c[0] as any).c;
 
-  await sql`DELETE FROM catalog_aliases`;
-  await sql`DELETE FROM catalog_items`;
-  await sql`DELETE FROM wastage`;
-  await sql`DELETE FROM supplier_payments`;
-  await sql`DELETE FROM purchase_items`;
-  await sql`DELETE FROM purchases`;
-  await sql`DELETE FROM bill_items`;
-  await sql`DELETE FROM transactions`;
-  await sql`DELETE FROM expenses`;
+  await sql`DELETE FROM catalog_aliases WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM catalog_items WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM wastage WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM supplier_payments WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM purchase_items WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM purchases WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM bill_items WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM transactions WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM expenses WHERE shop_id = ${shopId}`;
   // Keep customers and suppliers (they are master data)
   return { deleted };
 }

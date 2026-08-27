@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.8.2",
     "@neondatabase/serverless": "^1.1.0",
     "csv-parse": "^7.0.2",
     "fastest-levenshtein": "^1.0.16",

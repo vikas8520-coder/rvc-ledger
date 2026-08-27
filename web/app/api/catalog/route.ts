@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCatalog, saveCatalogItem } from '@/lib/db';
+import { requireShopAuth, AuthError } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const items = await getCatalog();
+    const auth = await requireShopAuth();
+    const items = await getCatalog(auth.shopId!);
     return NextResponse.json({ items });
   } catch (err: any) {
+    if (err instanceof AuthError) return NextResponse.json({ error: err.message }, { status: err.status });
     console.error('Get catalog error:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
@@ -15,11 +18,12 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireShopAuth();
     const body = await request.json();
     if (!body.name?.trim()) {
       return NextResponse.json({ error: 'Missing name' }, { status: 400 });
     }
-    await saveCatalogItem({
+    await saveCatalogItem(auth.shopId!, {
       id: body.id,
       name: body.name.trim(),
       defaultUnit: body.defaultUnit || null,
@@ -31,6 +35,7 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json({ ok: true });
   } catch (err: any) {
+    if (err instanceof AuthError) return NextResponse.json({ error: err.message }, { status: err.status });
     console.error('Save catalog error:', err);
     return NextResponse.json({ error: err.message || 'Unknown error' }, { status: 500 });
   }
