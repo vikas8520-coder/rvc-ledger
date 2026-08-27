@@ -22,8 +22,8 @@ export default function LedgerTable({ customer }: { customer: Customer }) {
         <colgroup>
           <col className="w-[70px]" />
           <col />
-          <col className="w-[80px]" />
-          <col className="w-[80px]" />
+          <col className="w-[70px]" />
+          <col className="w-[70px]" />
           <col className="w-[90px]" />
           <col className="w-[100px]" />
           <col className="w-[50px]" />
@@ -54,23 +54,43 @@ export default function LedgerTable({ customer }: { customer: Customer }) {
               ? ` · ${yardById(txn.market.marketYard)?.name || txn.market.marketYard}`
               : '';
 
+            if (isPayment) {
+              // Payment: single row, description spans qty+rate columns
+              return (
+                <tr key={txn.id} className="border-t-2 border-[#d9d0c2] bg-[#f0f8f3]">
+                  <td className="px-3 py-2 text-xs font-medium text-[#5a4a3a]">{fmtDate(txn.date)}</td>
+                  <td className="px-3 py-2 font-semibold text-[#2d6b4f]" colSpan={3}>
+                    {title}
+                  </td>
+                  <td className="px-3 py-2 text-right font-bold tabular-nums text-[#2d6b4f]">
+                    −{fmt(txn.amount)}
+                  </td>
+                  <td className="px-3 py-2 text-right font-semibold tabular-nums text-[#5a4a3a]">
+                    {fmt(txn.balanceAfter)}
+                  </td>
+                  <td className="px-2 py-2 text-right">
+                    <DeleteButton id={txn.id} />
+                  </td>
+                </tr>
+              );
+            }
+
+            // Bill with items
             return (
               <tbody key={txn.id} className="align-top">
-                {/* Transaction header row */}
+                {/* Bill header row — description spans qty+rate, shows total amount + balance */}
                 <tr className="border-t-2 border-[#d9d0c2] bg-[#f5f0e6]">
                   <td className="px-3 py-1.5 text-xs font-medium text-[#5a4a3a]" rowSpan={hasItems ? txn.items.length + 1 : 1}>
                     {fmtDate(txn.date)}
                   </td>
-                  <td className="px-3 py-1.5 font-semibold text-[#3a2f2f]">
+                  <td className="px-3 py-1.5 font-semibold text-[#3a2f2f]" colSpan={3}>
                     {title}
                     {yard && <span className="ml-1 text-[11px] font-normal text-[#8a7a6a]">{yard}</span>}
                   </td>
-                  <td className="px-3 py-1.5"></td>
-                  <td className="px-3 py-1.5"></td>
-                  <td className={`px-3 py-1.5 text-right font-bold tabular-nums ${isPayment ? 'text-[#2d6b4f]' : 'text-[#3a2f2f]'}`}>
-                    {isPayment ? '−' : '+'}{fmt(txn.amount)}
+                  <td className="px-3 py-1.5 text-right font-bold tabular-nums text-[#3a2f2f]">
+                    +{fmt(txn.amount)}
                   </td>
-                  <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-[#5a4a3a]">
+                  <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-[#5a4a3a]" rowSpan={hasItems ? txn.items.length + 1 : 1}>
                     {fmt(txn.balanceAfter)}
                   </td>
                   <td className="px-2 py-1.5 text-right" rowSpan={hasItems ? txn.items.length + 1 : 1}>
@@ -78,24 +98,15 @@ export default function LedgerTable({ customer }: { customer: Customer }) {
                   </td>
                 </tr>
 
-                {/* Item rows */}
+                {/* Item rows — qty, rate, amount filled; no empty balance cell */}
                 {hasItems && txn.items.map((it, idx) => (
                   <tr key={idx} className={`border-t border-[#ece5d8] ${it.kind === 'charge' ? 'italic text-[#6b5344]' : ''}`}>
                     <td className="px-3 py-1 text-[#3a2f2f]">{localizeName(it.name, uiLang)}</td>
-                    <td className="px-3 py-1 text-right tabular-nums text-[#7a6a5a]">{it.qty || ''}</td>
-                    <td className="px-3 py-1 text-right tabular-nums text-[#7a6a5a]">{it.rate || ''}</td>
+                    <td className="px-3 py-1 text-right tabular-nums text-[#7a6a5a]">{it.qty || '—'}</td>
+                    <td className="px-3 py-1 text-right tabular-nums text-[#7a6a5a]">{it.rate || '—'}</td>
                     <td className="px-3 py-1 text-right tabular-nums font-medium">{fmt(it.amount)}</td>
-                    <td className="px-3 py-1"></td>
                   </tr>
                 ))}
-
-                {/* Payment row — no items, just the balance line */}
-                {isPayment && (
-                  <tr className="border-t border-[#ece5d8]">
-                    <td className="px-3 py-0.5 text-[11px] text-[#8a7a6a] italic" colSpan={5}>{t('paymentReceived')}</td>
-                    <td className="px-3 py-0.5"></td>
-                  </tr>
-                )}
               </tbody>
             );
           })}
