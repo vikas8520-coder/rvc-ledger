@@ -18,7 +18,16 @@ export default function LedgerTable({ customer }: { customer: Customer }) {
 
   return (
     <div className="overflow-x-auto rounded-lg border border-[#d9d0c2] bg-white">
-      <table className="w-full border-collapse text-sm">
+      <table className="w-full border-collapse text-sm table-fixed">
+        <colgroup>
+          <col className="w-[70px]" />
+          <col />
+          <col className="w-[80px]" />
+          <col className="w-[80px]" />
+          <col className="w-[90px]" />
+          <col className="w-[100px]" />
+          <col className="w-[50px]" />
+        </colgroup>
         <thead>
           <tr className="bg-[#8b2e2e] text-white">
             <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide">{t('date')}</th>
