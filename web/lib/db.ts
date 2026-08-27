@@ -115,6 +115,13 @@ async function ensureSchema() {
     )
   `;
   await sql`ALTER TABLE customers ADD COLUMN IF NOT EXISTS credit_limit NUMERIC(12,2)`;
+  await sql`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT,
+      updated_at TIMESTAMPTZ DEFAULT now()
+    )
+  `;
   schemaReady = true;
 }
 
@@ -770,4 +777,210 @@ export async function exportAllData() {
     catalogAliases,
     expenses,
   };
+}
+
+/* ---- App settings (key-value) ---- */
+
+export async function getSetting(key: string): Promise<string | null> {
+  if (!isDbConfigured()) return null;
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql`SELECT value FROM app_settings WHERE key = ${key}`;
+  return (rows[0] as any)?.value ?? null;
+}
+
+export async function getAllSettings(): Promise<Record<string, string>> {
+  if (!isDbConfigured()) return {};
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql`SELECT key, value FROM app_settings`;
+  const out: Record<string, string> = {};
+  for (const r of rows as any[]) {
+    out[r.key] = r.value;
+  }
+  return out;
+}
+
+export async function setSetting(key: string, value: string): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`
+    INSERT INTO app_settings (key, value, updated_at)
+    VALUES (${key}, ${value}, now())
+    ON CONFLICT (key) DO UPDATE SET value = ${value}, updated_at = now()
+  `;
+}
+
+/* ---- Restore from backup ---- */
+
+export async function restoreAllData(data: any): Promise<{ restored: string[] }> {
+  await ensureSchema();
+  const sql = getSql();
+
+  const restored: string[] = [];
+
+  // Validate required tables exist in backup
+  const required = ['customers', 'transactions', 'billItems'];
+  for (const k of required) {
+    if (!Array.isArray(data[k])) throw new Error(`Invalid backup: missing ${k}`);
+  }
+
+  // Wipe existing data in dependency order
+  await sql`DELETE FROM catalog_aliases`;
+  await sql`DELETE FROM catalog_items`;
+  await sql`DELETE FROM wastage`;
+  await sql`DELETE FROM supplier_payments`;
+  await sql`DELETE FROM purchase_items`;
+  await sql`DELETE FROM purchases`;
+  await sql`DELETE FROM bill_items`;
+  await sql`DELETE FROM transactions`;
+  await sql`DELETE FROM expenses`;
+  await sql`DELETE FROM customers`;
+  await sql`DELETE FROM suppliers`;
+
+  // Restore customers first (other tables depend on them)
+  if (Array.isArray(data.customers)) {
+    for (const c of data.customers) {
+      await sql`INSERT INTO customers (id, name, phone, credit_limit) VALUES (${c.id}, ${c.name}, ${c.phone ?? null}, ${c.credit_limit ?? null}) ON CONFLICT (id) DO NOTHING`;
+    }
+    restored.push(`customers (${data.customers.length})`);
+  }
+
+  // Suppliers
+  if (Array.isArray(data.suppliers)) {
+    for (const s of data.suppliers) {
+      await sql`INSERT INTO suppliers (id, name, phone) VALUES (${s.id}, ${s.name}, ${s.phone ?? null}) ON CONFLICT (id) DO NOTHING`;
+    }
+    restored.push(`suppliers (${data.suppliers.length})`);
+  }
+
+  // Transactions
+  if (Array.isArray(data.transactions)) {
+    for (const t of data.transactions) {
+      await sql`INSERT INTO transactions (id, customer_id, date, type, amount, bill_no, market_notes, created_at) VALUES (${t.id}, ${t.customer_id}, ${t.date}, ${t.type}, ${t.amount}, ${t.bill_no ?? null}, ${t.market_notes ?? null}, ${t.created_at ?? new Date().toISOString()}) ON CONFLICT (id) DO NOTHING`;
+    }
+    restored.push(`transactions (${data.transactions.length})`);
+  }
+
+  // Bill items
+  if (Array.isArray(data.billItems)) {
+    for (const b of data.billItems) {
+      await sql`INSERT INTO bill_items (id, transaction_id, name, qty, rate, amount, display, kind, charge_code) VALUES (${b.id}, ${b.transaction_id}, ${b.name}, ${b.qty ?? null}, ${b.rate ?? null}, ${b.amount}, ${b.display ?? null}, ${b.kind ?? 'item'}, ${b.charge_code ?? null}) ON CONFLICT (id) DO NOTHING`;
+    }
+    restored.push(`bill_items (${data.billItems.length})`);
+  }
+
+  // Purchases
+  if (Array.isArray(data.purchases)) {
+    for (const p of data.purchases) {
+      await sql`INSERT INTO purchases (id, date, supplier, supplier_id, bill_no, total, notes, created_at) VALUES (${p.id}, ${p.date}, ${p.supplier ?? null}, ${p.supplier_id ?? null}, ${p.bill_no ?? null}, ${p.total ?? 0}, ${p.notes ?? null}, ${p.created_at ?? new Date().toISOString()}) ON CONFLICT (id) DO NOTHING`;
+    }
+    restored.push(`purchases (${data.purchases.length})`);
+  }
+
+  // Purchase items
+  if (Array.isArray(data.purchaseItems)) {
+    for (const pi of data.purchaseItems) {
+      await sql`INSERT INTO purchase_items (id, purchase_id, name, qty, rate, amount, kind, charge_code) VALUES (${pi.id}, ${pi.purchase_id}, ${pi.name}, ${pi.qty ?? null}, ${pi.rate ?? null}, ${pi.amount ?? 0}, ${pi.kind ?? 'item'}, ${pi.charge_code ?? null}) ON CONFLICT (id) DO NOTHING`;
+    }
+    restored.push(`purchase_items (${data.purchaseItems.length})`);
+  }
+
+  // Supplier payments
+  if (Array.isArray(data.supplierPayments)) {
+    for (const sp of data.supplierPayments) {
+      await sql`INSERT INTO supplier_payments (id, supplier_id, date, amount, notes) VALUES (${sp.id}, ${sp.supplier_id}, ${sp.date}, ${sp.amount}, ${sp.notes ?? null}) ON CONFLICT (id) DO NOTHING`;
+    }
+    restored.push(`supplier_payments (${data.supplierPayments.length})`);
+  }
+
+  // Wastage
+  if (Array.isArray(data.wastage)) {
+    for (const w of data.wastage) {
+      await sql`INSERT INTO wastage (id, date, item_name, qty, unit, reason, est_cost) VALUES (${w.id}, ${w.date}, ${w.item_name}, ${w.qty ?? null}, ${w.unit ?? null}, ${w.reason ?? null}, ${w.est_cost ?? 0}) ON CONFLICT (id) DO NOTHING`;
+    }
+    restored.push(`wastage (${data.wastage.length})`);
+  }
+
+  // Catalog items
+  if (Array.isArray(data.catalogItems)) {
+    for (const ci of data.catalogItems) {
+      await sql`INSERT INTO catalog_items (id, name, default_unit, default_sell_price, telugu_name, hindi_name, active) VALUES (${ci.id}, ${ci.name}, ${ci.default_unit ?? null}, ${ci.default_sell_price ?? null}, ${ci.telugu_name ?? null}, ${ci.hindi_name ?? null}, ${ci.active ?? true}) ON CONFLICT (id) DO NOTHING`;
+    }
+    restored.push(`catalog_items (${data.catalogItems.length})`);
+  }
+
+  // Catalog aliases
+  if (Array.isArray(data.catalogAliases)) {
+    for (const ca of data.catalogAliases) {
+      await sql`INSERT INTO catalog_aliases (id, item_id, alias) VALUES (${ca.id}, ${ca.item_id}, ${ca.alias}) ON CONFLICT (id) DO NOTHING`;
+    }
+    restored.push(`catalog_aliases (${data.catalogAliases.length})`);
+  }
+
+  // Expenses
+  if (Array.isArray(data.expenses)) {
+    for (const e of data.expenses) {
+      await sql`INSERT INTO expenses (id, date, category, description, amount) VALUES (${e.id}, ${e.date}, ${e.category}, ${e.description ?? null}, ${e.amount}) ON CONFLICT (id) DO NOTHING`;
+    }
+    restored.push(`expenses (${data.expenses.length})`);
+  }
+
+  return { restored };
+}
+
+/* ---- Clear old data ---- */
+
+export async function clearDataBefore(date: string): Promise<{ deleted: number }> {
+  await ensureSchema();
+  const sql = getSql();
+  // Delete bill_items for transactions before date
+  const oldTxns = await sql`SELECT id FROM transactions WHERE date < ${date}`;
+  const txnIds = oldTxns.map((r: any) => r.id);
+  let deleted = 0;
+  if (txnIds.length > 0) {
+    // Delete in batches
+    for (const tid of txnIds) {
+      await sql`DELETE FROM bill_items WHERE transaction_id = ${tid}`;
+    }
+    const result = await sql`DELETE FROM transactions WHERE date < ${date}`;
+    deleted += txnIds.length;
+  }
+  // Also clear old purchases, wastage, expenses, supplier payments
+  await sql`DELETE FROM purchase_items WHERE purchase_id IN (SELECT id FROM purchases WHERE date < ${date})`;
+  await sql`DELETE FROM purchases WHERE date < ${date}`;
+  await sql`DELETE FROM wastage WHERE date < ${date}`;
+  await sql`DELETE FROM expenses WHERE date < ${date}`;
+  await sql`DELETE FROM supplier_payments WHERE date < ${date}`;
+  return { deleted };
+}
+
+export async function clearAllData(): Promise<{ deleted: number }> {
+  await ensureSchema();
+  const sql = getSql();
+  const counts = await Promise.all([
+    sql`SELECT count(*)::int as c FROM bill_items`,
+    sql`SELECT count(*)::int as c FROM transactions`,
+    sql`SELECT count(*)::int as c FROM purchase_items`,
+    sql`SELECT count(*)::int as c FROM purchases`,
+    sql`SELECT count(*)::int as c FROM wastage`,
+    sql`SELECT count(*)::int as c FROM expenses`,
+    sql`SELECT count(*)::int as c FROM supplier_payments`,
+    sql`SELECT count(*)::int as c FROM catalog_aliases`,
+    sql`SELECT count(*)::int as c FROM catalog_items`,
+  ]);
+  let deleted = 0;
+  for (const c of counts) deleted += (c[0] as any).c;
+
+  await sql`DELETE FROM catalog_aliases`;
+  await sql`DELETE FROM catalog_items`;
+  await sql`DELETE FROM wastage`;
+  await sql`DELETE FROM supplier_payments`;
+  await sql`DELETE FROM purchase_items`;
+  await sql`DELETE FROM purchases`;
+  await sql`DELETE FROM bill_items`;
+  await sql`DELETE FROM transactions`;
+  await sql`DELETE FROM expenses`;
+  // Keep customers and suppliers (they are master data)
+  return { deleted };
 }

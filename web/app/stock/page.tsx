@@ -9,11 +9,18 @@ export default function StockPage() {
   const { t } = useI18n();
   const [stock, setStock] = useState<StockLevel[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lowStockThreshold, setLowStockThreshold] = useState(5);
 
   useEffect(() => {
-    fetch('/api/stock')
-      .then((r) => r.json())
-      .then((d) => setStock(d.stock || []))
+    Promise.all([
+      fetch('/api/stock').then((r) => r.json()),
+      fetch('/api/settings').then((r) => r.json()),
+    ])
+      .then(([d, s]) => {
+        setStock(d.stock || []);
+        const threshold = Number(s.settings?.lowStockThreshold);
+        if (threshold > 0) setLowStockThreshold(threshold);
+      })
       .catch(() => setStock([]))
       .finally(() => setLoading(false));
   }, []);
@@ -43,7 +50,7 @@ export default function StockPage() {
             <tbody>
               {stock.map((s) => {
                 const isOut = s.qty <= 0;
-                const isLow = s.qty > 0 && s.qty < 5;
+                const isLow = s.qty > 0 && s.qty < lowStockThreshold;
                 return (
                   <tr key={s.itemKey} className="border-t border-[#d9d0c2]">
                     <td className="px-3 py-2 font-medium">
