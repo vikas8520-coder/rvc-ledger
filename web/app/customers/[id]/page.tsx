@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useI18n } from '../../components/I18nProvider';
 import { useDashboard } from '../../components/useDashboard';
 import TxnCard from '../../components/TxnCard';
+import LedgerTable from '../../components/LedgerTable';
 import AgingBadge from '../../components/AgingBadge';
 import { fmt, fmtDate } from '@/lib/format';
 import {
@@ -243,12 +244,9 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
         </div>
       </section>
 
-      <section className="space-y-1">
+      <section className="space-y-2">
         <h2 className="text-sm font-semibold">{t('ledger')}</h2>
-        {customer.txns.length === 0 && <p className="text-sm text-[#8a7a6a]">{t('noActivity')}</p>}
-        {customer.txns.map((txn) => (
-          <TxnCard key={txn.id} txn={txn} />
-        ))}
+        <LedgerTable customer={customer} />
       </section>
     </div>
   );
