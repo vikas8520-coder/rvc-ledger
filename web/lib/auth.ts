@@ -1,5 +1,5 @@
 import { auth, currentUser } from '@clerk/nextjs/server';
-import { getOrCreateShop, linkUserToDefaultShop, isDbConfigured } from './db';
+import { getOrCreateShop, linkUserToDefaultShop, ensureDefaultShop, isDbConfigured } from './db';
 
 export type AuthResult = {
   shopId: string | null;
@@ -12,7 +12,31 @@ export type AuthResult = {
 // Superadmin Clerk user IDs (Vikas)
 const SUPERADMIN_IDS = process.env.SUPERADMIN_CLERK_IDS?.split(',').map(s => s.trim()).filter(Boolean) || [];
 
+// Check if Clerk is configured with real keys
+function isClerkConfigured(): boolean {
+  return !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && !!process.env.CLERK_SECRET_KEY;
+}
+
+// Check if we're using production keys (pk_live_) vs development (pk_test_)
+function isClerkProduction(): boolean {
+  const key = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || '';
+  return key.startsWith('pk_live_');
+}
+
 export async function getAuth(): Promise<AuthResult | null> {
+  // If Clerk isn't configured at all, return fallback auth (no auth mode)
+  if (!isClerkConfigured()) {
+    if (isDbConfigured()) {
+      try {
+        const shopId = await ensureDefaultShop();
+        return { shopId, role: 'owner', userId: 'anonymous', email: '', name: '' };
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  }
+
   const { userId, isAuthenticated } = await auth();
   if (!isAuthenticated || !userId) return null;
 
@@ -78,3 +102,5 @@ export class AuthError extends Error {
     this.status = status;
   }
 }
+
+export { isClerkConfigured, isClerkProduction };

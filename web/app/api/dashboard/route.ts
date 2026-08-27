@@ -7,11 +7,13 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     const auth = await requireShopAuth();
+    console.log('Dashboard auth:', { shopId: auth.shopId, role: auth.role, userId: auth.userId });
     const customers = await getCustomers(auth.shopId!);
+    console.log('Dashboard customers:', customers.length);
     return NextResponse.json({ customers, configured: isDbConfigured() });
   } catch (err: any) {
     if (err instanceof AuthError) return NextResponse.json({ error: err.message }, { status: err.status });
-    console.error('Dashboard error:', err);
+    console.error('Dashboard error:', err.message, err.stack);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
