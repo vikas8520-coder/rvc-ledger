@@ -43,15 +43,20 @@ export default function TxnCard({
         </p>
       </div>
       {!compact && txn.type === 'bill' && txn.items.length > 0 && (
-        <table className="mt-1 w-full text-[11px] tabular-nums">
+        <table className="mt-1 w-full text-[11px] tabular-nums table-fixed">
+          <colgroup>
+            <col className="w-auto" />
+            <col className="w-[35%]" />
+            <col className="w-[20%]" />
+          </colgroup>
           <tbody>
             {txn.items.map((it, idx) => (
               <tr key={idx} className={`${it.kind === 'charge' ? 'italic text-[#6b5344]' : ''} leading-none`}>
-                <td className="py-px pr-1.5 align-top leading-tight">{localizeName(it.name, uiLang)}</td>
-                <td className="whitespace-nowrap py-px pr-1.5 text-right leading-tight text-[#7a6a5a]">
+                <td className="py-px pr-1 align-top leading-tight truncate">{localizeName(it.name, uiLang)}</td>
+                <td className="whitespace-nowrap py-px px-1 text-right leading-tight text-[#7a6a5a]">
                   {[it.qty, it.rate].filter(Boolean).join(' × ')}
                 </td>
-                <td className="whitespace-nowrap py-px text-right leading-tight">{fmt(it.amount)}</td>
+                <td className="whitespace-nowrap py-px pl-1 text-right leading-tight">{fmt(it.amount)}</td>
               </tr>
             ))}
           </tbody>
