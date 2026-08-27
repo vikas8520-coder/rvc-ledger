@@ -43,24 +43,17 @@ export default function TxnCard({
         </p>
       </div>
       {!compact && txn.type === 'bill' && txn.items.length > 0 && (
-        <table className="mt-1 w-full text-[11px] tabular-nums table-fixed">
-          <colgroup>
-            <col className="w-auto" />
-            <col className="w-[35%]" />
-            <col className="w-[20%]" />
-          </colgroup>
-          <tbody>
-            {txn.items.map((it, idx) => (
-              <tr key={idx} className={`${it.kind === 'charge' ? 'italic text-[#6b5344]' : ''} leading-none`}>
-                <td className="py-px pr-1 align-top leading-tight truncate">{localizeName(it.name, uiLang)}</td>
-                <td className="whitespace-nowrap py-px px-1 text-right leading-tight text-[#7a6a5a]">
-                  {[it.qty, it.rate].filter(Boolean).join(' × ')}
-                </td>
-                <td className="whitespace-nowrap py-px pl-1 text-right leading-tight">{fmt(it.amount)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="mt-1 space-y-0">
+          {txn.items.map((it, idx) => (
+            <div key={idx} className={`flex items-baseline gap-1 text-[11px] leading-tight ${it.kind === 'charge' ? 'italic text-[#6b5344]' : ''}`}>
+              <span className="flex-1 truncate">{localizeName(it.name, uiLang)}</span>
+              <span className="shrink-0 whitespace-nowrap text-[#7a6a5a]">
+                {[it.qty, it.rate].filter(Boolean).join(' × ')}
+              </span>
+              <span className="shrink-0 whitespace-nowrap text-right tabular-nums" style={{ minWidth: '3rem' }}>{fmt(it.amount)}</span>
+            </div>
+          ))}
+        </div>
       )}
       <div className="mt-0.5 flex items-center justify-end gap-2 text-[11px] leading-none">
         <span className="text-[#8a7a6a]">
