@@ -45,12 +45,12 @@ export default function TxnCard({
       {!compact && txn.type === 'bill' && txn.items.length > 0 && (
         <div className="mt-1 space-y-0">
           {txn.items.map((it, idx) => (
-            <div key={idx} className={`flex items-baseline gap-1 text-[11px] leading-tight ${it.kind === 'charge' ? 'italic text-[#6b5344]' : ''}`}>
-              <span className="flex-1 truncate">{localizeName(it.name, uiLang)}</span>
+            <div key={idx} className={`flex items-baseline gap-2 text-[11px] leading-tight ${it.kind === 'charge' ? 'italic text-[#6b5344]' : ''}`}>
+              <span className="truncate">{localizeName(it.name, uiLang)}</span>
               <span className="shrink-0 whitespace-nowrap text-[#7a6a5a]">
                 {[it.qty, it.rate].filter(Boolean).join(' × ')}
               </span>
-              <span className="shrink-0 whitespace-nowrap text-right tabular-nums" style={{ minWidth: '3rem' }}>{fmt(it.amount)}</span>
+              <span className="shrink-0 whitespace-nowrap text-right tabular-nums">{fmt(it.amount)}</span>
             </div>
           ))}
         </div>
