@@ -40,7 +40,7 @@ export default function UploadPage() {
   const { t, ocrLangs } = useI18n();
   const [step, setStep] = useState<'idle' | 'ocr' | 'review' | 'saving' | 'done'>('idle');
   const [file, setFile] = useState<File | null>(null);
-  const [progress, setProgress] = useState<OcrProgress | null>(null);
+  const [progress, setProgress] = useState<SmartOcrProgress | null>(null);
   const [ocrText, setOcrText] = useState('');
   const [ocrSource, setOcrSource] = useState<OcrSource | null>(null);
 
@@ -149,7 +149,7 @@ export default function UploadPage() {
     setOcrSource(null);
     try {
       const result = await smartRecognizeBill(f, ocrLangs, (m: SmartOcrProgress) => {
-        setProgress({ status: m.status, progress: m.progress });
+        setProgress(m);
       });
       setOcrText(result.text);
       setOcrSource(result.source);
@@ -357,13 +357,13 @@ export default function UploadPage() {
                 {progress.status === 'local_ocr' && t('ocrLocal')}
                 {progress.status === 'ai_ocr' && t('ocrAI')}
                 {progress.status === 'ai_ocr_failed' && t('ocrAIFailed')}
-                {progress.status === 'done' && (progress as any).source === 'gemini' ? t('ocrAIDone') :
+                {progress.status === 'done' && progress.source === 'gemini' ? t('ocrAIDone') :
                   progress.status === 'done' ? t('ocrLocalDone') :
                   !['local_ocr', 'ai_ocr', 'ai_ocr_failed', 'done'].includes(progress.status) ? progress.status : ''}
               </p>
               <div className="mt-2 h-2 w-full rounded bg-[var(--bg-card-hover)]">
                 <div
-                  className={`h-2 rounded ${progress.status === 'ai_ocr' || (progress as any).source === 'gemini' ? 'bg-[var(--bg-success)]' : 'bg-[var(--bg-primary)]'}`}
+                  className={`h-2 rounded ${progress.status === 'ai_ocr' || progress.source === 'gemini' ? 'bg-[var(--bg-success)]' : 'bg-[var(--bg-primary)]'}`}
                   style={{ width: `${Math.max(5, progress.progress * 100)}%` }}
                 />
               </div>
