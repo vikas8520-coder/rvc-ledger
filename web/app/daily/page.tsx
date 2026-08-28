@@ -78,10 +78,10 @@ export default function DailyOpsPage() {
       {/* P&L Summary */}
       {summary && (
         <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <StatCard label={t('purchasedToday')} value={fmt(summary.purchased)} sub={`${summary.purchaseCount} ${t('entries')}`} icon={<PackageIcon size={14} />} />
           <StatCard label={t('soldToday')} value={fmt(summary.sold)} sub={`${summary.saleCount} ${t('bills')}`} icon={<TrendingIcon size={14} />} />
-          <StatCard label={t('collectedToday')} value={fmt(summary.collected)} accent="success" icon={<DollarIcon size={14} />} />
-          <StatCard label={t('estProfit')} value={fmt(summary.estProfit)} accent={summary.estProfit >= 0 ? 'success' : 'primary'} icon={<TrendingIcon size={14} />} />
+          <StatCard label={t('cogs')} value={fmt(summary.cogs)} icon={<PackageIcon size={14} />} />
+          <StatCard label={t('grossProfit')} value={fmt(summary.grossProfit)} accent={summary.grossProfit >= 0 ? 'success' : 'primary'} icon={<DollarIcon size={14} />} />
+          <StatCard label={t('stockValue')} value={fmt(summary.stockValue)} icon={<BoxIcon size={14} />} />
         </section>
       )}
 
@@ -91,16 +91,16 @@ export default function DailyOpsPage() {
           <SectionHeader title={t('cashPosition')} icon={<DollarIcon size={16} />} />
           <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
             <div>
+              <p className="text-[10px] uppercase text-[var(--text-muted)]">{t('purchasedToday')}</p>
+              <p className="font-semibold">{fmt(summary.purchased)}</p>
+            </div>
+            <div>
               <p className="text-[10px] uppercase text-[var(--text-muted)]">{t('collected')}</p>
               <p className="font-semibold text-[var(--bg-success)]">{fmt(summary.collected)}</p>
             </div>
             <div>
               <p className="text-[10px] uppercase text-[var(--text-muted)]">{t('supplierPaid')}</p>
               <p className="font-semibold text-[var(--bg-primary)]">{fmt(summary.supplierPaid)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase text-[var(--text-muted)]">{t('navExpenses')}</p>
-              <p className="font-semibold">{fmt(summary.expenses)}</p>
             </div>
             <div>
               <p className="text-[10px] uppercase text-[var(--text-muted)]">{t('netCash')}</p>

@@ -1162,10 +1162,12 @@ export async function clearAllData(shopId: string): Promise<{ deleted: number }>
 
 export async function getDailySummary(shopId: string, date: string): Promise<DailySummary> {
   if (!isDbConfigured()) {
-    return { date, purchased: 0, purchaseCount: 0, sold: 0, saleCount: 0, collected: 0, supplierPaid: 0, expenses: 0, wastageCost: 0, netCash: 0, estProfit: 0 };
+    return { date, purchased: 0, purchaseCount: 0, sold: 0, saleCount: 0, collected: 0, supplierPaid: 0, expenses: 0, wastageCost: 0, netCash: 0, cogs: 0, grossProfit: 0, estProfit: 0, stockValue: 0 };
   }
   await ensureSchema();
   const sql = getSql();
+
+  const { parseQty, qtyBasis, parseRate, itemKey } = await import('./units');
 
   // Purchases today
   const purchases = await sql`SELECT id, total FROM purchases WHERE date = ${date} AND shop_id = ${shopId}`;
@@ -1189,8 +1191,113 @@ export async function getDailySummary(shopId: string, date: string): Promise<Dai
   const wastage = await sql`SELECT est_cost FROM wastage WHERE date = ${date} AND shop_id = ${shopId}`;
   const wastageCost = (wastage as any[]).reduce((s, w) => s + Number(w.est_cost), 0);
 
+  // ---- Actual COGS calculation ----
+  // For each item sold today, multiply sold quantity by the average purchase rate
+  // for that item (from all purchases, not just today's — because you might sell
+  // stock bought on a previous day). This gives the true cost of goods sold.
+
+  // Get all purchase items ever (to compute avg buy rate per item)
+  const purchaseItems = await sql`
+    SELECT pi.name, pi.qty, pi.rate
+    FROM purchase_items pi
+    JOIN purchases p ON pi.purchase_id = p.id
+    WHERE (pi.kind = 'item' OR pi.kind IS NULL) AND pi.shop_id = ${shopId}
+  `;
+
+  // Build per-item average purchase rate (rate per kg or per unit)
+  const buyStats = new Map<string, { totalValue: number; totalQty: number; unit: string | null }>();
+  for (const pi of purchaseItems as any[]) {
+    const key = itemKey(pi.name);
+    if (!key) continue;
+    const basis = qtyBasis(parseQty(pi.qty));
+    const rate = parseRate(pi.rate);
+    if (!basis || !rate) continue;
+    const entry = buyStats.get(key) || { totalValue: 0, totalQty: 0, unit: basis.unit };
+    // rate.value is per single unit; basis.value is in kg or count
+    entry.totalValue += rate.value * basis.value;
+    entry.totalQty += basis.value;
+    entry.unit = basis.unit;
+    buyStats.set(key, entry);
+  }
+
+  // Get items sold today
+  const soldItems = await sql`
+    SELECT bi.confirmed_name as name, bi.qty, bi.amount
+    FROM bill_items bi
+    JOIN transactions t ON bi.transaction_id = t.id
+    WHERE (bi.kind = 'item' OR bi.kind IS NULL) AND t.date = ${date} AND bi.shop_id = ${shopId}
+  `;
+
+  // Calculate COGS: for each sold item, sold_qty × avg_buy_rate_per_unit
+  let cogs = 0;
+  for (const si of soldItems as any[]) {
+    const key = itemKey(si.name);
+    if (!key) continue;
+    const basis = qtyBasis(parseQty(si.qty));
+    if (!basis) continue;
+    const buy = buyStats.get(key);
+    if (buy && buy.totalQty > 0) {
+      const avgRate = buy.totalValue / buy.totalQty;
+      cogs += avgRate * basis.value;
+    }
+  }
+
+  // Calculate stock value (unsold stock × avg buy rate)
+  // Reuse getStock but compute value here for efficiency
+  let stockValue = 0;
+  const stockMap = new Map<string, { qty: number; unit: string | null }>();
+
+  for (const pi of purchaseItems as any[]) {
+    const key = itemKey(pi.name);
+    if (!key) continue;
+    const basis = qtyBasis(parseQty(pi.qty));
+    if (!basis) continue;
+    const entry = stockMap.get(key) || { qty: 0, unit: basis.unit };
+    entry.qty += basis.value;
+    entry.unit = basis.unit;
+    stockMap.set(key, entry);
+  }
+
+  // Subtract all sold items (not just today's)
+  const allSoldItems = await sql`
+    SELECT bi.confirmed_name as name, bi.qty
+    FROM bill_items bi
+    JOIN transactions t ON bi.transaction_id = t.id
+    WHERE (bi.kind = 'item' OR bi.kind IS NULL) AND bi.shop_id = ${shopId}
+  `;
+  for (const si of allSoldItems as any[]) {
+    const key = itemKey(si.name);
+    if (!key) continue;
+    const basis = qtyBasis(parseQty(si.qty));
+    if (!basis) continue;
+    const entry = stockMap.get(key);
+    if (entry) entry.qty -= basis.value;
+  }
+
+  // Subtract wastage
+  const allWastage = await sql`SELECT item_name as name, qty FROM wastage WHERE shop_id = ${shopId}`;
+  for (const w of allWastage as any[]) {
+    const key = itemKey(w.name);
+    if (!key) continue;
+    const basis = qtyBasis(parseQty(w.qty));
+    if (!basis) continue;
+    const entry = stockMap.get(key);
+    if (entry) entry.qty -= basis.value;
+  }
+
+  // Value the remaining stock
+  for (const [key, entry] of stockMap) {
+    if (entry.qty > 0) {
+      const buy = buyStats.get(key);
+      if (buy && buy.totalQty > 0) {
+        stockValue += (buy.totalValue / buy.totalQty) * entry.qty;
+      }
+    }
+  }
+
   const netCash = collected - supplierPaid - expensesTotal;
-  const estProfit = sold - purchased;
+  const grossProfit = sold - cogs;
+  const estProfit = sold - purchased; // legacy, kept for reference
 
   return {
     date,
@@ -1203,7 +1310,10 @@ export async function getDailySummary(shopId: string, date: string): Promise<Dai
     expenses: expensesTotal,
     wastageCost,
     netCash,
+    cogs,
+    grossProfit,
     estProfit,
+    stockValue,
   };
 }
 

@@ -91,9 +91,9 @@ export default function Home() {
               <p className="text-base font-bold text-[var(--bg-success)]">{fmt(daily.collected)}</p>
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">{t('estProfit')}</p>
-              <p className={`text-base font-bold ${daily.estProfit >= 0 ? 'text-[var(--bg-success)]' : 'text-[var(--bg-primary)]'}`}>
-                {fmt(daily.estProfit)}
+              <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">{t('grossProfit')}</p>
+              <p className={`text-base font-bold ${daily.grossProfit >= 0 ? 'text-[var(--bg-success)]' : 'text-[var(--bg-primary)]'}`}>
+                {fmt(daily.grossProfit)}
               </p>
             </div>
           </div>

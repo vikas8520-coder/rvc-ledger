@@ -168,7 +168,10 @@ export interface DailySummary {
   wastageCost: number;
   /* Computed */
   netCash: number; // collected - supplierPaid - expenses
-  estProfit: number; // sold - purchased (rough, same-day)
+  cogs: number; // actual cost of goods sold (sold_qty × purchase rate per item)
+  grossProfit: number; // sold - cogs (real profit on what was actually sold)
+  estProfit: number; // sold - purchased (legacy rough estimate, kept for reference)
+  stockValue: number; // estimated value of unsold stock
 }
 
 export interface ItemRateEntry {
