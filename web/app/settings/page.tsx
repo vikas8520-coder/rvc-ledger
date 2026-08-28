@@ -19,7 +19,7 @@ export default function SettingsPage() {
   const [stockStatus, setStockStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   // Bill format
-  const [billFormat, setBillFormat] = useState<'simple' | 'itemized' | 'market'>('itemized');
+  const [billFormat, setBillFormat] = useState<'simple' | 'itemized' | 'market' | 'patti'>('itemized');
   const [billFormatStatus, setBillFormatStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   // Restore
@@ -222,6 +222,7 @@ export default function SettingsPage() {
             <option value="simple">{t('billFormatSimple')}</option>
             <option value="itemized">{t('billFormatItemized')}</option>
             <option value="market">{t('billFormatMarket')}</option>
+            <option value="patti">{t('billFormatPatti')}</option>
           </select>
           <button
             onClick={saveBillFormat}

@@ -120,7 +120,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
     setShowPdfFormats((v) => !v);
   };
 
-  const printStatement = (format: 'statement' | 'simple' | 'itemized' | 'market') => {
+  const printStatement = (format: 'statement' | 'simple' | 'itemized' | 'market' | 'patti') => {
     setShowPdfFormats(false);
     if (format === 'statement') {
       // Original statement format — all transactions summary
@@ -252,7 +252,10 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
                   {t('billFormatItemized')}
                 </button>
                 <button onClick={() => printStatement('market')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
-                  {t('printCreditLedger')} (all customers, no items)
+                  {t('printCreditLedger')} (all customers)
+                </button>
+                <button onClick={() => printStatement('patti')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
+                  {t('billFormatPatti')} (6 per page)
                 </button>
               </span>
             )}
