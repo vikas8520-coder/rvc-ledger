@@ -798,6 +798,61 @@ export async function deleteCatalogItem(shopId: string, id: string): Promise<voi
   await sql`DELETE FROM catalog_items WHERE id = ${id} AND shop_id = ${shopId}`;
 }
 
+/**
+ * Returns a flat map of alias → item_name for all catalog items.
+ * Used by the OCR parser to resolve raw text to confirmed names.
+ */
+export async function getAliasMap(shopId: string): Promise<Record<string, string>> {
+  if (!isDbConfigured()) return {};
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql`
+    SELECT ca.alias, ci.name
+    FROM catalog_aliases ca
+    JOIN catalog_items ci ON ca.item_id = ci.id
+    WHERE ca.shop_id = ${shopId} AND ci.active = true
+  `;
+  const map: Record<string, string> = {};
+  for (const r of rows as any[]) {
+    map[(r.alias as string).toLowerCase().trim()] = r.name as string;
+  }
+  return map;
+}
+
+/**
+ * Save a single alias (raw_text → confirmed_name) for the OCR learning system.
+ * Creates the catalog item if it doesn't exist yet.
+ */
+export async function saveAlias(shopId: string, alias: string, itemName: string): Promise<void> {
+  if (!isDbConfigured()) return;
+  await ensureSchema();
+  const sql = getSql();
+  const cleanAlias = alias.trim();
+  const cleanName = itemName.trim();
+  if (!cleanAlias || !cleanName) return;
+
+  // Find or create the catalog item
+  const existing = await sql`SELECT id FROM catalog_items WHERE name = ${cleanName} AND shop_id = ${shopId} LIMIT 1`;
+  let itemId: string;
+  if (existing.length > 0) {
+    itemId = (existing[0] as any).id;
+  } else {
+    const [row] = await sql`
+      INSERT INTO catalog_items (name, active, shop_id)
+      VALUES (${cleanName}, true, ${shopId})
+      RETURNING id
+    `;
+    if (!row) return;
+    itemId = (row as any).id;
+  }
+
+  // Check if alias already exists
+  const dup = await sql`SELECT id FROM catalog_aliases WHERE item_id = ${itemId} AND alias = ${cleanAlias} AND shop_id = ${shopId} LIMIT 1`;
+  if (dup.length > 0) return;
+
+  await sql`INSERT INTO catalog_aliases (item_id, alias, shop_id) VALUES (${itemId}, ${cleanAlias}, ${shopId})`;
+}
+
 /* ---- Stock levels ---- */
 
 export async function getStock(shopId: string): Promise<StockLevel[]> {

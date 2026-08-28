@@ -17,6 +17,24 @@ const CATALOG: Record<SectionKey, Record<string, string | null>> = {
   ...catalog,
 } as Record<SectionKey, Record<string, string | null>>;
 
+/**
+ * Runtime aliases learned from user corrections (DB catalog_aliases).
+ * Key: lowercased raw text, Value: confirmed English item name.
+ * Set by the upload page after fetching from /api/catalog/aliases.
+ */
+const RUNTIME_ALIASES = new Map<string, string>();
+
+export function setRuntimeAliases(map: Record<string, string>): void {
+  RUNTIME_ALIASES.clear();
+  for (const [k, v] of Object.entries(map)) {
+    RUNTIME_ALIASES.set(k.toLowerCase().trim(), v);
+  }
+}
+
+export function getRuntimeAlias(name: string): string | null {
+  return RUNTIME_ALIASES.get(name.toLowerCase().trim()) ?? null;
+}
+
 export const ENGLISH_WORDS = new Set<string>();
 export const ENGLISH_TO_TELUGU = new Map<string, string>();
 export const ENGLISH_TO_HINDI = new Map<string, string>();
@@ -141,6 +159,12 @@ export interface Classification {
 export function classifyScript(name: string): Classification {
   const hasHindi = hindiInText(name);
   const hasTelugu = teluguInText(name);
+
+  // Check runtime aliases (learned from user corrections) first
+  const runtimeMatch = getRuntimeAlias(name);
+  if (runtimeMatch) {
+    return { script: 'learned', dialect: null, guess: runtimeMatch };
+  }
 
   // Hindi script
   if (hasHindi && !hasTelugu) {

@@ -1,7 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useI18n } from '../components/I18nProvider';
+import { Card, SectionHeader, Button, EmptyState, PageHeader } from '../components/ui';
+import { DollarIcon, CameraIcon, CheckIcon } from '../components/Icons';
+import { recognizeBill, OcrProgress } from '@/lib/ocr';
+import { parseDate } from '@/lib/parser';
+import { distance } from 'fastest-levenshtein';
 
 function today() {
   const d = new Date();
@@ -11,8 +16,61 @@ function today() {
   return `${y}-${m}-${day}`;
 }
 
+/**
+ * Extract payment amount from OCR text.
+ * Looks for lines with "received", "paid", "payment", "amount", or just the largest number.
+ */
+function extractPaymentAmount(text: string): { amount: number | null; date: string | null; customerHint: string | null } {
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  let amount: number | null = null;
+  let date: string | null = null;
+  let customerHint: string | null = null;
+
+  for (const line of lines) {
+    // Check for date
+    if (!date) {
+      const d = parseDate(line);
+      if (d) date = d;
+    }
+
+    // Check for amount keywords
+    const lower = line.toLowerCase();
+    if (/\b(received|paid|payment|amount|amt|cash|upi|rs|₹)\b/.test(lower)) {
+      const nums = line.match(/(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)/g);
+      if (nums) {
+        const val = Number(nums[nums.length - 1].replace(/,/g, ''));
+        if (Number.isFinite(val) && val > 0) {
+          amount = val;
+        }
+      }
+    }
+  }
+
+  // If no keyword match, find the largest number in the text (likely the payment amount)
+  if (!amount) {
+    const allNums = text.match(/(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)/g);
+    if (allNums) {
+      const vals = allNums.map((n) => Number(n.replace(/,/g, ''))).filter((n) => n > 0 && Number.isFinite(n));
+      if (vals.length > 0) {
+        amount = Math.max(...vals);
+      }
+    }
+  }
+
+  // Try to find a customer name — usually the first non-numeric, non-keyword line
+  for (const line of lines) {
+    if (/\d/.test(line)) continue;
+    if (/\b(received|paid|payment|amount|date|rs|₹)\b/i.test(line)) continue;
+    if (line.length < 3 || line.length > 40) continue;
+    customerHint = line;
+    break;
+  }
+
+  return { amount, date, customerHint };
+}
+
 export default function PaymentPage() {
-  const { t } = useI18n();
+  const { t, ocrLangs } = useI18n();
   const [customers, setCustomers] = useState<string[]>([]);
   const [customer, setCustomer] = useState('');
   const [date, setDate] = useState(today());
@@ -21,6 +79,12 @@ export default function PaymentPage() {
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi' | 'credit'>('cash');
   const [status, setStatus] = useState<'idle' | 'saving' | 'done' | 'error'>('idle');
   const [error, setError] = useState('');
+
+  // OCR state
+  const [ocrStep, setOcrStep] = useState<'idle' | 'scanning' | 'done'>('idle');
+  const [ocrProgress, setOcrProgress] = useState<OcrProgress | null>(null);
+  const [ocrHint, setOcrHint] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch('/api/customers')
@@ -31,6 +95,47 @@ export default function PaymentPage() {
         if (list.length > 0) setCustomer(list[0]);
       });
   }, []);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setOcrStep('scanning');
+    setOcrProgress(null);
+    setError('');
+    try {
+      const text = await recognizeBill(f, ocrLangs, setOcrProgress);
+      const { amount: extractedAmount, date: extractedDate, customerHint } = extractPaymentAmount(text);
+
+      if (extractedAmount) {
+        setAmount(String(extractedAmount));
+        setOcrHint(`Found: ₹${extractedAmount}`);
+      } else {
+        setOcrHint('Could not find amount — please enter manually');
+      }
+
+      if (extractedDate) {
+        setDate(extractedDate);
+      }
+
+      // Try to match customer hint
+      if (customerHint && customers.length > 0) {
+        const lower = customerHint.toLowerCase();
+        let best: { name: string; dist: number } | null = null;
+        for (const c of customers) {
+          const d = distance(lower, c.toLowerCase());
+          if (!best || d < best.dist) best = { name: c, dist: d };
+        }
+        if (best && best.dist <= Math.max(2, Math.floor(customerHint.length * 0.3))) {
+          setCustomer(best.name);
+        }
+      }
+
+      setOcrStep('done');
+    } catch (err: any) {
+      setError(err.message || 'OCR failed');
+      setOcrStep('idle');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,6 +152,8 @@ export default function PaymentPage() {
       setStatus('done');
       setAmount('');
       setNotes('');
+      setOcrHint(null);
+      setOcrStep('idle');
     } catch (err: any) {
       setError(err.message || 'Save failed');
       setStatus('error');
@@ -55,81 +162,137 @@ export default function PaymentPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold">{t('recordPayment')}</h1>
+      <PageHeader title={t('recordPayment')} />
 
-      <form onSubmit={handleSubmit} className="max-w-md space-y-4 rounded-2xl bg-[var(--bg-card)] p-6">
-        <div>
-          <label className="text-sm text-[var(--text-muted)]">{t('customer')}</label>
-          <select
-            value={customer}
-            onChange={(e) => setCustomer(e.target.value)}
-            className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2"
-          >
-            {customers.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="text-sm text-[var(--text-muted)]">{t('date')}</label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2"
-          />
-        </div>
-
-        <div>
-          <label className="text-sm text-[var(--text-muted)]">{t('amountReceived')}</label>
-          <input
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="text-sm text-[var(--text-muted)]">{t('paymentMethod')}</label>
-          <select
-            value={paymentMethod}
-            onChange={(e) => setPaymentMethod(e.target.value as 'cash' | 'upi' | 'credit')}
-            className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2"
-          >
-            <option value="cash">{t('cash')}</option>
-            <option value="upi">{t('upi')}</option>
-            <option value="credit">{t('credit')}</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="text-sm text-[var(--text-muted)]">{t('notes')}</label>
-          <input
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder={t('notes')}
-            className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2"
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={!customer || !date || !amount || status === 'saving'}
-          className="w-full rounded-xl bg-[var(--bg-success)] p-3 font-semibold text-[var(--text-on-primary)] disabled:opacity-50"
-        >
-          {status === 'saving' ? t('saving') : t('recordPayment')}
-        </button>
-
-        {status === 'done' && (
-          <p className="text-center text-[var(--bg-success)]">{t('paymentRecorded')}</p>
+      {/* Image upload for OCR */}
+      <Card>
+        <SectionHeader title={t('uploadPaymentRecord')} icon={<CameraIcon size={16} />} />
+        <p className="mb-3 text-sm text-[var(--text-muted)]">{t('uploadPaymentHelp')}</p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleImageUpload}
+          className="hidden"
+        />
+        {ocrStep === 'idle' && (
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+            <span className="flex items-center gap-2"><CameraIcon size={16} /> {t('photographPayment')}</span>
+          </Button>
         )}
-        {status === 'error' && <p className="text-center text-[var(--bg-primary)]">{error}</p>}
-      </form>
+        {ocrStep === 'scanning' && (
+          <div className="space-y-2">
+            <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--bg-card-hover)]">
+              <div
+                className="h-full bg-[var(--bg-primary)] transition-all"
+                style={{ width: `${(ocrProgress?.progress || 0) * 100}%` }}
+              />
+            </div>
+            <p className="text-xs text-[var(--text-muted)]">
+              {ocrProgress?.status || t('scanning')}... {ocrProgress ? Math.round(ocrProgress.progress * 100) : 0}%
+            </p>
+          </div>
+        )}
+        {ocrStep === 'done' && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm text-[var(--bg-success)]">
+              <CheckIcon size={16} /> {ocrHint}
+            </div>
+            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+              {t('scanAgain')}
+            </Button>
+          </div>
+        )}
+      </Card>
+
+      {/* Payment form */}
+      <Card>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="text-sm text-[var(--text-muted)]">{t('customer')}</label>
+            <select
+              value={customer}
+              onChange={(e) => setCustomer(e.target.value)}
+              className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] p-2.5 text-sm"
+            >
+              {customers.length === 0 && <option value="">{t('noCustomers')}</option>}
+              {customers.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm text-[var(--text-muted)]">{t('date')}</label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] p-2.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-[var(--text-muted)]">{t('amountReceived')}</label>
+              <input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="₹0"
+                className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] p-2.5 text-sm"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm text-[var(--text-muted)]">{t('paymentMethod')}</label>
+            <div className="flex gap-2">
+              {(['cash', 'upi', 'credit'] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setPaymentMethod(m)}
+                  className={`flex-1 rounded-lg border p-2.5 text-sm font-medium transition-colors ${
+                    paymentMethod === m
+                      ? 'border-[var(--bg-primary)] bg-[var(--bg-primary)] text-[var(--text-on-primary)]'
+                      : 'border-[var(--border-input)] bg-[var(--bg-input)] hover:bg-[var(--bg-card-hover)]'
+                  }`}
+                >
+                  {t(m)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm text-[var(--text-muted)]">{t('notes')}</label>
+            <input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder={t('notes')}
+              className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] p-2.5 text-sm"
+            />
+          </div>
+
+          <Button
+            type="submit"
+            variant="success"
+            disabled={!customer || !date || !amount || status === 'saving'}
+            className="w-full"
+          >
+            {status === 'saving' ? t('saving') : t('recordPayment')}
+          </Button>
+
+          {status === 'done' && (
+            <p className="flex items-center justify-center gap-2 text-[var(--bg-success)]">
+              <CheckIcon size={16} /> {t('paymentRecorded')}
+            </p>
+          )}
+          {status === 'error' && <p className="text-center text-[var(--bg-primary)]">{error}</p>}
+        </form>
+      </Card>
     </div>
   );
 }

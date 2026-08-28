@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { recognizeBill, OcrProgress } from '@/lib/ocr';
 import { parseBillText, buildDisplay } from '@/lib/parser';
 import { BillItem } from '@/lib/types';
-import { classifyScript } from '@/lib/catalog';
+import { classifyScript, setRuntimeAliases, getRuntimeAlias } from '@/lib/catalog';
 import { printBill, BillFormat, ShopProfile } from '@/lib/billPrint';
 import {
   MARKET_YARDS,
@@ -61,6 +61,8 @@ export default function UploadPage() {
   const [commissionPct, setCommissionPct] = useState('4');
   const [shopSettings, setShopSettings] = useState<ShopProfile>({});
   const [savedItems, setSavedItems] = useState<BillItem[]>([]);
+  const [learnedAliases, setLearnedAliases] = useState<Record<string, string>>({});
+  const [aliasSavedIdx, setAliasSavedIdx] = useState<number | null>(null);
 
   useEffect(() => {
     fetch('/api/customers')
@@ -84,6 +86,16 @@ export default function UploadPage() {
     fetch('/api/settings')
       .then((r) => r.json())
       .then((d) => setShopSettings(d.settings || {}))
+      .catch(() => {});
+    // Fetch learned aliases so OCR parser can use them
+    fetch('/api/catalog/aliases')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.aliases) {
+          setLearnedAliases(d.aliases);
+          setRuntimeAliases(d.aliases);
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -204,6 +216,29 @@ export default function UploadPage() {
     const next = items.filter((_, i) => i !== idx);
     setItems(next);
     recalc(next);
+  };
+
+  const saveItemAlias = async (idx: number) => {
+    const it = items[idx];
+    if (!it || !it.raw.trim() || !it.confirmed.trim()) return;
+    const raw = it.raw.trim();
+    const confirmed = it.confirmed.trim();
+    // Extract the English meaning from "Name (English)" format
+    const meaning = confirmed.match(/\(([^)]+)\)$/)?.[1]?.trim() || confirmed;
+    try {
+      const res = await fetch('/api/catalog/aliases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alias: raw, itemName: meaning }),
+      });
+      if (res.ok) {
+        const newAliases = { ...learnedAliases, [raw.toLowerCase()]: meaning };
+        setLearnedAliases(newAliases);
+        setRuntimeAliases(newAliases);
+        setAliasSavedIdx(idx);
+        setTimeout(() => setAliasSavedIdx(null), 2000);
+      }
+    } catch {}
   };
 
   const updateMarket = (patch: Partial<MarketMeta>) => {
@@ -465,7 +500,11 @@ export default function UploadPage() {
           <section className="rounded-2xl bg-[var(--bg-card)] p-4">
             <h2 className="mb-3 font-semibold">{t('items')}</h2>
             <div className="space-y-2">
-              {items.map((it, idx) => (
+              {items.map((it, idx) => {
+                const rawLower = it.raw.trim().toLowerCase();
+                const alreadyLearned = learnedAliases[rawLower] === (it.confirmed.match(/\(([^)]+)\)$/)?.[1]?.trim() || it.confirmed.trim());
+                const canLearn = it.kind !== 'charge' && it.raw.trim() && it.confirmed.trim() && !alreadyLearned;
+                return (
                 <div key={idx} className="grid gap-2 rounded-xl bg-[var(--bg-base)] p-3 sm:grid-cols-12">
                   <input
                     value={it.raw}
@@ -473,12 +512,26 @@ export default function UploadPage() {
                     className="col-span-3 rounded border border-[var(--border-light)] bg-[var(--bg-input)] p-2 text-sm"
                     placeholder={t('rawName')}
                   />
-                  <input
-                    value={it.confirmed}
-                    onChange={(e) => updateItem(idx, 'confirmed', e.target.value)}
-                    className={`col-span-4 rounded border bg-[var(--bg-input)] p-2 text-sm ${it.kind === 'charge' ? 'border-[#c4a574] italic' : 'border-[var(--border-light)]'}`}
-                    placeholder={t('confirmedName')}
-                  />
+                  <div className="col-span-4 flex gap-1">
+                    <input
+                      value={it.confirmed}
+                      onChange={(e) => updateItem(idx, 'confirmed', e.target.value)}
+                      className={`flex-1 rounded border bg-[var(--bg-input)] p-2 text-sm ${it.kind === 'charge' ? 'border-[#c4a574] italic' : 'border-[var(--border-light)]'}`}
+                      placeholder={t('confirmedName')}
+                    />
+                    {canLearn && (
+                      <button
+                        onClick={() => saveItemAlias(idx)}
+                        className={`shrink-0 rounded px-2 py-1 text-xs font-medium ${aliasSavedIdx === idx ? 'bg-[var(--bg-success)] text-[var(--text-on-primary)]' : 'bg-[var(--bg-secondary)] text-[var(--text-on-primary)] hover:opacity-80'}`}
+                        title={t('rememberAlias')}
+                      >
+                        {aliasSavedIdx === idx ? '✓' : '⟳'}
+                      </button>
+                    )}
+                    {alreadyLearned && (
+                      <span className="shrink-0 self-center text-xs text-[var(--bg-success)]" title={t('aliasKnown')}>✓</span>
+                    )}
+                  </div>
                   <input
                     value={it.qty}
                     onChange={(e) => updateItem(idx, 'qty', e.target.value)}
@@ -505,7 +558,8 @@ export default function UploadPage() {
                     ×
                   </button>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="mt-4 rounded-xl bg-[var(--bg-base)] p-3">

@@ -110,21 +110,65 @@ export function parseItemLine(line: string): BillItem | null {
     };
   }
 
-  const pattern = new RegExp(
+  // Pattern 1 (primary): name qty unit? [x rate] [= amount]
+  const pattern1 = new RegExp(
     `^(.+?)\\s+(\\d{1,3}(?:,\\d{3})+|\\d+(?:\\.\\d+)?)\\s*(${UNIT_PATTERN})?\\s*(?:[xX/]([\\d./]+\\s*(?:${UNIT_PATTERN})?))?\\s*(?:=|-)?\\s*(\\d{1,3}(?:,\\d{3})+|\\d+(?:\\.\\d+)?)?\\s*$`,
     'i'
   );
 
-  const m = line.match(pattern);
-  if (!m) return null;
+  // Pattern 2: name rate x qty = amount (rate before qty)
+  const pattern2 = new RegExp(
+    `^(.+?)\\s+([\\d./]+\\s*(?:${UNIT_PATTERN})?)\\s*[xX]\\s*(\\d{1,3}(?:,\\d{3})+|\\d+(?:\\.\\d+)?)\\s*(?:=|-)?\\s*(\\d{1,3}(?:,\\d{3})+|\\d+(?:\\.\\d+)?)?\\s*$`,
+    'i'
+  );
 
-  const name = m[1].trim();
-  if (looksLikeGarbageName(name)) return null;
+  // Pattern 3: name qty rate amount (column format, no x separator — 3 numbers after name)
+  const pattern3 = new RegExp(
+    `^(.+?)\\s+(\\d{1,3}(?:,\\d{3})+|\\d+(?:\\.\\d+)?)\\s*(${UNIT_PATTERN})?\\s+([\\d./]+)\\s+(\\d{1,3}(?:,\\d{3})+|\\d+(?:\\.\\d+)?)\\s*$`,
+    'i'
+  );
 
-  const qty = m[2].replace(/,/g, '');
-  const unit = normalizeUnit(m[3]);
-  const rate = m[4];
-  const amount = m[5];
+  // Try pattern 1 first
+  let m = line.match(pattern1);
+  if (m) {
+    const name = m[1].trim();
+    if (!looksLikeGarbageName(name)) {
+      return buildItem(name, m[2], m[3], m[4], m[5]);
+    }
+  }
+
+  // Try pattern 2 (rate x qty)
+  m = line.match(pattern2);
+  if (m) {
+    const name = m[1].trim();
+    if (!looksLikeGarbageName(name)) {
+      // m[2]=rate, m[3]=qty, m[4]=amount
+      return buildItem(name, m[3], undefined, m[2], m[4]);
+    }
+  }
+
+  // Try pattern 3 (column format: qty rate amount)
+  m = line.match(pattern3);
+  if (m) {
+    const name = m[1].trim();
+    if (!looksLikeGarbageName(name)) {
+      // m[2]=qty, m[3]=unit, m[4]=rate, m[5]=amount
+      return buildItem(name, m[2], m[3], m[4], m[5]);
+    }
+  }
+
+  return null;
+}
+
+function buildItem(
+  name: string,
+  qtyRaw: string,
+  unitRaw: string | undefined,
+  rateRaw: string | undefined,
+  amountRaw: string | undefined
+): BillItem {
+  const qty = qtyRaw.replace(/,/g, '');
+  const unit = normalizeUnit(unitRaw);
 
   let qtyStr: string | null = null;
   if (unit) {
@@ -134,14 +178,14 @@ export function parseItemLine(line: string): BillItem | null {
   }
 
   let rateStr: string | null = null;
-  if (rate) {
-    rateStr = rate.replace(/\s+/g, '').toLowerCase();
+  if (rateRaw) {
+    rateStr = rateRaw.replace(/\s+/g, '').toLowerCase();
     if (rateStr.endsWith('/')) rateStr = rateStr.slice(0, -1);
   }
 
   let amountVal = 0;
-  if (amount) {
-    amountVal = parseFloat(amount.replace(/,/g, ''));
+  if (amountRaw) {
+    amountVal = parseFloat(amountRaw.replace(/,/g, ''));
   } else if (rateStr) {
     const rateNum = parseFloat(rateStr.match(/\d+(?:\.\d+)?/)?.[0] || '0');
     amountVal = parseFloat(qty) * rateNum;
