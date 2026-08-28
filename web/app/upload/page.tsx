@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { recognizeBill, OcrProgress } from '@/lib/ocr';
+import { recognizeBill, OcrProgress, smartRecognizeBill, SmartOcrProgress, OcrSource } from '@/lib/ocr';
 import { parseBillText, buildDisplay } from '@/lib/parser';
 import { BillItem } from '@/lib/types';
 import { classifyScript, setRuntimeAliases, getRuntimeAlias } from '@/lib/catalog';
@@ -42,6 +42,7 @@ export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [progress, setProgress] = useState<OcrProgress | null>(null);
   const [ocrText, setOcrText] = useState('');
+  const [ocrSource, setOcrSource] = useState<OcrSource | null>(null);
 
   const [customerList, setCustomerList] = useState<string[]>([]);
   const [customerSelect, setCustomerSelect] = useState('__new__');
@@ -145,10 +146,14 @@ export default function UploadPage() {
     setStep('ocr');
     setProgress(null);
     setSaveError('');
+    setOcrSource(null);
     try {
-      const text = await recognizeBill(f, ocrLangs, setProgress);
-      setOcrText(text);
-      const parsed = parseBillText(text);
+      const result = await smartRecognizeBill(f, ocrLangs, (m: SmartOcrProgress) => {
+        setProgress({ status: m.status, progress: m.progress });
+      });
+      setOcrText(result.text);
+      setOcrSource(result.source);
+      const parsed = parseBillText(result.text);
 
       setDate(parsed.date || '');
       setBillNo(parsed.billNo || '');
@@ -348,10 +353,17 @@ export default function UploadPage() {
           <p className="mb-2 font-medium">{t('readingBill')}</p>
           {progress && (
             <div>
-              <p className="text-sm text-[var(--text-muted)]">{progress.status}</p>
+              <p className="text-sm text-[var(--text-muted)]">
+                {progress.status === 'local_ocr' && t('ocrLocal')}
+                {progress.status === 'ai_ocr' && t('ocrAI')}
+                {progress.status === 'ai_ocr_failed' && t('ocrAIFailed')}
+                {progress.status === 'done' && (progress as any).source === 'gemini' ? t('ocrAIDone') :
+                  progress.status === 'done' ? t('ocrLocalDone') :
+                  !['local_ocr', 'ai_ocr', 'ai_ocr_failed', 'done'].includes(progress.status) ? progress.status : ''}
+              </p>
               <div className="mt-2 h-2 w-full rounded bg-[var(--bg-card-hover)]">
                 <div
-                  className="h-2 rounded bg-[var(--bg-primary)]"
+                  className={`h-2 rounded ${progress.status === 'ai_ocr' || (progress as any).source === 'gemini' ? 'bg-[var(--bg-success)]' : 'bg-[var(--bg-primary)]'}`}
                   style={{ width: `${Math.max(5, progress.progress * 100)}%` }}
                 />
               </div>
@@ -362,6 +374,11 @@ export default function UploadPage() {
 
       {step === 'review' && (
         <div className="space-y-4">
+          {ocrSource && (
+            <div className={`rounded-lg px-3 py-1.5 text-xs ${ocrSource === 'gemini' ? 'bg-[var(--bg-success)] text-[var(--text-on-primary)]' : 'bg-[var(--bg-secondary)] text-[var(--text-on-primary)]'}`}>
+              {ocrSource === 'gemini' ? `✓ ${t('ocrAIBadge')}` : `✓ ${t('ocrLocalBadge')}`}
+            </div>
+          )}
           <section className="rounded-2xl bg-[var(--bg-card)] p-4">
             <div className="grid gap-3 sm:grid-cols-3">
               <div>
