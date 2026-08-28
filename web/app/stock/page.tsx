@@ -25,22 +25,22 @@ export default function StockPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <p className="py-10 text-center text-sm text-[#8a7a6a]">{t('loading')}</p>;
+  if (loading) return <p className="py-10 text-center text-sm text-[var(--text-faint)]">{t('loading')}</p>;
 
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-semibold">{t('navStock')}</h1>
-      <p className="text-xs text-[#8a7a6a]">{t('stockHelp')}</p>
+      <p className="text-xs text-[var(--text-faint)]">{t('stockHelp')}</p>
 
       {stock.length === 0 && (
-        <p className="rounded-lg bg-[#e8e0d2] p-4 text-center text-sm text-[#8a7a6a]">{t('noStock')}</p>
+        <p className="rounded-lg bg-[var(--bg-card)] p-4 text-center text-sm text-[var(--text-faint)]">{t('noStock')}</p>
       )}
 
       {stock.length > 0 && (
-        <div className="overflow-x-auto rounded-lg bg-[#e8e0d2]">
+        <div className="overflow-x-auto rounded-lg bg-[var(--bg-card)]">
           <table className="w-full text-sm tabular-nums">
             <thead>
-              <tr className="text-left text-[11px] text-[#7a6a5a]">
+              <tr className="text-left text-[11px] text-[var(--text-muted)]">
                 <th className="px-3 py-2">{t('itemName')}</th>
                 <th className="px-3 py-2 text-right">{t('inStock')}</th>
                 <th className="px-3 py-2 text-right">{t('lastBuyRate')}</th>
@@ -52,17 +52,17 @@ export default function StockPage() {
                 const isOut = s.qty <= 0;
                 const isLow = s.qty > 0 && s.qty < lowStockThreshold;
                 return (
-                  <tr key={s.itemKey} className="border-t border-[#d9d0c2]">
+                  <tr key={s.itemKey} className="border-t border-[var(--border-light)]">
                     <td className="px-3 py-2 font-medium">
                       {s.itemName}
-                      {isOut && <span className="ml-2 rounded bg-[#8b2e2e] px-1.5 py-0.5 text-[10px] text-white">{t('outOfStock')}</span>}
-                      {isLow && <span className="ml-2 rounded bg-[#c9a227] px-1.5 py-0.5 text-[10px] text-[#3a2f2f]">{t('lowStock')}</span>}
+                      {isOut && <span className="ml-2 rounded bg-[var(--bg-primary)] px-1.5 py-0.5 text-[10px] text-[var(--text-on-primary)]">{t('outOfStock')}</span>}
+                      {isLow && <span className="ml-2 rounded bg-[var(--bg-warning)] px-1.5 py-0.5 text-[10px] text-[var(--text-primary)]">{t('lowStock')}</span>}
                     </td>
-                    <td className={`px-3 py-2 text-right font-semibold ${isOut ? 'text-[#8b2e2e]' : isLow ? 'text-[#c4622d]' : 'text-[#2d6b4f]'}`}>
+                    <td className={`px-3 py-2 text-right font-semibold ${isOut ? 'text-[var(--bg-primary)]' : isLow ? 'text-[#c4622d]' : 'text-[var(--bg-success)]'}`}>
                       {s.qty} {s.unit || ''}
                     </td>
                     <td className="px-3 py-2 text-right">{s.lastRate ? `${fmt(s.lastRate)}/${s.unit || 'unit'}` : '—'}</td>
-                    <td className="px-3 py-2 text-[11px] text-[#7a6a5a]">{s.lastPurchaseDate ? fmtDate(s.lastPurchaseDate) : '—'}</td>
+                    <td className="px-3 py-2 text-[11px] text-[var(--text-muted)]">{s.lastPurchaseDate ? fmtDate(s.lastPurchaseDate) : '—'}</td>
                   </tr>
                 );
               })}

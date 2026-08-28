@@ -120,7 +120,7 @@ export default function SettingsPage() {
   };
 
   if (loading) {
-    return <p className="py-10 text-center text-sm text-[#8a7a6a]">{t('loading')}</p>;
+    return <p className="py-10 text-center text-sm text-[var(--text-faint)]">{t('loading')}</p>;
   }
 
   return (
@@ -128,42 +128,42 @@ export default function SettingsPage() {
       <h1 className="text-lg font-semibold">{t('settings')}</h1>
 
       {/* Shop Profile */}
-      <section className="rounded-lg bg-[#e8e0d2] p-4">
+      <section className="rounded-lg bg-[var(--bg-card)] p-4">
         <h2 className="text-sm font-semibold">{t('shopProfile')}</h2>
-        <p className="mt-1 text-xs text-[#8a7a6a]">{t('shopProfileHelp')}</p>
+        <p className="mt-1 text-xs text-[var(--text-faint)]">{t('shopProfileHelp')}</p>
         <div className="mt-3 space-y-2">
           <div>
-            <label className="text-xs text-[#7a6a5a]">{t('shopName')}</label>
+            <label className="text-xs text-[var(--text-muted)]">{t('shopName')}</label>
             <input
               value={shopName}
               onChange={(e) => setShopName(e.target.value)}
               placeholder="RVC Vegetable Shop"
-              className="w-full rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+              className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
             />
           </div>
           <div>
-            <label className="text-xs text-[#7a6a5a]">{t('shopAddress')}</label>
+            <label className="text-xs text-[var(--text-muted)]">{t('shopAddress')}</label>
             <input
               value={shopAddress}
               onChange={(e) => setShopAddress(e.target.value)}
               placeholder="Bowenpally, Hyderabad"
-              className="w-full rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+              className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
             />
           </div>
           <div>
-            <label className="text-xs text-[#7a6a5a]">{t('shopPhone')}</label>
+            <label className="text-xs text-[var(--text-muted)]">{t('shopPhone')}</label>
             <input
               value={shopPhone}
               onChange={(e) => setShopPhone(e.target.value)}
               placeholder="+91 98XXX XXXXX"
               inputMode="tel"
-              className="w-full rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+              className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
             />
           </div>
           <button
             onClick={saveProfile}
             disabled={profileStatus === 'saving'}
-            className="rounded-md bg-[#2d6b4f] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            className="rounded-md bg-[var(--bg-success)] px-4 py-2 text-sm font-semibold text-[var(--text-on-primary)] disabled:opacity-50"
           >
             {profileStatus === 'saved' ? t('saved') : t('save')}
           </button>
@@ -171,22 +171,22 @@ export default function SettingsPage() {
       </section>
 
       {/* Low Stock Alert */}
-      <section className="rounded-lg bg-[#e8e0d2] p-4">
+      <section className="rounded-lg bg-[var(--bg-card)] p-4">
         <h2 className="text-sm font-semibold">{t('lowStockAlert')}</h2>
-        <p className="mt-1 text-xs text-[#8a7a6a]">{t('lowStockHelp')}</p>
+        <p className="mt-1 text-xs text-[var(--text-faint)]">{t('lowStockHelp')}</p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <input
             value={lowStock}
             onChange={(e) => setLowStock(e.target.value)}
             placeholder="5"
             inputMode="decimal"
-            className="w-24 rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+            className="w-24 rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
           />
-          <span className="text-xs text-[#7a6a5a]">{t('kgOrUnit')}</span>
+          <span className="text-xs text-[var(--text-muted)]">{t('kgOrUnit')}</span>
           <button
             onClick={saveLowStock}
             disabled={stockStatus === 'saving'}
-            className="rounded-md bg-[#2d6b4f] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            className="rounded-md bg-[var(--bg-success)] px-4 py-2 text-sm font-semibold text-[var(--text-on-primary)] disabled:opacity-50"
           >
             {stockStatus === 'saved' ? t('saved') : t('save')}
           </button>
@@ -194,17 +194,17 @@ export default function SettingsPage() {
       </section>
 
       {/* Backup & Restore */}
-      <section className="rounded-lg bg-[#e8e0d2] p-4">
+      <section className="rounded-lg bg-[var(--bg-card)] p-4">
         <h2 className="text-sm font-semibold">{t('backupRestore')}</h2>
-        <p className="mt-1 text-xs text-[#8a7a6a]">{t('backupHelp')}</p>
+        <p className="mt-1 text-xs text-[var(--text-faint)]">{t('backupHelp')}</p>
         <div className="mt-3 flex flex-wrap gap-3">
           <button
             onClick={downloadBackup}
-            className="rounded-md bg-[#2d6b4f] px-4 py-2 text-sm font-semibold text-white"
+            className="rounded-md bg-[var(--bg-success)] px-4 py-2 text-sm font-semibold text-[var(--text-on-primary)]"
           >
             {t('downloadBackup')}
           </button>
-          <label className="cursor-pointer rounded-md bg-[#5a4a3a] px-4 py-2 text-sm font-semibold text-white">
+          <label className="cursor-pointer rounded-md bg-[var(--bg-secondary)] px-4 py-2 text-sm font-semibold text-[var(--text-on-primary)]">
             {t('restoreBackup')}
             <input
               ref={fileRef}
@@ -216,21 +216,21 @@ export default function SettingsPage() {
           </label>
         </div>
         {restoreStatus === 'restoring' && (
-          <p className="mt-2 text-xs text-[#7a6a5a]">{t('restoring')}…</p>
+          <p className="mt-2 text-xs text-[var(--text-muted)]">{t('restoring')}…</p>
         )}
         {restoreStatus === 'done' && (
-          <p className="mt-2 text-xs text-[#2d6b4f]">✓ {t('restoreSuccess')}: {restoreMsg}</p>
+          <p className="mt-2 text-xs text-[var(--bg-success)]">✓ {t('restoreSuccess')}: {restoreMsg}</p>
         )}
         {restoreStatus === 'error' && (
-          <p className="mt-2 text-xs text-[#8b2e2e]">✗ {restoreMsg}</p>
+          <p className="mt-2 text-xs text-[var(--bg-primary)]">✗ {restoreMsg}</p>
         )}
-        <p className="mt-2 text-[11px] text-[#8b2e2e]">⚠ {t('restoreWarning')}</p>
+        <p className="mt-2 text-[11px] text-[var(--bg-primary)]">⚠ {t('restoreWarning')}</p>
       </section>
 
       {/* Clear Old Data */}
       <section className="rounded-lg border border-[#d4a8a8] bg-[#f5e8e8] p-4">
-        <h2 className="text-sm font-semibold text-[#8b2e2e]">{t('clearData')}</h2>
-        <p className="mt-1 text-xs text-[#8a7a6a]">{t('clearDataHelp')}</p>
+        <h2 className="text-sm font-semibold text-[var(--bg-primary)]">{t('clearData')}</h2>
+        <p className="mt-1 text-xs text-[var(--text-faint)]">{t('clearDataHelp')}</p>
         <div className="mt-3 space-y-2">
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-1.5 text-sm">
@@ -255,13 +255,13 @@ export default function SettingsPage() {
               type="date"
               value={clearDate}
               onChange={(e) => setClearDate(e.target.value)}
-              className="rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+              className="rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
             />
           )}
           {clearMode === 'all' && (
-            <p className="text-xs text-[#8b2e2e]">{t('clearAllWarning')}</p>
+            <p className="text-xs text-[var(--bg-primary)]">{t('clearAllWarning')}</p>
           )}
-          <label className="flex items-center gap-1.5 text-sm text-[#8b2e2e]">
+          <label className="flex items-center gap-1.5 text-sm text-[var(--bg-primary)]">
             <input
               type="checkbox"
               checked={clearConfirm}
@@ -272,15 +272,15 @@ export default function SettingsPage() {
           <button
             onClick={doClear}
             disabled={clearStatus === 'clearing' || !clearConfirm || (clearMode === 'before' && !clearDate)}
-            className="rounded-md bg-[#8b2e2e] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            className="rounded-md bg-[var(--bg-primary)] px-4 py-2 text-sm font-semibold text-[var(--text-on-primary)] disabled:opacity-50"
           >
             {clearStatus === 'clearing' ? t('clearing') + '…' : t('clearDataBtn')}
           </button>
           {clearStatus === 'done' && (
-            <p className="text-xs text-[#2d6b4f]">✓ {clearMsg}</p>
+            <p className="text-xs text-[var(--bg-success)]">✓ {clearMsg}</p>
           )}
           {clearStatus === 'error' && (
-            <p className="text-xs text-[#8b2e2e]">✗ {clearMsg}</p>
+            <p className="text-xs text-[var(--bg-primary)]">✗ {clearMsg}</p>
           )}
         </div>
       </section>

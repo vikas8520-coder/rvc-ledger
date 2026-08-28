@@ -124,54 +124,54 @@ export default function QuickBillPage() {
     }
   };
 
-  if (loading) return <p className="py-10 text-center text-sm text-[#8a7a6a]">{t('loading')}</p>;
+  if (loading) return <p className="py-10 text-center text-sm text-[var(--text-faint)]">{t('loading')}</p>;
 
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-semibold">{t('quickBill')}</h1>
-      <p className="text-xs text-[#8a7a6a]">{t('quickBillHelp')}</p>
+      <p className="text-xs text-[var(--text-faint)]">{t('quickBillHelp')}</p>
 
       {activeItems.length === 0 ? (
-        <p className="rounded-lg bg-[#e8e0d2] p-4 text-center text-sm text-[#8a7a6a]">
+        <p className="rounded-lg bg-[var(--bg-card)] p-4 text-center text-sm text-[var(--text-faint)]">
           {t('noCatalogItemsForBill')}
         </p>
       ) : (
         <>
           <section className="grid gap-2 sm:grid-cols-3">
             <div>
-              <label className="text-xs text-[#7a6a5a]">{t('customer')}</label>
+              <label className="text-xs text-[var(--text-muted)]">{t('customer')}</label>
               <input
                 list="customer-list"
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
                 placeholder={t('selectCustomer')}
-                className="w-full rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+                className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
               />
               <datalist id="customer-list">
                 {customers.map((c) => <option key={c} value={c} />)}
               </datalist>
             </div>
             <div>
-              <label className="text-xs text-[#7a6a5a]">{t('date')}</label>
+              <label className="text-xs text-[var(--text-muted)]">{t('date')}</label>
               <input
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-full rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+                className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
               />
             </div>
             <div>
-              <label className="text-xs text-[#7a6a5a]">{t('billNo')}</label>
+              <label className="text-xs text-[var(--text-muted)]">{t('billNo')}</label>
               <input
                 value={billNo}
                 onChange={(e) => setBillNo(e.target.value)}
-                className="w-full rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+                className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
               />
             </div>
           </section>
 
-          <section className="rounded-lg bg-[#e8e0d2] p-3">
-            <p className="mb-2 text-xs font-semibold text-[#7a6a5a]">{t('addItemToBill')}</p>
+          <section className="rounded-lg bg-[var(--bg-card)] p-3">
+            <p className="mb-2 text-xs font-semibold text-[var(--text-muted)]">{t('addItemToBill')}</p>
             <div className="flex flex-wrap gap-1.5">
               {activeItems.map((item) => {
                 const key = item.name.toLowerCase().replace(/\s+/g, ' ').trim();
@@ -180,11 +180,11 @@ export default function QuickBillPage() {
                   <button
                     key={item.id}
                     onClick={() => addItemRow(item)}
-                    className="rounded-md border border-[#c9c0b2] bg-[#f5f0e6] px-2.5 py-1.5 text-xs hover:bg-[#efe8db]"
+                    className="rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-2.5 py-1.5 text-xs hover:bg-[#efe8db]"
                   >
                     {item.name}
                     {stk && (
-                      <span className={`ml-1 ${stk.qty <= 0 ? 'text-[#8b2e2e]' : stk.qty < 5 ? 'text-[#c4622d]' : 'text-[#2d6b4f]'}`}>
+                      <span className={`ml-1 ${stk.qty <= 0 ? 'text-[var(--bg-primary)]' : stk.qty < 5 ? 'text-[#c4622d]' : 'text-[var(--bg-success)]'}`}>
                         ({stk.qty}{stk.unit ? ` ${stk.unit}` : ''})
                       </span>
                     )}
@@ -195,68 +195,68 @@ export default function QuickBillPage() {
           </section>
 
           {rows.length > 0 && (
-            <section className="space-y-2 rounded-lg bg-[#e8e0d2] p-3">
+            <section className="space-y-2 rounded-lg bg-[var(--bg-card)] p-3">
               {rows.map((r, i) => {
                 const key = r.name.toLowerCase().replace(/\s+/g, ' ').trim();
                 const stk = stockMap.get(key);
                 return (
                   <div key={i} className="grid gap-2 sm:grid-cols-12 items-end">
                     <div className="sm:col-span-4">
-                      <label className="text-xs text-[#7a6a5a]">{t('itemName')}</label>
+                      <label className="text-xs text-[var(--text-muted)]">{t('itemName')}</label>
                       <p className="text-sm font-medium">{r.name}</p>
                       {stk && (
-                        <p className="text-[10px] text-[#7a6a5a]">
+                        <p className="text-[10px] text-[var(--text-muted)]">
                           {t('inStock')}: {stk.qty}{stk.unit ? ` ${stk.unit}` : ''}
                           {stk.lastRate && ` · ${t('lastBuyRate')}: ${fmt(stk.lastRate)}`}
                         </p>
                       )}
                     </div>
                     <div className="sm:col-span-2">
-                      <label className="text-xs text-[#7a6a5a]">{t('qty')}</label>
+                      <label className="text-xs text-[var(--text-muted)]">{t('qty')}</label>
                       <input
                         value={r.qty}
                         onChange={(e) => updateRow(i, 'qty', e.target.value)}
                         placeholder="10 kg"
-                        className="w-full rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+                        className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
                       />
                     </div>
                     <div className="sm:col-span-2">
-                      <label className="text-xs text-[#7a6a5a]">{t('rate')}</label>
+                      <label className="text-xs text-[var(--text-muted)]">{t('rate')}</label>
                       <input
                         value={r.rate}
                         onChange={(e) => updateRow(i, 'rate', e.target.value)}
-                        className="w-full rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+                        className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
                       />
                     </div>
                     <div className="sm:col-span-3">
-                      <label className="text-xs text-[#7a6a5a]">{t('amt')}</label>
+                      <label className="text-xs text-[var(--text-muted)]">{t('amt')}</label>
                       <input
                         value={r.amount}
                         onChange={(e) => updateRow(i, 'amount', e.target.value)}
                         inputMode="decimal"
-                        className="w-full rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+                        className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
                       />
                     </div>
                     <button
                       onClick={() => setRows(rows.filter((_, x) => x !== i))}
-                      className="rounded-md bg-[#8b2e2e] px-2 py-1.5 text-sm text-white sm:col-span-1"
+                      className="rounded-md bg-[var(--bg-primary)] px-2 py-1.5 text-sm text-[var(--text-on-primary)] sm:col-span-1"
                     >
                       ×
                     </button>
                   </div>
                 );
               })}
-              <div className="flex items-center justify-between border-t border-[#d9d0c2] pt-2">
+              <div className="flex items-center justify-between border-t border-[var(--border-light)] pt-2">
                 <p className="text-sm font-semibold">{t('billTotal')}: {fmt(total)}</p>
                 <button
                   onClick={save}
                   disabled={status === 'saving'}
-                  className="rounded-md bg-[#2d6b4f] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  className="rounded-md bg-[var(--bg-success)] px-4 py-2 text-sm font-semibold text-[var(--text-on-primary)] disabled:opacity-50"
                 >
                   {status === 'saving' ? t('saving') : t('saveBill')}
                 </button>
               </div>
-              {error && <p className="text-center text-sm text-[#8b2e2e]">{error}</p>}
+              {error && <p className="text-center text-sm text-[var(--bg-primary)]">{error}</p>}
             </section>
           )}
         </>

@@ -13,7 +13,7 @@ export default function LedgerTable({ customer }: { customer: Customer }) {
   const uiLang = getUiLang(lang);
 
   if (customer.txns.length === 0) {
-    return <p className="text-sm text-[#8a7a6a]">{t('noActivity')}</p>;
+    return <p className="text-sm text-[var(--text-faint)]">{t('noActivity')}</p>;
   }
 
   // Build flat row list: each item is its own row, bills get a total row at the end
@@ -112,10 +112,10 @@ export default function LedgerTable({ customer }: { customer: Customer }) {
   });
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-[#d9d0c2] bg-white shadow-sm">
+    <div className="overflow-x-auto rounded-lg border border-[var(--border-light)] bg-[var(--bg-input)] shadow-sm">
       <table className="w-full border-collapse text-sm">
         <thead>
-          <tr className="bg-[#8b2e2e] text-white">
+          <tr className="bg-[var(--bg-primary)] text-[var(--text-on-primary)]">
             <th className="w-[65px] px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">{t('date')}</th>
             <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">{t('particulars')}</th>
             <th className="w-[70px] px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">{t('qty')}</th>
@@ -128,22 +128,22 @@ export default function LedgerTable({ customer }: { customer: Customer }) {
         <tbody>
           {rows.map((r, i) => {
             const isLastOfTxn = lastRowOfTxn.get(r.txnId) === i;
-            const borderClass = r.isFirst ? 'border-t-2 border-[#c9c0b2]' : 'border-t border-[#ece5d8]';
+            const borderClass = r.isFirst ? 'border-t-2 border-[var(--border-input)]' : 'border-t border-[var(--border-card)]';
 
             if (r.isTotal) {
               // Total/subtotal row — bold, tinted background
               return (
-                <tr key={i} className={`${borderClass} bg-[#f5f0e6] font-semibold`}>
-                  <td className="px-3 py-1.5 text-xs text-[#5a4a3a]">{r.date}</td>
-                  <td className={`px-3 py-1.5 ${r.isPayment ? 'text-[#2d6b4f]' : 'text-[#3a2f2f]'}`}>
+                <tr key={i} className={`${borderClass} bg-[var(--bg-base)] font-semibold`}>
+                  <td className="px-3 py-1.5 text-xs text-[var(--text-secondary)]">{r.date}</td>
+                  <td className={`px-3 py-1.5 ${r.isPayment ? 'text-[var(--bg-success)]' : 'text-[var(--text-primary)]'}`}>
                     {r.particulars}
                   </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-[#8a7a6a]">{r.qty}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-[#8a7a6a]">{r.rate}</td>
-                  <td className={`px-3 py-1.5 text-right tabular-nums ${r.isPayment ? 'text-[#2d6b4f]' : 'text-[#3a2f2f]'}`}>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-[var(--text-faint)]">{r.qty}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-[var(--text-faint)]">{r.rate}</td>
+                  <td className={`px-3 py-1.5 text-right tabular-nums ${r.isPayment ? 'text-[var(--bg-success)]' : 'text-[var(--text-primary)]'}`}>
                     {r.isPayment ? '−' : '+'}{fmt(Math.abs(r.amount))}
                   </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-[#5a4a3a]">
+                  <td className="px-3 py-1.5 text-right tabular-nums text-[var(--text-secondary)]">
                     {r.balance !== null ? fmt(r.balance) : ''}
                   </td>
                   <td className="px-2 py-1.5 text-right">
@@ -156,14 +156,14 @@ export default function LedgerTable({ customer }: { customer: Customer }) {
             // Regular item row
             return (
               <tr key={i} className={`${borderClass} ${r.isCharge ? 'italic text-[#6b5344]' : ''}`}>
-                <td className="px-3 py-1 text-xs text-[#5a4a3a]">{r.date}</td>
-                <td className="px-3 py-1 text-[#3a2f2f]">
+                <td className="px-3 py-1 text-xs text-[var(--text-secondary)]">{r.date}</td>
+                <td className="px-3 py-1 text-[var(--text-primary)]">
                   {r.isFirst ? <span className="font-semibold">{r.particulars}</span> : r.particulars}
                 </td>
-                <td className="px-3 py-1 text-right tabular-nums text-[#7a6a5a]">{r.qty}</td>
-                <td className="px-3 py-1 text-right tabular-nums text-[#7a6a5a]">{r.rate}</td>
+                <td className="px-3 py-1 text-right tabular-nums text-[var(--text-muted)]">{r.qty}</td>
+                <td className="px-3 py-1 text-right tabular-nums text-[var(--text-muted)]">{r.rate}</td>
                 <td className="px-3 py-1 text-right tabular-nums">{fmt(r.amount)}</td>
-                <td className="px-3 py-1 text-right tabular-nums text-[#c9c0b2]"></td>
+                <td className="px-3 py-1 text-right tabular-nums text-[var(--border-input)]"></td>
                 <td className="px-2 py-1"></td>
               </tr>
             );

@@ -100,13 +100,13 @@ export default function SupplierLedgerPage({ params }: { params: Promise<{ id: s
     }
   };
 
-  if (loading) return <p className="py-10 text-center text-sm text-[#8a7a6a]">{t('loading')}</p>;
+  if (loading) return <p className="py-10 text-center text-sm text-[var(--text-faint)]">{t('loading')}</p>;
 
   if (!supplier) {
     return (
       <div className="space-y-3">
-        <p className="text-sm text-[#8a7a6a]">{t('noSuppliers')}</p>
-        <Link href="/suppliers" className="text-sm text-[#8b2e2e] hover:underline">
+        <p className="text-sm text-[var(--text-faint)]">{t('noSuppliers')}</p>
+        <Link href="/suppliers" className="text-sm text-[var(--bg-primary)] hover:underline">
           {t('allSuppliers')}
         </Link>
       </div>
@@ -116,34 +116,34 @@ export default function SupplierLedgerPage({ params }: { params: Promise<{ id: s
   return (
     <div className="space-y-4">
       <div>
-        <Link href="/suppliers" className="text-xs text-[#8b2e2e] hover:underline">
+        <Link href="/suppliers" className="text-xs text-[var(--bg-primary)] hover:underline">
           ← {t('allSuppliers')}
         </Link>
         <h1 className="text-xl font-bold">{supplier.name}</h1>
       </div>
 
       <section className="grid grid-cols-3 gap-2">
-        <div className="rounded-lg bg-[#e8e0d2] px-3 py-2">
-          <p className="text-[10px] uppercase text-[#7a6a5a]">{t('purchased')}</p>
+        <div className="rounded-lg bg-[var(--bg-card)] px-3 py-2">
+          <p className="text-[10px] uppercase text-[var(--text-muted)]">{t('purchased')}</p>
           <p className="font-bold">{fmt(supplier.purchased)}</p>
         </div>
-        <div className="rounded-lg bg-[#e8e0d2] px-3 py-2">
-          <p className="text-[10px] uppercase text-[#7a6a5a]">{t('paid')}</p>
+        <div className="rounded-lg bg-[var(--bg-card)] px-3 py-2">
+          <p className="text-[10px] uppercase text-[var(--text-muted)]">{t('paid')}</p>
           <p className="font-bold">{fmt(supplier.paid)}</p>
         </div>
-        <div className="rounded-lg bg-[#e8e0d2] px-3 py-2">
-          <p className="text-[10px] uppercase text-[#7a6a5a]">{t('supplierBalance')}</p>
-          <p className={`font-bold ${supplier.balance > 0 ? 'text-[#8b2e2e]' : 'text-[#2d6b4f]'}`}>
+        <div className="rounded-lg bg-[var(--bg-card)] px-3 py-2">
+          <p className="text-[10px] uppercase text-[var(--text-muted)]">{t('supplierBalance')}</p>
+          <p className={`font-bold ${supplier.balance > 0 ? 'text-[var(--bg-primary)]' : 'text-[var(--bg-success)]'}`}>
             {fmt(supplier.balance)}
           </p>
         </div>
       </section>
 
-      <section className="rounded-lg bg-[#e8e0d2] p-3">
+      <section className="rounded-lg bg-[var(--bg-card)] p-3">
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setPayOpen((v) => !v)}
-            className="rounded-md bg-[#2d6b4f] px-3 py-1.5 text-sm text-white"
+            className="rounded-md bg-[var(--bg-success)] px-3 py-1.5 text-sm text-[var(--text-on-primary)]"
           >
             {t('recordSupplierPayment')}
           </button>
@@ -151,19 +151,19 @@ export default function SupplierLedgerPage({ params }: { params: Promise<{ id: s
             href={waLink(supplierStatementText(supplier), supplier.phone)}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-md bg-[#8b2e2e] px-3 py-1.5 text-sm text-white"
+            className="rounded-md bg-[var(--bg-primary)] px-3 py-1.5 text-sm text-[var(--text-on-primary)]"
           >
             {t('shareStatement')}
           </a>
           <button
             onClick={copyStatement}
-            className="rounded-md border border-[#c9c0b2] bg-[#f5f0e6] px-3 py-1.5 text-sm"
+            className="rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-3 py-1.5 text-sm"
           >
             {copied ? t('copied') : t('copyStatement')}
           </button>
           <button
             onClick={() => downloadCsv(`${supplier.name.replace(/\s+/g, '-')}-supplier.csv`, supplierCsv(supplier))}
-            className="rounded-md border border-[#c9c0b2] bg-[#f5f0e6] px-3 py-1.5 text-sm"
+            className="rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-3 py-1.5 text-sm"
           >
             {t('exportCsv')}
           </button>
@@ -172,35 +172,35 @@ export default function SupplierLedgerPage({ params }: { params: Promise<{ id: s
         {payOpen && (
           <div className="mt-3 grid gap-2 sm:grid-cols-4">
             <div>
-              <label className="text-xs text-[#7a6a5a]">{t('date')}</label>
+              <label className="text-xs text-[var(--text-muted)]">{t('date')}</label>
               <input
                 type="date"
                 value={payDate}
                 onChange={(e) => setPayDate(e.target.value)}
-                className="w-full rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+                className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
               />
             </div>
             <div>
-              <label className="text-xs text-[#7a6a5a]">{t('amountReceived')}</label>
+              <label className="text-xs text-[var(--text-muted)]">{t('amountReceived')}</label>
               <input
                 value={payAmount}
                 onChange={(e) => setPayAmount(e.target.value)}
                 inputMode="decimal"
-                className="w-full rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+                className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
               />
             </div>
             <div>
-              <label className="text-xs text-[#7a6a5a]">{t('notes')}</label>
+              <label className="text-xs text-[var(--text-muted)]">{t('notes')}</label>
               <input
                 value={payNotes}
                 onChange={(e) => setPayNotes(e.target.value)}
-                className="w-full rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+                className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
               />
             </div>
             <button
               onClick={savePayment}
               disabled={payStatus === 'saving' || !payAmount}
-              className="mt-5 rounded-md bg-[#2d6b4f] px-3 py-1.5 text-sm text-white disabled:opacity-50"
+              className="mt-5 rounded-md bg-[var(--bg-success)] px-3 py-1.5 text-sm text-[var(--text-on-primary)] disabled:opacity-50"
             >
               {payStatus === 'saving' ? t('saving') : t('savePurchase')}
             </button>
@@ -208,18 +208,18 @@ export default function SupplierLedgerPage({ params }: { params: Promise<{ id: s
         )}
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <label className="text-xs text-[#7a6a5a]">{t('phone')}</label>
+          <label className="text-xs text-[var(--text-muted)]">{t('phone')}</label>
           <input
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder={t('addPhone')}
             inputMode="tel"
-            className="min-w-0 flex-1 rounded-md border border-[#c9c0b2] bg-white px-2 py-1 text-sm sm:w-48 sm:flex-none"
+            className="min-w-0 flex-1 rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1 text-sm sm:w-48 sm:flex-none"
           />
           <button
             onClick={savePhone}
             disabled={phoneStatus === 'saving'}
-            className="rounded-md bg-[#5a4a3a] px-3 py-1 text-sm text-white disabled:opacity-50"
+            className="rounded-md bg-[var(--bg-secondary)] px-3 py-1 text-sm text-[var(--text-on-primary)] disabled:opacity-50"
           >
             {phoneStatus === 'saved' ? t('saved') : t('savePhone')}
           </button>
@@ -228,21 +228,21 @@ export default function SupplierLedgerPage({ params }: { params: Promise<{ id: s
 
       <section className="space-y-2">
         <h2 className="text-sm font-semibold">{t('ledger')}</h2>
-        {supplier.entries.length === 0 && <p className="text-sm text-[#8a7a6a]">{t('noActivity')}</p>}
+        {supplier.entries.length === 0 && <p className="text-sm text-[var(--text-faint)]">{t('noActivity')}</p>}
         {supplier.entries.map((e) => (
-          <div key={e.id} className="rounded-lg bg-[#e8e0d2] p-3">
+          <div key={e.id} className="rounded-lg bg-[var(--bg-card)] p-3">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-[11px] text-[#7a6a5a]">{fmtDate(e.date)}</p>
+                <p className="text-[11px] text-[var(--text-muted)]">{fmtDate(e.date)}</p>
                 <p className="text-sm font-medium">
                   {e.type === 'payment' ? t('paymentReceived') : e.billNo ? `${t('bill')} ${e.billNo}` : t('bill')}
                 </p>
               </div>
               <div className="shrink-0 text-right">
-                <p className={`text-sm font-semibold ${e.type === 'payment' ? 'text-[#2d6b4f]' : 'text-[#3a2f2f]'}`}>
+                <p className={`text-sm font-semibold ${e.type === 'payment' ? 'text-[var(--bg-success)]' : 'text-[var(--text-primary)]'}`}>
                   {e.type === 'payment' ? '-' : '+'}{fmt(e.amount)}
                 </p>
-                <p className="text-[11px] text-[#7a6a5a]">{t('balanceAfter')} {fmt(e.balanceAfter)}</p>
+                <p className="text-[11px] text-[var(--text-muted)]">{t('balanceAfter')} {fmt(e.balanceAfter)}</p>
               </div>
             </div>
             {e.items && e.items.length > 0 && (
@@ -251,7 +251,7 @@ export default function SupplierLedgerPage({ params }: { params: Promise<{ id: s
                   {e.items.map((it, i) => (
                     <tr key={i} className={it.kind === 'charge' ? 'italic text-[#6b5344]' : ''}>
                       <td className="pr-2">{it.name}</td>
-                      <td className="whitespace-nowrap pr-2 text-right text-[#7a6a5a]">
+                      <td className="whitespace-nowrap pr-2 text-right text-[var(--text-muted)]">
                         {[it.qty, it.rate].filter(Boolean).join(' × ')}
                       </td>
                       <td className="whitespace-nowrap text-right">{fmt(it.amount)}</td>

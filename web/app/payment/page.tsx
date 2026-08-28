@@ -56,13 +56,13 @@ export default function PaymentPage() {
     <div className="space-y-4">
       <h1 className="text-xl font-bold">{t('recordPayment')}</h1>
 
-      <form onSubmit={handleSubmit} className="max-w-md space-y-4 rounded-2xl bg-[#e8e0d2] p-6">
+      <form onSubmit={handleSubmit} className="max-w-md space-y-4 rounded-2xl bg-[var(--bg-card)] p-6">
         <div>
-          <label className="text-sm text-[#7a6a5a]">{t('customer')}</label>
+          <label className="text-sm text-[var(--text-muted)]">{t('customer')}</label>
           <select
             value={customer}
             onChange={(e) => setCustomer(e.target.value)}
-            className="w-full rounded-lg border border-[#c9c0b2] bg-[#f5f0e6] p-2"
+            className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2"
           >
             {customers.map((c) => (
               <option key={c} value={c}>
@@ -73,48 +73,48 @@ export default function PaymentPage() {
         </div>
 
         <div>
-          <label className="text-sm text-[#7a6a5a]">{t('date')}</label>
+          <label className="text-sm text-[var(--text-muted)]">{t('date')}</label>
           <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="w-full rounded-lg border border-[#c9c0b2] bg-[#f5f0e6] p-2"
+            className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2"
           />
         </div>
 
         <div>
-          <label className="text-sm text-[#7a6a5a]">{t('amountReceived')}</label>
+          <label className="text-sm text-[var(--text-muted)]">{t('amountReceived')}</label>
           <input
             type="number"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="w-full rounded-lg border border-[#c9c0b2] bg-[#f5f0e6] p-2"
+            className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2"
             required
           />
         </div>
 
         <div>
-          <label className="text-sm text-[#7a6a5a]">{t('notes')}</label>
+          <label className="text-sm text-[var(--text-muted)]">{t('notes')}</label>
           <input
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="e.g. Cash / UPI"
-            className="w-full rounded-lg border border-[#c9c0b2] bg-[#f5f0e6] p-2"
+            className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2"
           />
         </div>
 
         <button
           type="submit"
           disabled={!customer || !date || !amount || status === 'saving'}
-          className="w-full rounded-xl bg-[#2d6b4f] p-3 font-semibold text-white disabled:opacity-50"
+          className="w-full rounded-xl bg-[var(--bg-success)] p-3 font-semibold text-[var(--text-on-primary)] disabled:opacity-50"
         >
           {status === 'saving' ? t('saving') : t('recordPayment')}
         </button>
 
         {status === 'done' && (
-          <p className="text-center text-[#2d6b4f]">{t('paymentRecorded')}</p>
+          <p className="text-center text-[var(--bg-success)]">{t('paymentRecorded')}</p>
         )}
-        {status === 'error' && <p className="text-center text-[#8b2e2e]">{error}</p>}
+        {status === 'error' && <p className="text-center text-[var(--bg-primary)]">{error}</p>}
       </form>
     </div>
   );

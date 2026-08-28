@@ -106,44 +106,44 @@ export default function PurchasesPage() {
         <h1 className="text-lg font-semibold">{t('navPurchases')}</h1>
         <button
           onClick={() => setOpen((v) => !v)}
-          className="rounded-md bg-[#8b2e2e] px-3 py-1.5 text-sm text-white"
+          className="rounded-md bg-[var(--bg-primary)] px-3 py-1.5 text-sm text-[var(--text-on-primary)]"
         >
           {open ? t('close') : t('addPurchase')}
         </button>
       </div>
 
-      <p className="text-xs text-[#8a7a6a]">{t('purchasesHelp')}</p>
+      <p className="text-xs text-[var(--text-faint)]">{t('purchasesHelp')}</p>
 
       {open && (
-        <section className="space-y-3 rounded-lg bg-[#e8e0d2] p-3">
+        <section className="space-y-3 rounded-lg bg-[var(--bg-card)] p-3">
           <div className="grid gap-2 sm:grid-cols-4">
             <div>
-              <label className="text-xs text-[#7a6a5a]">{t('date')}</label>
+              <label className="text-xs text-[var(--text-muted)]">{t('date')}</label>
               <input
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-full rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+                className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
               />
             </div>
             <div>
-              <label className="text-xs text-[#7a6a5a]">{t('supplier')}</label>
+              <label className="text-xs text-[var(--text-muted)]">{t('supplier')}</label>
               <input
                 value={supplier}
                 onChange={(e) => setSupplier(e.target.value)}
-                className="w-full rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+                className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
               />
             </div>
             <div>
-              <label className="text-xs text-[#7a6a5a]">{t('billNo')}</label>
+              <label className="text-xs text-[var(--text-muted)]">{t('billNo')}</label>
               <input
                 value={billNo}
                 onChange={(e) => setBillNo(e.target.value)}
-                className="w-full rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+                className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
               />
             </div>
             <div>
-              <label className="text-xs text-[#7a6a5a]">{t('marketYard')}</label>
+              <label className="text-xs text-[var(--text-muted)]">{t('marketYard')}</label>
               <select
                 value={market.marketYard}
                 onChange={(e) => {
@@ -154,7 +154,7 @@ export default function PurchasesPage() {
                     marketType: yard?.type || market.marketType,
                   });
                 }}
-                className="w-full rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+                className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
               >
                 {MARKET_YARDS.map((y) => (
                   <option key={y.id} value={y.id}>{y.name}</option>
@@ -170,30 +170,30 @@ export default function PurchasesPage() {
                   value={r.name}
                   onChange={(e) => updateRow(i, 'name', e.target.value)}
                   placeholder={t('itemName')}
-                  className="rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm sm:col-span-5"
+                  className="rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm sm:col-span-5"
                 />
                 <input
                   value={r.qty}
                   onChange={(e) => updateRow(i, 'qty', e.target.value)}
                   placeholder="50 kg"
-                  className="rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm sm:col-span-2"
+                  className="rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm sm:col-span-2"
                 />
                 <input
                   value={r.rate}
                   onChange={(e) => updateRow(i, 'rate', e.target.value)}
                   placeholder="20"
-                  className="rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm sm:col-span-2"
+                  className="rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm sm:col-span-2"
                 />
                 <input
                   value={r.amount}
                   onChange={(e) => updateRow(i, 'amount', e.target.value)}
                   placeholder={t('amt')}
                   inputMode="decimal"
-                  className="rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm sm:col-span-2"
+                  className="rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm sm:col-span-2"
                 />
                 <button
                   onClick={() => setRows(rows.filter((_, x) => x !== i))}
-                  className="rounded-md bg-[#8b2e2e] px-2 py-1.5 text-sm text-white sm:col-span-1"
+                  className="rounded-md bg-[var(--bg-primary)] px-2 py-1.5 text-sm text-[var(--text-on-primary)] sm:col-span-1"
                 >
                   ×
                 </button>
@@ -204,7 +204,7 @@ export default function PurchasesPage() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <button
               onClick={() => setRows([...rows, { ...emptyRow }])}
-              className="rounded-md border border-[#c9c0b2] bg-[#f5f0e6] px-3 py-1.5 text-sm"
+              className="rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-3 py-1.5 text-sm"
             >
               + {t('add')}
             </button>
@@ -214,25 +214,25 @@ export default function PurchasesPage() {
           <button
             onClick={save}
             disabled={status === 'saving'}
-            className="w-full rounded-md bg-[#2d6b4f] py-2 font-semibold text-white disabled:opacity-50"
+            className="w-full rounded-md bg-[var(--bg-success)] py-2 font-semibold text-[var(--text-on-primary)] disabled:opacity-50"
           >
             {status === 'saving' ? t('saving') : t('savePurchase')}
           </button>
-          {error && <p className="text-center text-sm text-[#8b2e2e]">{error}</p>}
+          {error && <p className="text-center text-sm text-[var(--bg-primary)]">{error}</p>}
         </section>
       )}
 
-      {loading && <p className="text-sm text-[#8a7a6a]">{t('loading')}</p>}
+      {loading && <p className="text-sm text-[var(--text-faint)]">{t('loading')}</p>}
       {!loading && purchases.length === 0 && (
-        <p className="rounded-lg bg-[#e8e0d2] p-4 text-center text-sm text-[#8a7a6a]">{t('noPurchases')}</p>
+        <p className="rounded-lg bg-[var(--bg-card)] p-4 text-center text-sm text-[var(--text-faint)]">{t('noPurchases')}</p>
       )}
 
       <div className="space-y-2">
         {purchases.map((p) => (
-          <div key={p.id} className="rounded-lg bg-[#e8e0d2] p-3">
+          <div key={p.id} className="rounded-lg bg-[var(--bg-card)] p-3">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-[11px] text-[#7a6a5a]">
+                <p className="text-[11px] text-[var(--text-muted)]">
                   {fmtDate(p.date)}
                   {p.market?.marketYard ? ` · ${yardById(p.market.marketYard)?.name || p.market.marketYard}` : ''}
                 </p>
@@ -249,7 +249,7 @@ export default function PurchasesPage() {
                   {p.items.map((it, i) => (
                     <tr key={i} className={it.kind === 'charge' ? 'italic text-[#6b5344]' : ''}>
                       <td className="pr-2">{it.name}</td>
-                      <td className="whitespace-nowrap pr-2 text-right text-[#7a6a5a]">
+                      <td className="whitespace-nowrap pr-2 text-right text-[var(--text-muted)]">
                         {[it.qty, it.rate].filter(Boolean).join(' × ')}
                       </td>
                       <td className="whitespace-nowrap text-right">{fmt(it.amount)}</td>
@@ -259,7 +259,7 @@ export default function PurchasesPage() {
               </table>
             )}
             <div className="mt-1 text-right">
-              <button onClick={() => remove(p.id)} className="text-[11px] text-[#8b2e2e] hover:underline">
+              <button onClick={() => remove(p.id)} className="text-[11px] text-[var(--bg-primary)] hover:underline">
                 {t('delete')}
               </button>
             </div>

@@ -28,7 +28,7 @@ export default function CustomersPage() {
   }, [customers, q, sort]);
 
   if (loading) {
-    return <p className="py-10 text-center text-sm text-[#8a7a6a]">{t('loading')}</p>;
+    return <p className="py-10 text-center text-sm text-[var(--text-faint)]">{t('loading')}</p>;
   }
 
   return (
@@ -40,12 +40,12 @@ export default function CustomersPage() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder={t('searchCustomers')}
-            className="min-w-0 flex-1 rounded-md border border-[#c9c0b2] bg-white px-3 py-1.5 text-sm sm:w-56 sm:flex-none"
+            className="min-w-0 flex-1 rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-1.5 text-sm sm:w-56 sm:flex-none"
           />
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as 'due' | 'name' | 'oldest')}
-            className="rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+            className="rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
           >
             <option value="due">{t('sortDue')}</option>
             <option value="oldest">{t('overdue')}</option>
@@ -53,16 +53,16 @@ export default function CustomersPage() {
           </select>
           <button
             onClick={() => downloadCsv('rvc-customers.csv', customersCsv(customers))}
-            className="rounded-md border border-[#c9c0b2] bg-[#f5f0e6] px-3 py-1.5 text-sm"
+            className="rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-3 py-1.5 text-sm"
           >
             {t('exportCsv')}
           </button>
         </div>
       </div>
 
-      {list.length === 0 && <p className="text-sm text-[#8a7a6a]">{t('noCustomers')}</p>}
+      {list.length === 0 && <p className="text-sm text-[var(--text-faint)]">{t('noCustomers')}</p>}
 
-      <ul className="divide-y divide-[#d9d0c2] overflow-hidden rounded-lg bg-[#e8e0d2]">
+      <ul className="divide-y divide-[var(--border-light)] overflow-hidden rounded-lg bg-[var(--bg-card)]">
         {list.map(({ c, aging }) => (
           <li key={c.id}>
             <Link href={`/customers/${c.id}`} className="flex items-center justify-between gap-3 px-3 py-3 hover:bg-[#efe8db]">
@@ -71,11 +71,11 @@ export default function CustomersPage() {
                   {c.name}
                   <AgingBadge aging={aging} />
                 </p>
-                <p className="text-[11px] text-[#7a6a5a]">
+                <p className="text-[11px] text-[var(--text-muted)]">
                   {t('billed')} {fmt(c.billed)} · {t('paid')} {fmt(c.paid)}
                 </p>
               </div>
-              <p className="shrink-0 text-sm font-semibold text-[#8b2e2e]">{fmt(c.due)}</p>
+              <p className="shrink-0 text-sm font-semibold text-[var(--bg-primary)]">{fmt(c.due)}</p>
             </Link>
           </li>
         ))}

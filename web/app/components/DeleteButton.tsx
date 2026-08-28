@@ -18,7 +18,7 @@ export default function DeleteButton({ id }: { id: string }) {
   return (
     <button
       onClick={handleDelete}
-      className="text-xs text-[#8b2e2e] hover:underline"
+      className="text-xs text-[var(--bg-primary)] hover:underline"
     >
       {t('delete')}
     </button>

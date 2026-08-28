@@ -1,26 +1,68 @@
 @import "tailwindcss";
 
+/* Theme variables — light mode (default) */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg-base: #f5f0e6;
+  --bg-card: #e8e0d2;
+  --bg-card-hover: #d9d0c2;
+  --bg-input: #ffffff;
+  --bg-header: #f5f0e6;
+  --bg-primary: #8b2e2e;
+  --bg-primary-hover: #6b2222;
+  --bg-secondary: #5a4a3a;
+  --bg-secondary-hover: #4a3a2a;
+  --bg-success: #2d6b4f;
+  --bg-success-hover: #22513a;
+  --bg-warning: #c9a227;
+  --bg-danger: #8b2e2e;
+  --text-primary: #3a2f2f;
+  --text-secondary: #5a4a3a;
+  --text-muted: #7a6a5a;
+  --text-faint: #8a7a6a;
+  --text-on-primary: #ffffff;
+  --text-on-success: #ffffff;
+  --text-on-warning: #3a2f2f;
+  --border-light: #d9d0c2;
+  --border-input: #c9c0b2;
+  --border-card: #ece5d8;
+}
+
+/* Dark mode */
+.dark {
+  --bg-base: #1a1714;
+  --bg-card: #252220;
+  --bg-card-hover: #2f2b28;
+  --bg-input: #2a2724;
+  --bg-header: #1a1714;
+  --bg-primary: #a04040;
+  --bg-primary-hover: #b04848;
+  --bg-secondary: #4a4038;
+  --bg-secondary-hover: #5a4a40;
+  --bg-success: #3a7a5a;
+  --bg-success-hover: #4a8a6a;
+  --bg-warning: #b89020;
+  --bg-danger: #a04040;
+  --text-primary: #e8e0d2;
+  --text-secondary: #c9c0b2;
+  --text-muted: #9a8a7a;
+  --text-faint: #7a6a5a;
+  --text-on-primary: #ffffff;
+  --text-on-success: #ffffff;
+  --text-on-warning: #1a1714;
+  --border-light: #3a3530;
+  --border-input: #4a4540;
+  --border-card: #332e2a;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--bg-base);
+  --color-foreground: var(--text-primary);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--bg-base);
+  color: var(--text-primary);
   font-family: Arial, Helvetica, sans-serif;
 }

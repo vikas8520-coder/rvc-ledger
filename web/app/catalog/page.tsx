@@ -86,64 +86,64 @@ export default function CatalogPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-lg font-semibold">{t('navCatalog')}</h1>
-        <button onClick={startAdd} className="rounded-md bg-[#8b2e2e] px-3 py-1.5 text-sm text-white">
+        <button onClick={startAdd} className="rounded-md bg-[var(--bg-primary)] px-3 py-1.5 text-sm text-[var(--text-on-primary)]">
           {t('addItem')}
         </button>
       </div>
 
-      <p className="text-xs text-[#8a7a6a]">{t('catalogHelp')}</p>
+      <p className="text-xs text-[var(--text-faint)]">{t('catalogHelp')}</p>
 
       {open && (
-        <section className="space-y-3 rounded-lg bg-[#e8e0d2] p-3">
+        <section className="space-y-3 rounded-lg bg-[var(--bg-card)] p-3">
           <div className="grid gap-2 sm:grid-cols-3">
             <div>
-              <label className="text-xs text-[#7a6a5a]">{t('itemName')}</label>
+              <label className="text-xs text-[var(--text-muted)]">{t('itemName')}</label>
               <input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="w-full rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+                className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
               />
             </div>
             <div>
-              <label className="text-xs text-[#7a6a5a]">{t('defaultUnit')}</label>
+              <label className="text-xs text-[var(--text-muted)]">{t('defaultUnit')}</label>
               <input
                 value={form.defaultUnit || ''}
                 onChange={(e) => setForm({ ...form, defaultUnit: e.target.value || null })}
                 placeholder="kg / bag / pcs"
-                className="w-full rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+                className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
               />
             </div>
             <div>
-              <label className="text-xs text-[#7a6a5a]">{t('defaultPrice')}</label>
+              <label className="text-xs text-[var(--text-muted)]">{t('defaultPrice')}</label>
               <input
                 value={form.defaultSellPrice ?? ''}
                 onChange={(e) => setForm({ ...form, defaultSellPrice: e.target.value ? Number(e.target.value) : null })}
                 inputMode="decimal"
-                className="w-full rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+                className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
               />
             </div>
             <div>
-              <label className="text-xs text-[#7a6a5a]">{t('teluguName')}</label>
+              <label className="text-xs text-[var(--text-muted)]">{t('teluguName')}</label>
               <input
                 value={form.teluguName || ''}
                 onChange={(e) => setForm({ ...form, teluguName: e.target.value || null })}
-                className="w-full rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+                className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
               />
             </div>
             <div>
-              <label className="text-xs text-[#7a6a5a]">{t('hindiName')}</label>
+              <label className="text-xs text-[var(--text-muted)]">{t('hindiName')}</label>
               <input
                 value={form.hindiName || ''}
                 onChange={(e) => setForm({ ...form, hindiName: e.target.value || null })}
-                className="w-full rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+                className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
               />
             </div>
             <div>
-              <label className="text-xs text-[#7a6a5a]">{t('active')}</label>
+              <label className="text-xs text-[var(--text-muted)]">{t('active')}</label>
               <select
                 value={form.active ? '1' : '0'}
                 onChange={(e) => setForm({ ...form, active: e.target.value === '1' })}
-                className="w-full rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+                className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
               >
                 <option value="1">{t('active')}</option>
                 <option value="0">—</option>
@@ -151,39 +151,39 @@ export default function CatalogPage() {
             </div>
           </div>
           <div>
-            <label className="text-xs text-[#7a6a5a]">{t('aliases')}</label>
+            <label className="text-xs text-[var(--text-muted)]">{t('aliases')}</label>
             <input
               value={aliasText}
               onChange={(e) => setAliasText(e.target.value)}
               placeholder="mirchi, mirapakaya, మిర్చి"
-              className="w-full rounded-md border border-[#c9c0b2] bg-white px-2 py-1.5 text-sm"
+              className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
             />
           </div>
           <div className="flex gap-2">
             <button
               onClick={save}
               disabled={status === 'saving' || !form.name.trim()}
-              className="rounded-md bg-[#2d6b4f] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              className="rounded-md bg-[var(--bg-success)] px-4 py-2 text-sm font-semibold text-[var(--text-on-primary)] disabled:opacity-50"
             >
               {status === 'saving' ? t('saving') : t('savePurchase')}
             </button>
-            <button onClick={() => setOpen(false)} className="rounded-md border border-[#c9c0b2] bg-[#f5f0e6] px-4 py-2 text-sm">
+            <button onClick={() => setOpen(false)} className="rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-4 py-2 text-sm">
               {t('close')}
             </button>
           </div>
         </section>
       )}
 
-      {loading && <p className="text-sm text-[#8a7a6a]">{t('loading')}</p>}
+      {loading && <p className="text-sm text-[var(--text-faint)]">{t('loading')}</p>}
       {!loading && items.length === 0 && (
-        <p className="rounded-lg bg-[#e8e0d2] p-4 text-center text-sm text-[#8a7a6a]">{t('noCatalogItems')}</p>
+        <p className="rounded-lg bg-[var(--bg-card)] p-4 text-center text-sm text-[var(--text-faint)]">{t('noCatalogItems')}</p>
       )}
 
       {items.length > 0 && (
-        <div className="overflow-x-auto rounded-lg bg-[#e8e0d2]">
+        <div className="overflow-x-auto rounded-lg bg-[var(--bg-card)]">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-[11px] text-[#7a6a5a]">
+              <tr className="text-left text-[11px] text-[var(--text-muted)]">
                 <th className="px-3 py-2">{t('itemName')}</th>
                 <th className="px-3 py-2">{t('defaultUnit')}</th>
                 <th className="px-3 py-2 text-right">{t('defaultPrice')}</th>
@@ -193,16 +193,16 @@ export default function CatalogPage() {
             </thead>
             <tbody>
               {items.map((it) => (
-                <tr key={it.id} className="border-t border-[#d9d0c2]">
+                <tr key={it.id} className="border-t border-[var(--border-light)]">
                   <td className="px-3 py-2 font-medium">{it.name}</td>
-                  <td className="px-3 py-2 text-[#7a6a5a]">{it.defaultUnit || '—'}</td>
+                  <td className="px-3 py-2 text-[var(--text-muted)]">{it.defaultUnit || '—'}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{it.defaultSellPrice ? fmt(it.defaultSellPrice) : '—'}</td>
-                  <td className="px-3 py-2 text-[11px] text-[#7a6a5a]">{it.aliases.join(', ')}</td>
+                  <td className="px-3 py-2 text-[11px] text-[var(--text-muted)]">{it.aliases.join(', ')}</td>
                   <td className="px-3 py-2 text-right">
-                    <button onClick={() => startEdit(it)} className="text-xs text-[#2d6b4f] hover:underline">
+                    <button onClick={() => startEdit(it)} className="text-xs text-[var(--bg-success)] hover:underline">
                       {t('editItem')}
                     </button>
-                    <button onClick={() => remove(it.id)} className="ml-2 text-xs text-[#8b2e2e] hover:underline">
+                    <button onClick={() => remove(it.id)} className="ml-2 text-xs text-[var(--bg-primary)] hover:underline">
                       {t('delete')}
                     </button>
                   </td>

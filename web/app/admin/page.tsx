@@ -54,44 +54,44 @@ export default function AdminPage() {
   };
 
   if (loading) {
-    return <p className="py-10 text-center text-sm text-[#8a7a6a]">Loading…</p>;
+    return <p className="py-10 text-center text-sm text-[var(--text-faint)]">Loading…</p>;
   }
 
   if (error) {
-    return <p className="py-10 text-center text-sm text-[#8b2e2e]">{error}</p>;
+    return <p className="py-10 text-center text-sm text-[var(--bg-primary)]">{error}</p>;
   }
 
   const statusColors: Record<string, string> = {
-    trial: 'bg-[#c9a227] text-[#3a2f2f]',
-    active: 'bg-[#2d6b4f] text-white',
-    expired: 'bg-[#8b2e2e] text-white',
-    suspended: 'bg-[#5a4a3a] text-white',
+    trial: 'bg-[var(--bg-warning)] text-[var(--text-primary)]',
+    active: 'bg-[var(--bg-success)] text-[var(--text-on-primary)]',
+    expired: 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]',
+    suspended: 'bg-[var(--bg-secondary)] text-[var(--text-on-primary)]',
   };
 
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-semibold">All Shops</h1>
-      <p className="text-xs text-[#8a7a6a]">{shops.length} shop{shops.length !== 1 ? 's' : ''} registered</p>
+      <p className="text-xs text-[var(--text-faint)]">{shops.length} shop{shops.length !== 1 ? 's' : ''} registered</p>
 
       {shops.length === 0 ? (
-        <p className="rounded-lg bg-[#e8e0d2] p-4 text-center text-sm text-[#8a7a6a]">No shops yet.</p>
+        <p className="rounded-lg bg-[var(--bg-card)] p-4 text-center text-sm text-[var(--text-faint)]">No shops yet.</p>
       ) : (
         <div className="space-y-3">
           {shops.map((shop) => (
-            <div key={shop.id} className="rounded-lg border border-[#d9d0c2] bg-white p-4 shadow-sm">
+            <div key={shop.id} className="rounded-lg border border-[var(--border-light)] bg-[var(--bg-input)] p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <h2 className="font-semibold text-[#3a2f2f]">{shop.name}</h2>
-                  <p className="text-xs text-[#7a6a5a]">
+                  <h2 className="font-semibold text-[var(--text-primary)]">{shop.name}</h2>
+                  <p className="text-xs text-[var(--text-muted)]">
                     {shop.address || 'No address'}{shop.phone ? ` · ${shop.phone}` : ''}
                   </p>
-                  <p className="text-xs text-[#7a6a5a] mt-0.5">
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">
                     Owner: {shop.owner_name || 'Unknown'} {shop.owner_email ? `· ${shop.owner_email}` : ''}
                   </p>
-                  <p className="text-xs text-[#7a6a5a] mt-0.5">
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">
                     {shop.customer_count} customers · {shop.txn_count} transactions
                   </p>
-                  <p className="text-[11px] text-[#8a7a6a] mt-0.5">
+                  <p className="text-[11px] text-[var(--text-faint)] mt-0.5">
                     Joined {new Date(shop.created_at).toLocaleDateString('en-IN')}
                     {shop.trial_ends ? ` · Trial ends ${new Date(shop.trial_ends).toLocaleDateString('en-IN')}` : ''}
                   </p>
@@ -101,20 +101,20 @@ export default function AdminPage() {
                     {shop.billing_status}
                   </span>
                   {!shop.active && (
-                    <span className="rounded-full bg-[#8b2e2e] px-2.5 py-0.5 text-[11px] font-semibold text-white">
+                    <span className="rounded-full bg-[var(--bg-primary)] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--text-on-primary)]">
                       INACTIVE
                     </span>
                   )}
                 </div>
               </div>
 
-              <div className="mt-3 flex flex-wrap gap-2 border-t border-[#ece5d8] pt-3">
+              <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--border-card)] pt-3">
                 <button
                   onClick={() => toggleActive(shop)}
                   className={`rounded-md px-3 py-1 text-xs font-medium ${
                     shop.active
-                      ? 'bg-[#e8e0d2] text-[#5a4a3a] hover:bg-[#d9d0c2]'
-                      : 'bg-[#2d6b4f] text-white hover:bg-[#22513a]'
+                      ? 'bg-[var(--bg-card)] text-[var(--text-secondary)] hover:bg-[var(--bg-card-hover)]'
+                      : 'bg-[var(--bg-success)] text-[var(--text-on-primary)] hover:bg-[var(--bg-success-hover)]'
                   }`}
                 >
                   {shop.active ? 'Deactivate' : 'Activate'}
@@ -122,7 +122,7 @@ export default function AdminPage() {
                 <select
                   value={shop.billing_status}
                   onChange={(e) => setBilling(shop, e.target.value)}
-                  className="rounded-md border border-[#c9c0b2] bg-white px-2 py-1 text-xs"
+                  className="rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1 text-xs"
                 >
                   <option value="trial">Trial</option>
                   <option value="active">Active (paid)</option>
@@ -131,7 +131,7 @@ export default function AdminPage() {
                 </select>
                 <a
                   href={`/api/admin/shops/${shop.id}/data`}
-                  className="rounded-md bg-[#5a4a3a] px-3 py-1 text-xs font-medium text-white hover:bg-[#4a3a2a]"
+                  className="rounded-md bg-[var(--bg-secondary)] px-3 py-1 text-xs font-medium text-[var(--text-on-primary)] hover:bg-[var(--bg-secondary-hover)]"
                 >
                   View data
                 </a>

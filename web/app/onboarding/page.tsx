@@ -63,59 +63,59 @@ export default function OnboardingPage() {
 
   if (checking || !isLoaded) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f5f0e6]">
-        <p className="text-sm text-[#8a7a6a]">Loading…</p>
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-base)]">
+        <p className="text-sm text-[var(--text-faint)]">Loading…</p>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#f5f0e6] px-4 py-8">
+    <div className="flex min-h-screen items-center justify-center bg-[var(--bg-base)] px-4 py-8">
       <div className="w-full max-w-md">
         <div className="mb-6 text-center">
-          <h1 className="text-2xl font-bold text-[#8b2e2e]">Welcome to RVC Ledger</h1>
-          <p className="mt-1 text-sm text-[#7a6a5a]">
+          <h1 className="text-2xl font-bold text-[var(--bg-primary)]">Welcome to RVC Ledger</h1>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
             Set up your shop to get started. You can change these later in Settings.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 rounded-xl bg-white p-6 shadow-lg border border-[#d9d0c2]">
+        <form onSubmit={handleSubmit} className="space-y-4 rounded-xl bg-[var(--bg-input)] p-6 shadow-lg border border-[var(--border-light)]">
           <div>
-            <label className="block text-xs font-medium text-[#7a6a5a] mb-1">Shop name *</label>
+            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Shop name *</label>
             <input
               value={shopName}
               onChange={(e) => setShopName(e.target.value)}
               placeholder="My Vegetable Shop"
-              className="w-full rounded-md border border-[#c9c0b2] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8b2e2e]"
+              className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--bg-primary)]"
               required
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-[#7a6a5a] mb-1">Address</label>
+            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Address</label>
             <input
               value={shopAddress}
               onChange={(e) => setShopAddress(e.target.value)}
               placeholder="Market, City"
-              className="w-full rounded-md border border-[#c9c0b2] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8b2e2e]"
+              className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--bg-primary)]"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-[#7a6a5a] mb-1">Phone</label>
+            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Phone</label>
             <input
               value={shopPhone}
               onChange={(e) => setShopPhone(e.target.value)}
               placeholder="+91 98XXX XXXXX"
               inputMode="tel"
-              className="w-full rounded-md border border-[#c9c0b2] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8b2e2e]"
+              className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--bg-primary)]"
             />
           </div>
 
-          {error && <p className="text-sm text-[#8b2e2e]">{error}</p>}
+          {error && <p className="text-sm text-[var(--bg-primary)]">{error}</p>}
 
           <button
             type="submit"
             disabled={status === 'saving'}
-            className="w-full rounded-md bg-[#8b2e2e] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#6b2222] disabled:opacity-50"
+            className="w-full rounded-md bg-[var(--bg-primary)] px-4 py-2.5 text-sm font-semibold text-[var(--text-on-primary)] hover:bg-[var(--bg-primary-hover)] disabled:opacity-50"
           >
             {status === 'saving' ? 'Creating your shop…' : 'Create my shop'}
           </button>
@@ -124,7 +124,7 @@ export default function OnboardingPage() {
         <div className="mt-4 text-center">
           <button
             onClick={() => signOut({ redirectUrl: '/sign-in' })}
-            className="text-xs text-[#8a7a6a] hover:text-[#5a4a3a]"
+            className="text-xs text-[var(--text-faint)] hover:text-[var(--text-secondary)]"
           >
             Sign out
           </button>

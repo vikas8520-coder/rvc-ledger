@@ -26,10 +26,10 @@ export default function TxnCard({
         : t('bill');
 
   return (
-    <div className="rounded-md bg-[#f5f0e6] px-2 py-1">
+    <div className="rounded-md bg-[var(--bg-base)] px-2 py-1">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <span className="text-[11px] leading-none text-[#7a6a5a]">
+          <span className="text-[11px] leading-none text-[var(--text-muted)]">
             {fmtDate(txn.date)}
             {txn.market?.marketYard
               ? ` · ${yardById(txn.market.marketYard)?.name || txn.market.marketYard}`
@@ -37,7 +37,7 @@ export default function TxnCard({
           </span>
           <span className="ml-1.5 text-sm font-medium leading-none">{title}</span>
         </div>
-        <p className={`shrink-0 text-sm font-semibold leading-none ${txn.type === 'payment' ? 'text-[#2d6b4f]' : 'text-[#3a2f2f]'}`}>
+        <p className={`shrink-0 text-sm font-semibold leading-none ${txn.type === 'payment' ? 'text-[var(--bg-success)]' : 'text-[var(--text-primary)]'}`}>
           {txn.type === 'payment' ? '−' : '+'}
           {fmt(txn.amount)}
         </p>
@@ -47,7 +47,7 @@ export default function TxnCard({
           {txn.items.map((it, idx) => (
             <div key={idx} className={`flex items-baseline gap-2 text-[11px] leading-tight ${it.kind === 'charge' ? 'italic text-[#6b5344]' : ''}`}>
               <span className="truncate">{localizeName(it.name, uiLang)}</span>
-              <span className="shrink-0 whitespace-nowrap text-[#7a6a5a]">
+              <span className="shrink-0 whitespace-nowrap text-[var(--text-muted)]">
                 {[it.qty, it.rate].filter(Boolean).join(' × ')}
               </span>
               <span className="shrink-0 whitespace-nowrap text-right tabular-nums">{fmt(it.amount)}</span>
@@ -56,7 +56,7 @@ export default function TxnCard({
         </div>
       )}
       <div className="mt-0.5 flex items-center justify-end gap-2 text-[11px] leading-none">
-        <span className="text-[#8a7a6a]">
+        <span className="text-[var(--text-faint)]">
           {t('balanceAfter')}: {fmt(txn.balanceAfter)}
         </span>
         <DeleteButton id={txn.id} />

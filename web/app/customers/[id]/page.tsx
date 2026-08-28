@@ -43,14 +43,14 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
   }, []);
 
   if (loading) {
-    return <p className="py-10 text-center text-sm text-[#8a7a6a]">{t('loading')}</p>;
+    return <p className="py-10 text-center text-sm text-[var(--text-faint)]">{t('loading')}</p>;
   }
 
   if (!customer) {
     return (
       <div className="space-y-3">
-        <p className="text-sm text-[#8a7a6a]">{t('noCustomers')}</p>
-        <Link href="/customers" className="text-sm text-[#8b2e2e] hover:underline">
+        <p className="text-sm text-[var(--text-faint)]">{t('noCustomers')}</p>
+        <Link href="/customers" className="text-sm text-[var(--bg-primary)] hover:underline">
           {t('allCustomers')}
         </Link>
       </div>
@@ -142,14 +142,14 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
   return (
     <div className="space-y-4">
       <div>
-        <Link href="/customers" className="text-xs text-[#8b2e2e] hover:underline">
+        <Link href="/customers" className="text-xs text-[var(--bg-primary)] hover:underline">
           ← {t('allCustomers')}
         </Link>
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-xl font-bold">{customer.name}</h1>
           <AgingBadge aging={aging} />
         </div>
-        <p className="text-xs text-[#7a6a5a]">
+        <p className="text-xs text-[var(--text-muted)]">
           {t('bills')} {bills} · {t('payments')} {payments}
           {aging.oldestDate
             ? ` · ${t('oldestUnpaid')} ${fmtDate(aging.oldestDate)} (${aging.oldestDays} ${t('days')})`
@@ -158,27 +158,27 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
       </div>
 
       <section className="grid grid-cols-3 gap-2">
-        <div className="rounded-lg bg-[#e8e0d2] px-3 py-2">
-          <p className="text-[10px] uppercase text-[#7a6a5a]">{t('billed')}</p>
+        <div className="rounded-lg bg-[var(--bg-card)] px-3 py-2">
+          <p className="text-[10px] uppercase text-[var(--text-muted)]">{t('billed')}</p>
           <p className="font-bold">{fmt(customer.billed)}</p>
         </div>
-        <div className="rounded-lg bg-[#e8e0d2] px-3 py-2">
-          <p className="text-[10px] uppercase text-[#7a6a5a]">{t('paid')}</p>
+        <div className="rounded-lg bg-[var(--bg-card)] px-3 py-2">
+          <p className="text-[10px] uppercase text-[var(--text-muted)]">{t('paid')}</p>
           <p className="font-bold">{fmt(customer.paid)}</p>
         </div>
-        <div className="rounded-lg bg-[#e8e0d2] px-3 py-2">
-          <p className="text-[10px] uppercase text-[#7a6a5a]">{t('due')}</p>
-          <p className="font-bold text-[#8b2e2e]">{fmt(customer.due)}</p>
+        <div className="rounded-lg bg-[var(--bg-card)] px-3 py-2">
+          <p className="text-[10px] uppercase text-[var(--text-muted)]">{t('due')}</p>
+          <p className="font-bold text-[var(--bg-primary)]">{fmt(customer.due)}</p>
         </div>
       </section>
 
-      <section className="rounded-lg bg-[#e8e0d2] p-3">
+      <section className="rounded-lg bg-[var(--bg-card)] p-3">
         <div className="flex flex-wrap gap-2">
           <a
             href={waLink(reminderText(customer), customer.phone)}
             target="_blank"
             rel="noopener noreferrer"
-            className={`rounded-md px-3 py-1.5 text-sm text-white ${customer.due > 0 ? 'bg-[#2d6b4f]' : 'bg-[#a8a095] pointer-events-none'}`}
+            className={`rounded-md px-3 py-1.5 text-sm text-[var(--text-on-primary)] ${customer.due > 0 ? 'bg-[var(--bg-success)]' : 'bg-[#a8a095] pointer-events-none'}`}
           >
             {t('sendReminder')}
           </a>
@@ -186,13 +186,13 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
             href={waLink(statementText(customer), customer.phone)}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-md bg-[#8b2e2e] px-3 py-1.5 text-sm text-white"
+            className="rounded-md bg-[var(--bg-primary)] px-3 py-1.5 text-sm text-[var(--text-on-primary)]"
           >
             {t('shareStatement')}
           </a>
           <button
             onClick={copyStatement}
-            className="rounded-md border border-[#c9c0b2] bg-[#f5f0e6] px-3 py-1.5 text-sm"
+            className="rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-3 py-1.5 text-sm"
           >
             {copied ? t('copied') : t('copyStatement')}
           </button>
@@ -200,54 +200,54 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
             onClick={() =>
               downloadCsv(`${customer.name.replace(/\s+/g, '-')}-ledger.csv`, customerCsv(customer))
             }
-            className="rounded-md border border-[#c9c0b2] bg-[#f5f0e6] px-3 py-1.5 text-sm"
+            className="rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-3 py-1.5 text-sm"
           >
             {t('exportCsv')}
           </button>
           <button
             onClick={printPdf}
-            className="rounded-md border border-[#c9c0b2] bg-[#f5f0e6] px-3 py-1.5 text-sm"
+            className="rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-3 py-1.5 text-sm"
           >
             {t('downloadPdf')}
           </button>
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <label className="text-xs text-[#7a6a5a]">{t('creditLimit')}</label>
+          <label className="text-xs text-[var(--text-muted)]">{t('creditLimit')}</label>
           <input
             value={creditLimit}
             onChange={(e) => setCreditLimit(e.target.value)}
             placeholder={t('noCreditLimit')}
             inputMode="decimal"
-            className="min-w-0 flex-1 rounded-md border border-[#c9c0b2] bg-white px-2 py-1 text-sm sm:w-48 sm:flex-none"
+            className="min-w-0 flex-1 rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1 text-sm sm:w-48 sm:flex-none"
           />
           <button
             onClick={saveCreditLimit}
             disabled={creditStatus === 'saving'}
-            className="rounded-md bg-[#5a4a3a] px-3 py-1 text-sm text-white disabled:opacity-50"
+            className="rounded-md bg-[var(--bg-secondary)] px-3 py-1 text-sm text-[var(--text-on-primary)] disabled:opacity-50"
           >
             {creditStatus === 'saved' ? t('saved') : t('setCreditLimit')}
           </button>
           {customer.creditLimit && customer.due > customer.creditLimit && (
-            <span className="text-xs text-[#8b2e2e]">
+            <span className="text-xs text-[var(--bg-primary)]">
               {t('creditOver')} {fmt(customer.due - (customer.creditLimit || 0))}
             </span>
           )}
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <label className="text-xs text-[#7a6a5a]">{t('phone')}</label>
+          <label className="text-xs text-[var(--text-muted)]">{t('phone')}</label>
           <input
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder={t('addPhone')}
             inputMode="tel"
-            className="min-w-0 flex-1 rounded-md border border-[#c9c0b2] bg-white px-2 py-1 text-sm sm:w-48 sm:flex-none"
+            className="min-w-0 flex-1 rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1 text-sm sm:w-48 sm:flex-none"
           />
           <button
             onClick={savePhone}
             disabled={phoneStatus === 'saving'}
-            className="rounded-md bg-[#5a4a3a] px-3 py-1 text-sm text-white disabled:opacity-50"
+            className="rounded-md bg-[var(--bg-secondary)] px-3 py-1 text-sm text-[var(--text-on-primary)] disabled:opacity-50"
           >
             {phoneStatus === 'saved' ? t('saved') : t('savePhone')}
           </button>

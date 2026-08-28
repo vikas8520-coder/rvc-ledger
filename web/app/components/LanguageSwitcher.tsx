@@ -7,14 +7,14 @@ export default function LanguageSwitcher() {
 
   return (
     <div className="flex items-center gap-2">
-      <label htmlFor="lang" className="text-sm text-[#7a6a5a]">
+      <label htmlFor="lang" className="text-sm text-[var(--text-muted)]">
         {t('language')}
       </label>
       <select
         id="lang"
         value={lang}
         onChange={(e) => setLang(e.target.value as any)}
-        className="rounded-lg border border-[#c9c0b2] bg-[#f5f0e6] p-1 text-sm"
+        className="rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-1 text-sm"
       >
         {LANGUAGES.map((l) => (
           <option key={l.value} value={l.value}>

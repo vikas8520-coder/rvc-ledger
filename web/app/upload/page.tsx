@@ -264,22 +264,22 @@ export default function UploadPage() {
       <h1 className="text-xl font-bold">{t('uploadBill')}</h1>
 
       {step === 'idle' && (
-        <label className="block cursor-pointer rounded-2xl border-2 border-dashed border-[#c9c0b2] bg-[#e8e0d2] p-10 text-center">
+        <label className="block cursor-pointer rounded-2xl border-2 border-dashed border-[var(--border-input)] bg-[var(--bg-card)] p-10 text-center">
           <input type="file" accept="image/*" className="hidden" onChange={handleFile} />
           <p className="text-lg font-medium">{t('tapToChooseBill')}</p>
-          <p className="text-sm text-[#8a7a6a]">{t('pngOrJpg')}</p>
+          <p className="text-sm text-[var(--text-faint)]">{t('pngOrJpg')}</p>
         </label>
       )}
 
       {step === 'ocr' && (
-        <div className="rounded-2xl bg-[#e8e0d2] p-6 text-center">
+        <div className="rounded-2xl bg-[var(--bg-card)] p-6 text-center">
           <p className="mb-2 font-medium">{t('readingBill')}</p>
           {progress && (
             <div>
-              <p className="text-sm text-[#7a6a5a]">{progress.status}</p>
-              <div className="mt-2 h-2 w-full rounded bg-[#d9d0c2]">
+              <p className="text-sm text-[var(--text-muted)]">{progress.status}</p>
+              <div className="mt-2 h-2 w-full rounded bg-[var(--bg-card-hover)]">
                 <div
-                  className="h-2 rounded bg-[#8b2e2e]"
+                  className="h-2 rounded bg-[var(--bg-primary)]"
                   style={{ width: `${Math.max(5, progress.progress * 100)}%` }}
                 />
               </div>
@@ -290,14 +290,14 @@ export default function UploadPage() {
 
       {step === 'review' && (
         <div className="space-y-4">
-          <section className="rounded-2xl bg-[#e8e0d2] p-4">
+          <section className="rounded-2xl bg-[var(--bg-card)] p-4">
             <div className="grid gap-3 sm:grid-cols-3">
               <div>
-                <label className="text-sm text-[#7a6a5a]">{t('customer')}</label>
+                <label className="text-sm text-[var(--text-muted)]">{t('customer')}</label>
                 <select
                   value={customerSelect}
                   onChange={(e) => handleCustomerSelect(e.target.value)}
-                  className="w-full rounded-lg border border-[#c9c0b2] bg-[#f5f0e6] p-2"
+                  className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2"
                 >
                   {customerList.map((c) => (
                     <option key={c} value={c}>
@@ -311,29 +311,29 @@ export default function UploadPage() {
                     value={customerInput}
                     onChange={(e) => handleCustomerInput(e.target.value)}
                     placeholder={t('typeCustomerName')}
-                    className="mt-2 w-full rounded-lg border border-[#c9c0b2] bg-[#f5f0e6] p-2"
+                    className="mt-2 w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2"
                   />
                 )}
 
                 {isExistingCustomer && (
-                  <p className="mt-1 text-xs text-[#2d6b4f]">{t('existingCustomer')}</p>
+                  <p className="mt-1 text-xs text-[var(--bg-success)]">{t('existingCustomer')}</p>
                 )}
 
                 {!isExistingCustomer && customer.trim() && fuzzy && (
                   <div className="mt-2 rounded-lg bg-[#fff9e6] p-2 text-sm">
-                    <p className="text-[#8a7a6a]">
+                    <p className="text-[var(--text-faint)]">
                       {t('didYouMean')} <strong>{fuzzy.name}</strong>?
                     </p>
                     <div className="mt-1 flex gap-2">
                       <button
                         onClick={() => handleCustomerSelect(fuzzy.name)}
-                        className="rounded bg-[#2d6b4f] px-2 py-1 text-xs text-white"
+                        className="rounded bg-[var(--bg-success)] px-2 py-1 text-xs text-[var(--text-on-primary)]"
                       >
                         {t('yesUse')} {fuzzy.name}
                       </button>
                       <button
                         onClick={() => setNewCustomerConfirmed(true)}
-                        className="rounded bg-[#8b2e2e] px-2 py-1 text-xs text-white"
+                        className="rounded bg-[var(--bg-primary)] px-2 py-1 text-xs text-[var(--text-on-primary)]"
                       >
                         {t('noCreateNew')}
                       </button>
@@ -349,37 +349,37 @@ export default function UploadPage() {
                       checked={newCustomerConfirmed}
                       onChange={(e) => setNewCustomerConfirmed(e.target.checked)}
                     />
-                    <label htmlFor="newCustomer" className="text-[#8a7a6a]">
+                    <label htmlFor="newCustomer" className="text-[var(--text-faint)]">
                       {t('saveAsNewCustomer')} <strong>{customer}</strong>.
                     </label>
                   </div>
                 )}
               </div>
               <div>
-                <label className="text-sm text-[#7a6a5a]">{t('date')}</label>
+                <label className="text-sm text-[var(--text-muted)]">{t('date')}</label>
                 <input
                   type="date"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
-                  className="w-full rounded-lg border border-[#c9c0b2] bg-[#f5f0e6] p-2"
+                  className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2"
                 />
               </div>
               <div>
-                <label className="text-sm text-[#7a6a5a]">{t('billNo')}</label>
+                <label className="text-sm text-[var(--text-muted)]">{t('billNo')}</label>
                 <input
                   value={billNo}
                   onChange={(e) => setBillNo(e.target.value)}
-                  className="w-full rounded-lg border border-[#c9c0b2] bg-[#f5f0e6] p-2"
+                  className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2"
                 />
               </div>
             </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-3">
               <div>
-                <label className="text-sm text-[#7a6a5a]">{t('marketYard')}</label>
+                <label className="text-sm text-[var(--text-muted)]">{t('marketYard')}</label>
                 <select
                   value={market.marketYard}
                   onChange={(e) => updateMarket({ marketYard: e.target.value })}
-                  className="w-full rounded-lg border border-[#c9c0b2] bg-[#f5f0e6] p-2"
+                  className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2"
                 >
                   {MARKET_YARDS.map((y) => (
                     <option key={y.id} value={y.id}>{y.name}</option>
@@ -387,11 +387,11 @@ export default function UploadPage() {
                 </select>
               </div>
               <div>
-                <label className="text-sm text-[#7a6a5a]">{t('marketType')}</label>
+                <label className="text-sm text-[var(--text-muted)]">{t('marketType')}</label>
                 <select
                   value={market.marketType}
                   onChange={(e) => updateMarket({ marketType: e.target.value as MarketMeta['marketType'] })}
-                  className="w-full rounded-lg border border-[#c9c0b2] bg-[#f5f0e6] p-2"
+                  className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2"
                 >
                   <option value="apmc">{t('apmc')}</option>
                   <option value="rythu">{t('rythu')}</option>
@@ -400,75 +400,75 @@ export default function UploadPage() {
                 </select>
               </div>
               <div>
-                <label className="text-sm text-[#7a6a5a]">{t('seller')}</label>
+                <label className="text-sm text-[var(--text-muted)]">{t('seller')}</label>
                 <input
                   value={market.sellerName}
                   onChange={(e) => updateMarket({ sellerName: e.target.value })}
-                  className="w-full rounded-lg border border-[#c9c0b2] bg-[#f5f0e6] p-2"
+                  className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2"
                 />
               </div>
               <div>
-                <label className="text-sm text-[#7a6a5a]">{t('lotNo')}</label>
+                <label className="text-sm text-[var(--text-muted)]">{t('lotNo')}</label>
                 <input
                   value={market.lotNo}
                   onChange={(e) => updateMarket({ lotNo: e.target.value })}
-                  className="w-full rounded-lg border border-[#c9c0b2] bg-[#f5f0e6] p-2"
+                  className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2"
                 />
               </div>
               <div>
-                <label className="text-sm text-[#7a6a5a]">{t('vehicleNo')}</label>
+                <label className="text-sm text-[var(--text-muted)]">{t('vehicleNo')}</label>
                 <input
                   value={market.vehicleNo}
                   onChange={(e) => updateMarket({ vehicleNo: e.target.value })}
-                  className="w-full rounded-lg border border-[#c9c0b2] bg-[#f5f0e6] p-2"
+                  className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2"
                 />
               </div>
             </div>
             <div className="mt-3 text-right">
-              <p className="text-sm text-[#7a6a5a]">{t('goods')}: {fmt(goods)} · {t('charges')}: {fmt(chargesSum)}</p>
+              <p className="text-sm text-[var(--text-muted)]">{t('goods')}: {fmt(goods)} · {t('charges')}: {fmt(chargesSum)}</p>
               <p className="text-2xl font-bold">{t('total')}: {fmt(total)}</p>
             </div>
           </section>
 
-          <section className="rounded-2xl bg-[#e8e0d2] p-4">
+          <section className="rounded-2xl bg-[var(--bg-card)] p-4">
             <h2 className="mb-3 font-semibold">{t('items')}</h2>
             <div className="space-y-2">
               {items.map((it, idx) => (
-                <div key={idx} className="grid gap-2 rounded-xl bg-[#f5f0e6] p-3 sm:grid-cols-12">
+                <div key={idx} className="grid gap-2 rounded-xl bg-[var(--bg-base)] p-3 sm:grid-cols-12">
                   <input
                     value={it.raw}
                     onChange={(e) => updateItem(idx, 'raw', e.target.value)}
-                    className="col-span-3 rounded border border-[#d9d0c2] bg-white p-2 text-sm"
+                    className="col-span-3 rounded border border-[var(--border-light)] bg-[var(--bg-input)] p-2 text-sm"
                     placeholder={t('rawName')}
                   />
                   <input
                     value={it.confirmed}
                     onChange={(e) => updateItem(idx, 'confirmed', e.target.value)}
-                    className={`col-span-4 rounded border bg-white p-2 text-sm ${it.kind === 'charge' ? 'border-[#c4a574] italic' : 'border-[#d9d0c2]'}`}
+                    className={`col-span-4 rounded border bg-[var(--bg-input)] p-2 text-sm ${it.kind === 'charge' ? 'border-[#c4a574] italic' : 'border-[var(--border-light)]'}`}
                     placeholder={t('confirmedName')}
                   />
                   <input
                     value={it.qty}
                     onChange={(e) => updateItem(idx, 'qty', e.target.value)}
-                    className="col-span-2 rounded border border-[#d9d0c2] bg-white p-2 text-sm"
+                    className="col-span-2 rounded border border-[var(--border-light)] bg-[var(--bg-input)] p-2 text-sm"
                     placeholder={t('qty')}
                   />
                   <input
                     value={it.rate}
                     onChange={(e) => updateItem(idx, 'rate', e.target.value)}
-                    className="col-span-1 rounded border border-[#d9d0c2] bg-white p-2 text-sm"
+                    className="col-span-1 rounded border border-[var(--border-light)] bg-[var(--bg-input)] p-2 text-sm"
                     placeholder={t('rate')}
                   />
                   <input
                     type="number"
                     value={it.amount}
                     onChange={(e) => updateItem(idx, 'amount', e.target.value)}
-                    className="col-span-1 rounded border border-[#d9d0c2] bg-white p-2 text-sm"
+                    className="col-span-1 rounded border border-[var(--border-light)] bg-[var(--bg-input)] p-2 text-sm"
                     placeholder={t('amt')}
                   />
                   <button
                     onClick={() => removeItem(idx)}
-                    className="col-span-1 rounded bg-[#8b2e2e] text-sm text-white"
+                    className="col-span-1 rounded bg-[var(--bg-primary)] text-sm text-[var(--text-on-primary)]"
                   >
                     ×
                   </button>
@@ -476,69 +476,69 @@ export default function UploadPage() {
               ))}
             </div>
 
-            <div className="mt-4 rounded-xl bg-[#f5f0e6] p-3">
-              <p className="mb-2 text-sm text-[#7a6a5a]">{t('chargesHelp')}</p>
+            <div className="mt-4 rounded-xl bg-[var(--bg-base)] p-3">
+              <p className="mb-2 text-sm text-[var(--text-muted)]">{t('chargesHelp')}</p>
               <div className="mb-3 flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => addCharge('hamali', 0)}
-                  className="rounded bg-[#8b2e2e] px-3 py-1 text-xs text-white"
+                  className="rounded bg-[var(--bg-primary)] px-3 py-1 text-xs text-[var(--text-on-primary)]"
                 >
                   {t('addHamali')}
                 </button>
                 <button
                   type="button"
                   onClick={() => addCharge('market_fee', apmcFee(goods), '1%')}
-                  className="rounded bg-[#8b2e2e] px-3 py-1 text-xs text-white"
+                  className="rounded bg-[var(--bg-primary)] px-3 py-1 text-xs text-[var(--text-on-primary)]"
                 >
                   {t('addMarketFee')}
                 </button>
                 <button
                   type="button"
                   onClick={() => addCharge('cess', apmcCess(apmcFee(goods)), '0.5%')}
-                  className="rounded bg-[#8b2e2e] px-3 py-1 text-xs text-white"
+                  className="rounded bg-[var(--bg-primary)] px-3 py-1 text-xs text-[var(--text-on-primary)]"
                 >
                   {t('addCess')}
                 </button>
                 <button
                   type="button"
                   onClick={() => addCharge('commission', commissionOn(goods, Number(commissionPct) || 0), `${commissionPct}%`)}
-                  className="rounded bg-[#8b2e2e] px-3 py-1 text-xs text-white"
+                  className="rounded bg-[var(--bg-primary)] px-3 py-1 text-xs text-[var(--text-on-primary)]"
                 >
                   {t('addCommission')}
                 </button>
                 <input
                   value={commissionPct}
                   onChange={(e) => setCommissionPct(e.target.value)}
-                  className="w-16 rounded border border-[#d9d0c2] bg-white px-2 py-1 text-xs"
+                  className="w-16 rounded border border-[var(--border-light)] bg-[var(--bg-input)] px-2 py-1 text-xs"
                   title={t('commission')}
                 />
-                <span className="self-center text-xs text-[#7a6a5a]">%</span>
+                <span className="self-center text-xs text-[var(--text-muted)]">%</span>
                 <button
                   type="button"
                   onClick={() => addCharge('weighing', 0)}
-                  className="rounded bg-[#8b2e2e] px-3 py-1 text-xs text-white"
+                  className="rounded bg-[var(--bg-primary)] px-3 py-1 text-xs text-[var(--text-on-primary)]"
                 >
                   {t('addWeighing')}
                 </button>
               </div>
-              <p className="mb-2 text-sm text-[#7a6a5a]">{t('addManualItem')}</p>
+              <p className="mb-2 text-sm text-[var(--text-muted)]">{t('addManualItem')}</p>
               <div className="grid gap-2 sm:grid-cols-12">
                 <input
                   value={manualName}
                   onChange={(e) => setManualName(e.target.value)}
-                  className="col-span-4 rounded border border-[#d9d0c2] bg-white p-2 text-sm"
+                  className="col-span-4 rounded border border-[var(--border-light)] bg-[var(--bg-input)] p-2 text-sm"
                   placeholder={t('itemName')}
                 />
                 <input
                   value={manualLine}
                   onChange={(e) => setManualLine(e.target.value)}
-                  className="col-span-6 rounded border border-[#d9d0c2] bg-white p-2 text-sm"
+                  className="col-span-6 rounded border border-[var(--border-light)] bg-[var(--bg-input)] p-2 text-sm"
                   placeholder={t('qtyRateAmount')}
                 />
                 <button
                   onClick={addUnparsed}
-                  className="col-span-2 rounded bg-[#2d6b4f] text-sm text-white"
+                  className="col-span-2 rounded bg-[var(--bg-success)] text-sm text-[var(--text-on-primary)]"
                 >
                   {t('add')}
                 </button>
@@ -547,9 +547,9 @@ export default function UploadPage() {
           </section>
 
           {unparsed.length > 0 && (
-            <section className="rounded-2xl bg-[#e8e0d2] p-4">
-              <h2 className="mb-2 text-sm font-semibold text-[#8a7a6a]">{t('ocrCouldNotRead')}</h2>
-              <ul className="text-sm text-[#7a6a5a]">
+            <section className="rounded-2xl bg-[var(--bg-card)] p-4">
+              <h2 className="mb-2 text-sm font-semibold text-[var(--text-faint)]">{t('ocrCouldNotRead')}</h2>
+              <ul className="text-sm text-[var(--text-muted)]">
                 {unparsed.map((line, i) => (
                   <li key={i}>{line}</li>
                 ))}
@@ -560,24 +560,24 @@ export default function UploadPage() {
           <button
             onClick={handleSave}
             disabled={!canSave}
-            className="w-full rounded-xl bg-[#8b2e2e] p-4 font-semibold text-white disabled:opacity-50"
+            className="w-full rounded-xl bg-[var(--bg-primary)] p-4 font-semibold text-[var(--text-on-primary)] disabled:opacity-50"
           >
             {t('saveBill')}
           </button>
-          {saveError && <p className="text-center text-[#8b2e2e]">{saveError}</p>}
+          {saveError && <p className="text-center text-[var(--bg-primary)]">{saveError}</p>}
         </div>
       )}
 
       {step === 'saving' && (
-        <div className="rounded-2xl bg-[#e8e0d2] p-6 text-center">
+        <div className="rounded-2xl bg-[var(--bg-card)] p-6 text-center">
           <p className="font-medium">{t('saving')}</p>
         </div>
       )}
 
       {step === 'done' && (
-        <div className="rounded-2xl bg-[#e8e0d2] p-6 text-center">
+        <div className="rounded-2xl bg-[var(--bg-card)] p-6 text-center">
           <p className="text-xl font-bold">{t('saved')}</p>
-          <a href="/" className="mt-4 inline-block rounded bg-[#8b2e2e] px-4 py-2 text-white">{t('viewDashboard')}</a>
+          <a href="/" className="mt-4 inline-block rounded bg-[var(--bg-primary)] px-4 py-2 text-[var(--text-on-primary)]">{t('viewDashboard')}</a>
         </div>
       )}
     </div>

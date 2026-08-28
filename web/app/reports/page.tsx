@@ -89,27 +89,27 @@ export default function ReportsPage() {
     downloadCsv('rvc-item-rates.csv', rows);
   };
 
-  if (loading) return <p className="text-sm text-[#8a7a6a]">{t('loading')}</p>;
+  if (loading) return <p className="text-sm text-[var(--text-faint)]">{t('loading')}</p>;
 
   return (
     <div className="space-y-5">
       <h1 className="text-lg font-semibold">{t('navReports')}</h1>
-      <p className="text-xs text-[#8a7a6a]">{t('reportsHelp')}</p>
+      <p className="text-xs text-[var(--text-faint)]">{t('reportsHelp')}</p>
 
       {/* Monthly summary */}
-      <section className="rounded-lg bg-[#e8e0d2] p-3">
+      <section className="rounded-lg bg-[var(--bg-card)] p-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold">{t('month')}</h2>
-          <button onClick={exportMonths} className="text-xs text-[#2d6b4f] hover:underline">
+          <button onClick={exportMonths} className="text-xs text-[var(--bg-success)] hover:underline">
             {t('exportReport')}
           </button>
         </div>
         {months.length === 0 ? (
-          <p className="py-3 text-center text-sm text-[#8a7a6a]">{t('noData')}</p>
+          <p className="py-3 text-center text-sm text-[var(--text-faint)]">{t('noData')}</p>
         ) : (
           <table className="mt-2 w-full text-sm tabular-nums">
             <thead>
-              <tr className="text-left text-[11px] text-[#7a6a5a]">
+              <tr className="text-left text-[11px] text-[var(--text-muted)]">
                 <th className="py-1">{t('month')}</th>
                 <th className="py-1 text-right">{t('billedSales')}</th>
                 <th className="py-1 text-right">{t('collected')}</th>
@@ -118,7 +118,7 @@ export default function ReportsPage() {
             </thead>
             <tbody>
               {months.map((m) => (
-                <tr key={m.month} className="border-t border-[#d9d0c2]">
+                <tr key={m.month} className="border-t border-[var(--border-light)]">
                   <td className="py-1.5">{monthLabel(m.month)}</td>
                   <td className="py-1.5 text-right">{fmt(m.billed)}</td>
                   <td className="py-1.5 text-right">{fmt(m.collected)}</td>
@@ -131,20 +131,20 @@ export default function ReportsPage() {
       </section>
 
       {/* Item rates & margins */}
-      <section className="rounded-lg bg-[#e8e0d2] p-3">
+      <section className="rounded-lg bg-[var(--bg-card)] p-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold">{t('itemRates')}</h2>
-          <button onClick={exportItems} className="text-xs text-[#2d6b4f] hover:underline">
+          <button onClick={exportItems} className="text-xs text-[var(--bg-success)] hover:underline">
             {t('exportReport')}
           </button>
         </div>
         {items.length === 0 ? (
-          <p className="py-3 text-center text-sm text-[#8a7a6a]">{t('noData')}</p>
+          <p className="py-3 text-center text-sm text-[var(--text-faint)]">{t('noData')}</p>
         ) : (
           <div className="mt-2 overflow-x-auto">
             <table className="w-full text-[12px] tabular-nums">
               <thead>
-                <tr className="text-left text-[11px] text-[#7a6a5a]">
+                <tr className="text-left text-[11px] text-[var(--text-muted)]">
                   <th className="py-1">{t('itemName')}</th>
                   <th className="py-1 text-right">{t('avgBuyRate')}</th>
                   <th className="py-1 text-right">{t('avgSellRate')}</th>
@@ -155,7 +155,7 @@ export default function ReportsPage() {
               </thead>
               <tbody>
                 {items.map((i) => (
-                  <tr key={i.key} className="border-t border-[#d9d0c2]">
+                  <tr key={i.key} className="border-t border-[var(--border-light)]">
                     <td className="py-1.5 pr-2">{i.name}</td>
                     <td className="py-1.5 text-right">
                       {i.avgBuyRate ? `${Math.round(i.avgBuyRate * 100) / 100}/${i.boughtUnit || ''}` : '—'}
@@ -166,7 +166,7 @@ export default function ReportsPage() {
                     <td className="py-1.5 text-right">{i.lastBuyRate || '—'}</td>
                     <td className="py-1.5 text-right">
                       {i.marginPerUnit !== null ? (
-                        <span className={i.marginPerUnit >= 0 ? 'text-[#2d6b4f]' : 'text-[#8b2e2e]'}>
+                        <span className={i.marginPerUnit >= 0 ? 'text-[var(--bg-success)]' : 'text-[var(--bg-primary)]'}>
                           {Math.round(i.marginPerUnit * 100) / 100}
                         </span>
                       ) : (
@@ -181,27 +181,27 @@ export default function ReportsPage() {
               </tbody>
               {totalEstProfit > 0 && (
                 <tfoot>
-                  <tr className="border-t border-[#c9c0b2] font-semibold">
+                  <tr className="border-t border-[var(--border-input)] font-semibold">
                     <td className="py-1.5" colSpan={5}>{t('estProfit')}</td>
-                    <td className="py-1.5 text-right text-[#2d6b4f]">{fmt(totalEstProfit)}</td>
+                    <td className="py-1.5 text-right text-[var(--bg-success)]">{fmt(totalEstProfit)}</td>
                   </tr>
                   {totalWastage > 0 && (
                     <>
-                      <tr className="text-[#8b2e2e]">
+                      <tr className="text-[var(--bg-primary)]">
                         <td className="py-1.5" colSpan={5}>{t('totalWastage')}</td>
                         <td className="py-1.5 text-right">-{fmt(totalWastage)}</td>
                       </tr>
                     </>
                   )}
                   {totalExpenses > 0 && (
-                    <tr className="text-[#8b2e2e]">
+                    <tr className="text-[var(--bg-primary)]">
                       <td className="py-1.5" colSpan={5}>{t('totalExpenses')}</td>
                       <td className="py-1.5 text-right">-{fmt(totalExpenses)}</td>
                     </tr>
                   )}
-                  <tr className="border-t border-[#c9c0b2] font-semibold">
+                  <tr className="border-t border-[var(--border-input)] font-semibold">
                     <td className="py-1.5" colSpan={5}>{t('netProfit')}</td>
-                    <td className="py-1.5 text-right text-[#2d6b4f]">{fmt(netEstProfit)}</td>
+                    <td className="py-1.5 text-right text-[var(--bg-success)]">{fmt(netEstProfit)}</td>
                   </tr>
                 </tfoot>
               )}
@@ -211,18 +211,18 @@ export default function ReportsPage() {
       </section>
 
       {/* Top customers */}
-      <section className="rounded-lg bg-[#e8e0d2] p-3">
+      <section className="rounded-lg bg-[var(--bg-card)] p-3">
         <h2 className="text-sm font-semibold">{t('topCustomers')}</h2>
         {top.length === 0 ? (
-          <p className="py-3 text-center text-sm text-[#8a7a6a]">{t('noData')}</p>
+          <p className="py-3 text-center text-sm text-[var(--text-faint)]">{t('noData')}</p>
         ) : (
           <table className="mt-2 w-full text-sm tabular-nums">
             <tbody>
               {top.map((c) => (
-                <tr key={c.id} className="border-t border-[#d9d0c2]">
+                <tr key={c.id} className="border-t border-[var(--border-light)]">
                   <td className="py-1.5">{c.name}</td>
                   <td className="py-1.5 text-right">{fmt(c.billed)}</td>
-                  <td className="py-1.5 text-right text-[#8b2e2e]">{c.due > 0 ? fmt(c.due) : '—'}</td>
+                  <td className="py-1.5 text-right text-[var(--bg-primary)]">{c.due > 0 ? fmt(c.due) : '—'}</td>
                 </tr>
               ))}
             </tbody>

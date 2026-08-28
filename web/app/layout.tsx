@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
+import { ThemeProvider } from "./components/ThemeProvider";
 import { I18nProvider } from "./components/I18nProvider";
 import AppShell from "./components/AppShell";
 import ServiceWorkerRegister from "./components/ServiceWorkerRegister";
@@ -34,12 +35,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-[#f5f0e6]">
+      <body className="min-h-full flex flex-col bg-[var(--bg-base)] text-[var(--text-primary)]">
         <ClerkProvider afterSignOutUrl="/sign-in">
-          <I18nProvider>
-            <AppShell>{children}</AppShell>
-            <ServiceWorkerRegister />
-          </I18nProvider>
+          <ThemeProvider>
+            <I18nProvider>
+              <AppShell>{children}</AppShell>
+              <ServiceWorkerRegister />
+            </I18nProvider>
+          </ThemeProvider>
         </ClerkProvider>
       </body>
     </html>

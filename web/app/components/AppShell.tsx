@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useUser, UserButton, useClerk } from '@clerk/nextjs';
 import LanguageSwitcher from './LanguageSwitcher';
+import ThemeToggle from './ThemeToggle';
 import { useI18n } from './I18nProvider';
 
 // Check if Clerk production keys are configured (determined at build time)
@@ -45,13 +46,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     const tabClass = (href: string, exact = false) => {
       const active = exact ? path === href : path === href || path.startsWith(`${href}/`);
       return active
-        ? 'bg-[#8b2e2e] text-white'
-        : 'text-[#5a4a3a] hover:bg-[#e8e0d2]';
+        ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'
+        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-card)]';
     };
 
     return (
-      <div className="min-h-screen bg-[#f5f0e6] text-[#3a2f2f]">
-        <header className="sticky top-0 z-10 border-b border-[#d9d0c2] bg-[#f5f0e6]/95 backdrop-blur">
+      <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)]">
+        <header className="sticky top-0 z-10 border-b border-[var(--border-light)] bg-[var(--bg-base)]/95 backdrop-blur">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-3 py-2 sm:px-5">
             <div className="flex min-w-0 items-center gap-3">
               <Link href="/" className="shrink-0 text-lg font-bold">
@@ -92,21 +93,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
               <LanguageSwitcher />
+              <ThemeToggle />
               <Link
                 href="/quick-bill"
-                className="rounded-md bg-[#5a4a3a] px-3 py-1.5 text-sm text-white hover:bg-[#4a3a2a]"
+                className="rounded-md bg-[var(--bg-secondary)] px-3 py-1.5 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-secondary-hover)]"
               >
                 {t('quickBill')}
               </Link>
               <Link
                 href="/payment"
-                className="rounded-md bg-[#2d6b4f] px-3 py-1.5 text-sm text-white hover:bg-[#22513a]"
+                className="rounded-md bg-[var(--bg-success)] px-3 py-1.5 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-success-hover)]"
               >
                 {t('recordPayment')}
               </Link>
               <Link
                 href="/upload"
-                className="rounded-md bg-[#8b2e2e] px-3 py-1.5 text-sm text-white hover:bg-[#6b2222]"
+                className="rounded-md bg-[var(--bg-primary)] px-3 py-1.5 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-primary-hover)]"
               >
                 {t('uploadBill')}
               </Link>
@@ -121,22 +123,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // Show loading or sign-in prompt if not loaded
   if (!isLoaded) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f5f0e6]">
-        <p className="text-sm text-[#8a7a6a]">Loading…</p>
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-base)]">
+        <p className="text-sm text-[var(--text-faint)]">Loading…</p>
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#f5f0e6] gap-4">
-        <h1 className="text-2xl font-bold text-[#8b2e2e]">RVC Ledger</h1>
-        <p className="text-sm text-[#7a6a5a]">Sign in to access your shop ledger</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--bg-base)] gap-4">
+        <h1 className="text-2xl font-bold text-[var(--bg-primary)]">RVC Ledger</h1>
+        <p className="text-sm text-[var(--text-muted)]">Sign in to access your shop ledger</p>
         <div className="flex gap-3">
-          <Link href="/sign-in" className="rounded-md bg-[#8b2e2e] px-5 py-2 text-sm font-semibold text-white hover:bg-[#6b2222]">
+          <Link href="/sign-in" className="rounded-md bg-[var(--bg-primary)] px-5 py-2 text-sm font-semibold text-[var(--text-on-primary)] hover:bg-[var(--bg-primary-hover)]">
             Sign in
           </Link>
-          <Link href="/sign-up" className="rounded-md border border-[#8b2e2e] px-5 py-2 text-sm font-semibold text-[#8b2e2e] hover:bg-[#e8e0d2]">
+          <Link href="/sign-up" className="rounded-md border border-[var(--bg-primary)] px-5 py-2 text-sm font-semibold text-[var(--bg-primary)] hover:bg-[var(--bg-card)]">
             Sign up
           </Link>
         </div>
@@ -147,16 +149,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const tabClass = (href: string, exact = false) => {
     const active = exact ? path === href : path === href || path.startsWith(`${href}/`);
     return active
-      ? 'bg-[#8b2e2e] text-white'
-      : 'text-[#5a4a3a] hover:bg-[#e8e0d2]';
+      ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'
+      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-card)]';
   };
 
   // Superadmin sees normal nav + admin link
   const isAdmin = authState?.role === 'superadmin';
 
   return (
-    <div className="min-h-screen bg-[#f5f0e6] text-[#3a2f2f]">
-      <header className="sticky top-0 z-10 border-b border-[#d9d0c2] bg-[#f5f0e6]/95 backdrop-blur">
+    <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)]">
+      <header className="sticky top-0 z-10 border-b border-[var(--border-light)] bg-[var(--bg-base)]/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-3 py-2 sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
             <Link href="/" className="shrink-0 text-lg font-bold">
@@ -202,21 +204,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <LanguageSwitcher />
+            <ThemeToggle />
             <Link
               href="/quick-bill"
-              className="rounded-md bg-[#5a4a3a] px-3 py-1.5 text-sm text-white hover:bg-[#4a3a2a]"
+              className="rounded-md bg-[var(--bg-secondary)] px-3 py-1.5 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-secondary-hover)]"
             >
               {t('quickBill')}
             </Link>
             <Link
               href="/payment"
-              className="rounded-md bg-[#2d6b4f] px-3 py-1.5 text-sm text-white hover:bg-[#22513a]"
+              className="rounded-md bg-[var(--bg-success)] px-3 py-1.5 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-success-hover)]"
             >
               {t('recordPayment')}
             </Link>
             <Link
               href="/upload"
-              className="rounded-md bg-[#8b2e2e] px-3 py-1.5 text-sm text-white hover:bg-[#6b2222]"
+              className="rounded-md bg-[var(--bg-primary)] px-3 py-1.5 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-primary-hover)]"
             >
               {t('uploadBill')}
             </Link>
