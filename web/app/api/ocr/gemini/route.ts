@@ -51,6 +51,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing image data' }, { status: 400 });
     }
 
+    // Validate MIME type — only allow image formats Gemini supports
+    const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+    if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
+      return NextResponse.json({ error: 'Unsupported image format' }, { status: 400 });
+    }
+
+    // Limit image size to 10MB decoded (base64 is ~33% larger than binary)
+    const MAX_BASE64_LENGTH = 14 * 1024 * 1024; // ~10MB binary → ~14MB base64
+    if (imageBase64.length > MAX_BASE64_LENGTH) {
+      return NextResponse.json({ error: 'Image too large (max 10MB)' }, { status: 413 });
+    }
+
     const payload = {
       contents: [
         {

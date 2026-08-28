@@ -360,7 +360,6 @@ const PATTI_STYLES = `
     padding: 4mm 5mm;
     font-size: 9px;
     line-height: 1.35;
-    overflow: hidden;
     display: flex;
     flex-direction: column;
   }
@@ -377,19 +376,19 @@ const PATTI_STYLES = `
   .patti-table td { font-size: 8px; padding: 1px 2px; border-bottom: 0.25px dotted #ccc; }
   .patti-table td.num { text-align: right; }
   .patti-table td.name { max-width: 35mm; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .patti-continuation td { font-size: 7px; color: #888; font-style: italic; text-align: center; padding: 1px 2px; }
   .patti-charges { font-size: 7px; margin-top: 2px; }
   .patti-charge-row { display: flex; justify-content: space-between; }
   .patti-total { display: flex; justify-content: space-between; border-top: 1px solid #000; margin-top: 3px; padding-top: 2px; font-weight: bold; font-size: 11px; }
   .patti-sign { margin-top: auto; padding-top: 4px; font-size: 7px; color: #888; text-align: center; border-top: 0.25px dotted #aaa; }
 
   .print-btn { display: block; margin: 10px auto 0; padding: 6px 18px; background: #333; color: #fff; border: none; font-size: 12px; cursor: pointer; }
-  .no-print { display: none; }
 
   @page { size: A4; margin: 0; }
   @media print {
     body { background: #fff; }
     .patti-sheet { border: 1px solid #000; }
-    .no-print { display: none; }
+    .no-print, .patti-print-btn { display: none; }
     .patti-page-break { page-break-after: always; }
     .patti-page-break:last-child { page-break-after: auto; }
   }
@@ -400,12 +399,21 @@ function pattiSection(bill: BillPrintData, shop: ShopProfile): string {
   const charges = bill.items.filter((it) => it.kind === 'charge');
   const goodsSum = goodsTotal(bill.items);
 
-  const itemRows = items.map((it) => `<tr>
+  // Limit items to fit in the section — 15 rows max, then show continuation note
+  const MAX_ITEMS = 15;
+  const visibleItems = items.slice(0, MAX_ITEMS);
+  const remainingCount = items.length - visibleItems.length;
+
+  const itemRows = visibleItems.map((it) => `<tr>
     <td class="name">${esc(it.name)}</td>
     <td class="num">${esc(it.qty || '')}</td>
     <td class="num">${esc(it.rate || '')}</td>
     <td class="num">${money(it.amount)}</td>
   </tr>`).join('\n');
+
+  const continuationNote = remainingCount > 0
+    ? `<tr class="patti-continuation"><td colspan="4">+ ${remainingCount} more item${remainingCount > 1 ? 's' : ''} (see full bill)</td></tr>`
+    : '';
 
   const chargeRows = charges.map((it) =>
     `<div class="patti-charge-row"><span>${esc(it.name)}</span><span>${money(it.amount)}</span></div>`
@@ -423,7 +431,7 @@ function pattiSection(bill: BillPrintData, shop: ShopProfile): string {
     <div class="patti-customer">${esc(bill.customerName)}</div>
     <table class="patti-table">
       <thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amt</th></tr></thead>
-      <tbody>${itemRows}</tbody>
+      <tbody>${itemRows}${continuationNote}</tbody>
     </table>
     ${chargeRows ? `<div class="patti-charges">${chargeRows}</div>` : ''}
     ${charges.length > 0 ? `<div class="patti-charge-row" style="font-weight:bold;font-size:8px"><span>Goods</span><span>${money(goodsSum)}</span></div>` : ''}
@@ -451,7 +459,7 @@ function pattiSheet(bills: BillPrintData[], shop: ShopProfile): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Patti - ${esc(shop.shopName || 'RVC')}</title>
   <style>${PATTI_STYLES}</style></head><body>
   ${sheets}
-  <button class="print-btn no-print" onclick="window.print()">Print Patti</button>
+  <button class="print-btn patti-print-btn" onclick="window.print()">Print Patti</button>
   <script>window.onload=function(){setTimeout(function(){window.print()},300)}</script>
   </body></html>`;
 }
