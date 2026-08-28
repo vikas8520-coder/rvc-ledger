@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import Link from 'next/link';
 import { useI18n } from '../components/I18nProvider';
-import { Card, SectionHeader, Button, EmptyState, PageHeader } from '../components/ui';
-import { DollarIcon, CameraIcon, CheckIcon } from '../components/Icons';
+import { Card, SectionHeader, Button, PageHeader } from '../components/ui';
+import { CameraIcon, CheckIcon, AlertIcon, GraduationIcon } from '../components/Icons';
 import { recognizeBill, OcrProgress } from '@/lib/ocr';
 import { parseDate } from '@/lib/parser';
 import { distance } from 'fastest-levenshtein';
@@ -69,6 +70,23 @@ function extractPaymentAmount(text: string): { amount: number | null; date: stri
   return { amount, date, customerHint };
 }
 
+/**
+ * Check if OCR text is mostly garbage (unreadable handwriting).
+ * Returns true if the text is too short or too garbled to be useful.
+ */
+function isOcrGarbage(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return true;
+  // Very short output — probably nothing recognized
+  if (trimmed.length < 10) return true;
+  // Count readable words (Latin letters, at least 2 chars)
+  const words = trimmed.split(/\s+/).filter((w) => /^[a-zA-Z]{2,}/.test(w));
+  // If less than 2 readable words and no numbers, it's garbage
+  const hasNumbers = /\d{2,}/.test(trimmed);
+  if (words.length < 2 && !hasNumbers) return true;
+  return false;
+}
+
 export default function PaymentPage() {
   const { t, ocrLangs } = useI18n();
   const [customers, setCustomers] = useState<string[]>([]);
@@ -80,10 +98,12 @@ export default function PaymentPage() {
   const [status, setStatus] = useState<'idle' | 'saving' | 'done' | 'error'>('idle');
   const [error, setError] = useState('');
 
-  // OCR state
-  const [ocrStep, setOcrStep] = useState<'idle' | 'scanning' | 'done'>('idle');
+  // OCR state: 'idle' | 'scanning' | 'done' | 'failed'
+  const [ocrStep, setOcrStep] = useState<'idle' | 'scanning' | 'done' | 'failed'>('idle');
   const [ocrProgress, setOcrProgress] = useState<OcrProgress | null>(null);
   const [ocrHint, setOcrHint] = useState<string | null>(null);
+  const [ocrRawText, setOcrRawText] = useState<string>('');
+  const [showRawOcr, setShowRawOcr] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -102,19 +122,30 @@ export default function PaymentPage() {
     setOcrStep('scanning');
     setOcrProgress(null);
     setError('');
+    setOcrHint(null);
+    setOcrRawText('');
+    setShowRawOcr(false);
     try {
       const text = await recognizeBill(f, ocrLangs, setOcrProgress);
-      const { amount: extractedAmount, date: extractedDate, customerHint } = extractPaymentAmount(text);
+      setOcrRawText(text);
 
-      if (extractedAmount) {
-        setAmount(String(extractedAmount));
-        setOcrHint(`Found: ₹${extractedAmount}`);
-      } else {
-        setOcrHint('Could not find amount — please enter manually');
+      // Check if OCR produced garbage
+      if (isOcrGarbage(text)) {
+        setOcrStep('failed');
+        setOcrHint(t('ocrFailedHandwriting'));
+        return;
       }
 
+      const { amount: extractedAmount, date: extractedDate, customerHint } = extractPaymentAmount(text);
+
+      const foundParts: string[] = [];
+      if (extractedAmount) {
+        setAmount(String(extractedAmount));
+        foundParts.push(`₹${extractedAmount}`);
+      }
       if (extractedDate) {
         setDate(extractedDate);
+        foundParts.push(extractedDate);
       }
 
       // Try to match customer hint
@@ -127,13 +158,22 @@ export default function PaymentPage() {
         }
         if (best && best.dist <= Math.max(2, Math.floor(customerHint.length * 0.3))) {
           setCustomer(best.name);
+          foundParts.push(best.name);
         }
       }
 
-      setOcrStep('done');
+      if (foundParts.length > 0) {
+        setOcrHint(`${t('ocrFound')}: ${foundParts.join(' · ')}`);
+        setOcrStep('done');
+      } else {
+        // OCR produced text but couldn't extract structured data
+        setOcrStep('failed');
+        setOcrHint(t('ocrCouldNotExtract'));
+      }
     } catch (err: any) {
       setError(err.message || 'OCR failed');
-      setOcrStep('idle');
+      setOcrStep('failed');
+      setOcrHint(t('ocrFailedError'));
     }
   };
 
@@ -176,11 +216,15 @@ export default function PaymentPage() {
           onChange={handleImageUpload}
           className="hidden"
         />
+
+        {/* Idle state — show upload button */}
         {ocrStep === 'idle' && (
           <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
             <span className="flex items-center gap-2"><CameraIcon size={16} /> {t('photographPayment')}</span>
           </Button>
         )}
+
+        {/* Scanning state — show progress bar */}
         {ocrStep === 'scanning' && (
           <div className="space-y-2">
             <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--bg-card-hover)]">
@@ -194,21 +238,92 @@ export default function PaymentPage() {
             </p>
           </div>
         )}
+
+        {/* Done state — OCR found something useful */}
         {ocrStep === 'done' && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm text-[var(--bg-success)]">
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 rounded-lg bg-[var(--bg-success)] bg-opacity-10 p-3 text-sm text-[var(--bg-success)]">
               <CheckIcon size={16} /> {ocrHint}
             </div>
-            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-              {t('scanAgain')}
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                {t('scanAgain')}
+              </Button>
+              <button
+                onClick={() => setShowRawOcr(!showRawOcr)}
+                className="text-xs text-[var(--text-muted)] underline"
+              >
+                {showRawOcr ? t('hideRawOcr') : t('showRawOcr')}
+              </button>
+            </div>
+            {showRawOcr && (
+              <pre className="max-h-32 overflow-auto rounded-lg bg-[var(--bg-base)] p-3 text-xs whitespace-pre-wrap">
+                {ocrRawText || '(empty)'}
+              </pre>
+            )}
+          </div>
+        )}
+
+        {/* Failed state — OCR could not read the handwriting */}
+        {ocrStep === 'failed' && (
+          <div className="space-y-3">
+            <div className="rounded-lg border border-[var(--bg-primary)] bg-opacity-5 p-4" style={{ backgroundColor: 'rgba(239, 68, 68, 0.05)' }}>
+              <div className="flex items-start gap-2">
+                <AlertIcon size={18} className="mt-0.5 shrink-0 text-[var(--bg-primary)]" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-[var(--bg-primary)]">{ocrHint}</p>
+                  <p className="text-xs text-[var(--text-muted)]">{t('ocrFailedHelp')}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Show raw OCR text so user can see what happened */}
+            {ocrRawText.trim() && (
+              <div>
+                <button
+                  onClick={() => setShowRawOcr(!showRawOcr)}
+                  className="text-xs text-[var(--text-muted)] underline"
+                >
+                  {showRawOcr ? t('hideRawOcr') : t('showRawOcr')}
+                </button>
+                {showRawOcr && (
+                  <pre className="mt-2 max-h-32 overflow-auto rounded-lg bg-[var(--bg-base)] p-3 text-xs whitespace-pre-wrap">
+                    {ocrRawText}
+                  </pre>
+                )}
+              </div>
+            )}
+
+            {/* Actions: try again, go to training, or fill manually */}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                <span className="flex items-center gap-1.5"><CameraIcon size={14} /> {t('scanAgain')}</span>
+              </Button>
+              <Link href="/training">
+                <Button variant="outline" size="sm">
+                  <span className="flex items-center gap-1.5"><GraduationIcon size={14} /> {t('goToTraining')}</span>
+                </Button>
+              </Link>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setOcrStep('idle');
+                  setOcrHint(null);
+                  // Scroll to the form below
+                  document.getElementById('payment-form')?.scrollIntoView({ behavior: 'smooth' });
+                }}
+              >
+                {t('enterManually')}
+              </Button>
+            </div>
           </div>
         )}
       </Card>
 
       {/* Payment form */}
       <Card>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form id="payment-form" onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="text-sm text-[var(--text-muted)]">{t('customer')}</label>
             <select
