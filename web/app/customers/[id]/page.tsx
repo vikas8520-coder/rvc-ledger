@@ -28,7 +28,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
   const [copied, setCopied] = useState(false);
   const [creditLimit, setCreditLimit] = useState('');
   const [creditStatus, setCreditStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
-  const [shopSettings, setShopSettings] = useState<{ shopName?: string; shopAddress?: string; shopPhone?: string }>({});
+  const [shopSettings, setShopSettings] = useState<{ shopName?: string; shopAddress?: string; shopPhone?: string; billFormat?: string }>({});
 
   useEffect(() => {
     if (customer?.phone) setPhone(customer.phone);
@@ -256,7 +256,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
 
       <section className="space-y-2">
         <h2 className="text-sm font-semibold">{t('ledger')}</h2>
-        <LedgerTable customer={customer} />
+        <LedgerTable customer={customer} shop={shopSettings} defaultFormat={(shopSettings.billFormat as any) || 'itemized'} />
       </section>
     </div>
   );

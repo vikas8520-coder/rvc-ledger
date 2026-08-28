@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Customer } from '@/lib/types';
 import { localizeName } from '@/lib/catalog';
 import { yardById } from '@/lib/market';
@@ -7,10 +8,20 @@ import { fmt, fmtDate } from '@/lib/format';
 import { getUiLang } from '@/lib/i18n';
 import { useI18n } from './I18nProvider';
 import DeleteButton from './DeleteButton';
+import { printBill, txnToBillData, BillFormat, ShopProfile } from '@/lib/billPrint';
 
-export default function LedgerTable({ customer }: { customer: Customer }) {
+export default function LedgerTable({
+  customer,
+  shop,
+  defaultFormat = 'itemized',
+}: {
+  customer: Customer;
+  shop?: ShopProfile;
+  defaultFormat?: BillFormat;
+}) {
   const { lang, t } = useI18n();
   const uiLang = getUiLang(lang);
+  const [printMenuTxn, setPrintMenuTxn] = useState<string | null>(null);
 
   if (customer.txns.length === 0) {
     return <p className="text-sm text-[var(--text-faint)]">{t('noActivity')}</p>;
@@ -146,7 +157,35 @@ export default function LedgerTable({ customer }: { customer: Customer }) {
                   <td className="px-3 py-1.5 text-right tabular-nums text-[var(--text-secondary)]">
                     {r.balance !== null ? fmt(r.balance) : ''}
                   </td>
-                  <td className="px-2 py-1.5 text-right">
+                  <td className="px-2 py-1.5 text-right whitespace-nowrap">
+                    {isLastOfTxn && !r.isPayment && shop && (
+                      <span className="relative mr-1">
+                        <button
+                          onClick={() => setPrintMenuTxn(printMenuTxn === r.txnId ? null : r.txnId)}
+                          className="text-[10px] text-[var(--bg-primary)] hover:underline"
+                        >
+                          {t('printBill')}
+                        </button>
+                        {printMenuTxn === r.txnId && (
+                          <span className="absolute right-0 top-4 z-10 flex flex-col gap-0.5 rounded-md border border-[var(--border-light)] bg-[var(--bg-input)] p-1 shadow-lg">
+                            {(['simple', 'itemized', 'market'] as BillFormat[]).map((f) => (
+                              <button
+                                key={f}
+                                onClick={() => {
+                                  const txn = customer.txns.find((tx) => tx.id === r.txnId);
+                                  if (txn) printBill(txnToBillData(txn, customer.name), shop, f);
+                                  setPrintMenuTxn(null);
+                                }}
+                                className="whitespace-nowrap rounded px-2 py-1 text-left text-[10px] hover:bg-[var(--bg-card)]"
+                              >
+                                {t(`billFormat${f.charAt(0).toUpperCase() + f.slice(1)}` as any)}
+                                {f === defaultFormat ? ' ✓' : ''}
+                              </button>
+                            ))}
+                          </span>
+                        )}
+                      </span>
+                    )}
                     {isLastOfTxn && <DeleteButton id={r.txnId} />}
                   </td>
                 </tr>

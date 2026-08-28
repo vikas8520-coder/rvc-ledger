@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useI18n } from '../components/I18nProvider';
 import { fmt } from '@/lib/format';
 import { CatalogItem, StockLevel } from '@/lib/types';
+import { printBill, ShopProfile } from '@/lib/billPrint';
 
 function today() {
   const d = new Date();
@@ -33,17 +34,21 @@ export default function QuickBillPage() {
   const [rows, setRows] = useState<BillRow[]>([]);
   const [status, setStatus] = useState<'idle' | 'saving'>('idle');
   const [error, setError] = useState('');
+  const [savedBill, setSavedBill] = useState<{ customerName: string; date: string; billNo: string; total: number; items: BillRow[] } | null>(null);
+  const [shopSettings, setShopSettings] = useState<ShopProfile>({});
 
   useEffect(() => {
     Promise.all([
       fetch('/api/catalog').then((r) => r.json()),
       fetch('/api/stock').then((r) => r.json()),
       fetch('/api/dashboard').then((r) => r.json()),
+      fetch('/api/settings').then((r) => r.json()),
     ])
-      .then(([cat, stk, dash]) => {
+      .then(([cat, stk, dash, settings]) => {
         setCatalog(cat.items || []);
         setStock(stk.stock || []);
         setCustomers((dash.customers || []).map((c: any) => c.name));
+        setShopSettings(settings.settings || {});
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -114,17 +119,75 @@ export default function QuickBillPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Save failed');
 
+      // Show success with print option
+      setSavedBill({ customerName: customerName.trim(), date, billNo, total, items: rows.filter((r) => r.name && r.amount) });
       setRows([]);
       setBillNo('');
       setStatus('idle');
-      router.push(`/customers`);
     } catch (err: any) {
       setError(err.message || 'Save failed');
       setStatus('idle');
     }
   };
 
+  const printSavedBill = (format: 'simple' | 'itemized' | 'market') => {
+    if (!savedBill) return;
+    const billItems = savedBill.items.map((r) => ({
+      name: r.name,
+      qty: r.qty || null,
+      rate: r.rate || null,
+      amount: Number(r.amount) || 0,
+      display: [r.qty, r.rate].filter(Boolean).join(' × '),
+      kind: 'item' as const,
+      chargeCode: null,
+    }));
+    printBill(
+      {
+        customerName: savedBill.customerName,
+        date: savedBill.date,
+        billNo: savedBill.billNo || null,
+        items: billItems,
+        total: savedBill.total,
+      },
+      shopSettings,
+      format
+    );
+  };
+
   if (loading) return <p className="py-10 text-center text-sm text-[var(--text-faint)]">{t('loading')}</p>;
+
+  if (savedBill) {
+    return (
+      <div className="space-y-4">
+        <div className="rounded-lg bg-[var(--bg-success)] p-4 text-center text-[var(--text-on-primary)]">
+          <p className="text-lg font-bold">✓ {t('bill')} {savedBill.billNo || ''} — {fmt(savedBill.total)}</p>
+          <p className="text-sm opacity-90">{savedBill.customerName} · {savedBill.date}</p>
+        </div>
+        <div className="rounded-lg bg-[var(--bg-card)] p-4 space-y-3">
+          <h2 className="text-sm font-semibold">{t('printBill')}</h2>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => printSavedBill('simple')} className="rounded-md bg-[var(--bg-secondary)] px-4 py-2 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-secondary-hover)]">
+              {t('billFormatSimple')}
+            </button>
+            <button onClick={() => printSavedBill('itemized')} className="rounded-md bg-[var(--bg-secondary)] px-4 py-2 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-secondary-hover)]">
+              {t('billFormatItemized')}
+            </button>
+            <button onClick={() => printSavedBill('market')} className="rounded-md bg-[var(--bg-secondary)] px-4 py-2 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-secondary-hover)]">
+              {t('billFormatMarket')}
+            </button>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setSavedBill(null)} className="rounded-md bg-[var(--bg-primary)] px-4 py-2 text-sm font-semibold text-[var(--text-on-primary)]">
+              {t('quickBill')} →
+            </button>
+            <button onClick={() => router.push('/customers')} className="rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-4 py-2 text-sm">
+              {t('allCustomers')}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

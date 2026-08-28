@@ -5,6 +5,7 @@ import { recognizeBill, OcrProgress } from '@/lib/ocr';
 import { parseBillText, buildDisplay } from '@/lib/parser';
 import { BillItem } from '@/lib/types';
 import { classifyScript } from '@/lib/catalog';
+import { printBill, BillFormat, ShopProfile } from '@/lib/billPrint';
 import {
   MARKET_YARDS,
   EMPTY_MARKET,
@@ -58,6 +59,8 @@ export default function UploadPage() {
   const [saveError, setSaveError] = useState('');
   const [market, setMarket] = useState<MarketMeta>(EMPTY_MARKET);
   const [commissionPct, setCommissionPct] = useState('4');
+  const [shopSettings, setShopSettings] = useState<ShopProfile>({});
+  const [savedItems, setSavedItems] = useState<BillItem[]>([]);
 
   useEffect(() => {
     fetch('/api/customers')
@@ -78,6 +81,10 @@ export default function UploadPage() {
       .catch(() => {
         setCustomerSelect('__new__');
       });
+    fetch('/api/settings')
+      .then((r) => r.json())
+      .then((d) => setShopSettings(d.settings || {}))
+      .catch(() => {});
   }, []);
 
   const fuzzy = useMemo(() => {
@@ -253,10 +260,35 @@ export default function UploadPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Save failed');
       setStep('done');
+      // Store for printing
+      setSavedItems(billItems);
     } catch (err: any) {
       setSaveError(err.message || 'Save failed');
       setStep('review');
     }
+  };
+
+  const printSavedUploadBill = (format: BillFormat) => {
+    printBill(
+      {
+        customerName: customer,
+        date,
+        billNo: billNo || null,
+        items: savedItems.map((it) => ({
+          name: it.confirmed_name,
+          qty: it.qty,
+          rate: it.rate,
+          amount: it.amount,
+          display: it.display || '',
+          kind: it.kind,
+          chargeCode: it.chargeCode,
+        })),
+        total,
+        market,
+      },
+      shopSettings,
+      format
+    );
   };
 
   return (
@@ -575,9 +607,23 @@ export default function UploadPage() {
       )}
 
       {step === 'done' && (
-        <div className="rounded-2xl bg-[var(--bg-card)] p-6 text-center">
+        <div className="rounded-2xl bg-[var(--bg-card)] p-6 text-center space-y-4">
           <p className="text-xl font-bold">{t('saved')}</p>
-          <a href="/" className="mt-4 inline-block rounded bg-[var(--bg-primary)] px-4 py-2 text-[var(--text-on-primary)]">{t('viewDashboard')}</a>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">{t('printBill')}</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <button onClick={() => printSavedUploadBill('simple')} className="rounded-md bg-[var(--bg-secondary)] px-4 py-2 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-secondary-hover)]">
+                {t('billFormatSimple')}
+              </button>
+              <button onClick={() => printSavedUploadBill('itemized')} className="rounded-md bg-[var(--bg-secondary)] px-4 py-2 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-secondary-hover)]">
+                {t('billFormatItemized')}
+              </button>
+              <button onClick={() => printSavedUploadBill('market')} className="rounded-md bg-[var(--bg-secondary)] px-4 py-2 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-secondary-hover)]">
+                {t('billFormatMarket')}
+              </button>
+            </div>
+          </div>
+          <a href="/" className="inline-block rounded bg-[var(--bg-primary)] px-4 py-2 text-[var(--text-on-primary)]">{t('viewDashboard')}</a>
         </div>
       )}
     </div>

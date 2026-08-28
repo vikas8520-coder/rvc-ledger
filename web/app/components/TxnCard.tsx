@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Customer } from '@/lib/types';
 import { localizeName } from '@/lib/catalog';
 import { yardById } from '@/lib/market';
@@ -7,16 +8,24 @@ import { fmt, fmtDate } from '@/lib/format';
 import { getUiLang } from '@/lib/i18n';
 import { useI18n } from './I18nProvider';
 import DeleteButton from './DeleteButton';
+import { printBill, txnToBillData, BillFormat, ShopProfile } from '@/lib/billPrint';
 
 export default function TxnCard({
   txn,
   compact = false,
+  customerName,
+  shop,
+  defaultFormat = 'itemized',
 }: {
   txn: Customer['txns'][number];
   compact?: boolean;
+  customerName?: string;
+  shop?: ShopProfile;
+  defaultFormat?: BillFormat;
 }) {
   const { lang, t } = useI18n();
   const uiLang = getUiLang(lang);
+  const [showFormats, setShowFormats] = useState(false);
 
   const title =
     txn.type === 'payment'
@@ -59,6 +68,33 @@ export default function TxnCard({
         <span className="text-[var(--text-faint)]">
           {t('balanceAfter')}: {fmt(txn.balanceAfter)}
         </span>
+        {txn.type === 'bill' && customerName && shop && (
+          <span className="relative">
+            <button
+              onClick={() => setShowFormats((v) => !v)}
+              className="text-[var(--bg-primary)] hover:underline"
+            >
+              {t('printBill')}
+            </button>
+            {showFormats && (
+              <span className="absolute right-0 top-4 z-10 flex flex-col gap-0.5 rounded-md border border-[var(--border-light)] bg-[var(--bg-input)] p-1 shadow-lg">
+                {(['simple', 'itemized', 'market'] as BillFormat[]).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => {
+                      printBill(txnToBillData(txn, customerName), shop, f);
+                      setShowFormats(false);
+                    }}
+                    className="whitespace-nowrap rounded px-2 py-1 text-left text-[11px] hover:bg-[var(--bg-card)]"
+                  >
+                    {t(`billFormat${f.charAt(0).toUpperCase() + f.slice(1)}` as any)}
+                    {f === defaultFormat ? ' ✓' : ''}
+                  </button>
+                ))}
+              </span>
+            )}
+          </span>
+        )}
         <DeleteButton id={txn.id} />
       </div>
     </div>

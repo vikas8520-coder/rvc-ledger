@@ -18,6 +18,10 @@ export default function SettingsPage() {
   const [lowStock, setLowStock] = useState('');
   const [stockStatus, setStockStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
+  // Bill format
+  const [billFormat, setBillFormat] = useState<'simple' | 'itemized' | 'market'>('itemized');
+  const [billFormatStatus, setBillFormatStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+
   // Restore
   const [restoreStatus, setRestoreStatus] = useState<'idle' | 'restoring' | 'done' | 'error'>('idle');
   const [restoreMsg, setRestoreMsg] = useState('');
@@ -40,6 +44,7 @@ export default function SettingsPage() {
         setShopAddress(s.shopAddress || '');
         setShopPhone(s.shopPhone || '');
         setLowStock(s.lowStockThreshold || '');
+        setBillFormat((s.billFormat as any) || 'itemized');
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -68,6 +73,17 @@ export default function SettingsPage() {
       setTimeout(() => setStockStatus('idle'), 1500);
     } catch {
       setStockStatus('idle');
+    }
+  };
+
+  const saveBillFormat = async () => {
+    setBillFormatStatus('saving');
+    try {
+      await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'billFormat', value: billFormat }) });
+      setBillFormatStatus('saved');
+      setTimeout(() => setBillFormatStatus('idle'), 1500);
+    } catch {
+      setBillFormatStatus('idle');
     }
   };
 
@@ -189,6 +205,30 @@ export default function SettingsPage() {
             className="rounded-md bg-[var(--bg-success)] px-4 py-2 text-sm font-semibold text-[var(--text-on-primary)] disabled:opacity-50"
           >
             {stockStatus === 'saved' ? t('saved') : t('save')}
+          </button>
+        </div>
+      </section>
+
+      {/* Bill Format */}
+      <section className="rounded-lg bg-[var(--bg-card)] p-4">
+        <h2 className="text-sm font-semibold">{t('billFormat')}</h2>
+        <p className="mt-1 text-xs text-[var(--text-faint)]">{t('billFormatHelp')}</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <select
+            value={billFormat}
+            onChange={(e) => setBillFormat(e.target.value as any)}
+            className="rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-1.5 text-sm"
+          >
+            <option value="simple">{t('billFormatSimple')}</option>
+            <option value="itemized">{t('billFormatItemized')}</option>
+            <option value="market">{t('billFormatMarket')}</option>
+          </select>
+          <button
+            onClick={saveBillFormat}
+            disabled={billFormatStatus === 'saving'}
+            className="rounded-md bg-[var(--bg-success)] px-4 py-2 text-sm font-semibold text-[var(--text-on-primary)] disabled:opacity-50"
+          >
+            {billFormatStatus === 'saved' ? t('saved') : t('save')}
           </button>
         </div>
       </section>
