@@ -2,12 +2,13 @@ import type { TxnView, TxnItemView } from './types';
 import type { MarketMeta, ChargeCode } from './market';
 import { yardById, chargeLabel, goodsTotal, chargesTotal } from './market';
 
-export type BillFormat = 'simple' | 'itemized' | 'market';
+export type BillFormat = 'simple' | 'itemized' | 'market' | 'patti';
 
 export const BILL_FORMATS: { value: BillFormat; labelKey: string }[] = [
   { value: 'simple', labelKey: 'billFormatSimple' },
   { value: 'itemized', labelKey: 'billFormatItemized' },
   { value: 'market', labelKey: 'billFormatMarket' },
+  { value: 'patti', labelKey: 'billFormatPatti' },
 ];
 
 export interface ShopProfile {
@@ -336,12 +337,133 @@ function marketBill(bill: BillPrintData, shop: ShopProfile): string {
   </body></html>`;
 }
 
+// ============================================================
+// FORMAT 4: PATTI — 6 bills per A4 page (2 columns × 3 rows)
+// Compact sections, each with shop name, customer, items, total
+// ============================================================
+
+const PATTI_STYLES = `
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Arial', 'Helvetica', sans-serif; color: #000; background: #fff; }
+  .patti-sheet {
+    width: 210mm;
+    height: 297mm;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr 1fr;
+    gap: 0;
+    border: 1px solid #000;
+  }
+  .patti-section {
+    border: 0.5px solid #000;
+    padding: 4mm 5mm;
+    font-size: 9px;
+    line-height: 1.35;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .patti-section:nth-child(odd) { border-right: 1px solid #000; }
+  .patti-section:nth-child(-n+4) { border-bottom: 1px solid #000; }
+
+  .patti-shop { text-align: center; font-weight: bold; font-size: 11px; border-bottom: 0.5px solid #000; padding-bottom: 2px; margin-bottom: 3px; }
+  .patti-shop-addr { font-size: 7px; font-weight: normal; color: #444; }
+  .patti-meta { display: flex; justify-content: space-between; font-size: 8px; margin-bottom: 3px; }
+  .patti-customer { font-weight: bold; font-size: 9px; }
+  .patti-table { width: 100%; border-collapse: collapse; flex: 1; }
+  .patti-table th { font-size: 7px; text-transform: uppercase; border-bottom: 0.5px solid #000; padding: 1px 2px; text-align: left; }
+  .patti-table th.num { text-align: right; }
+  .patti-table td { font-size: 8px; padding: 1px 2px; border-bottom: 0.25px dotted #ccc; }
+  .patti-table td.num { text-align: right; }
+  .patti-table td.name { max-width: 35mm; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .patti-charges { font-size: 7px; margin-top: 2px; }
+  .patti-charge-row { display: flex; justify-content: space-between; }
+  .patti-total { display: flex; justify-content: space-between; border-top: 1px solid #000; margin-top: 3px; padding-top: 2px; font-weight: bold; font-size: 11px; }
+  .patti-sign { margin-top: auto; padding-top: 4px; font-size: 7px; color: #888; text-align: center; border-top: 0.25px dotted #aaa; }
+
+  .print-btn { display: block; margin: 10px auto 0; padding: 6px 18px; background: #333; color: #fff; border: none; font-size: 12px; cursor: pointer; }
+  .no-print { display: none; }
+
+  @page { size: A4; margin: 0; }
+  @media print {
+    body { background: #fff; }
+    .patti-sheet { border: 1px solid #000; }
+    .no-print { display: none; }
+    .patti-page-break { page-break-after: always; }
+    .patti-page-break:last-child { page-break-after: auto; }
+  }
+`;
+
+function pattiSection(bill: BillPrintData, shop: ShopProfile): string {
+  const items = bill.items.filter((it) => it.kind !== 'charge');
+  const charges = bill.items.filter((it) => it.kind === 'charge');
+  const goodsSum = goodsTotal(bill.items);
+
+  const itemRows = items.map((it) => `<tr>
+    <td class="name">${esc(it.name)}</td>
+    <td class="num">${esc(it.qty || '')}</td>
+    <td class="num">${esc(it.rate || '')}</td>
+    <td class="num">${money(it.amount)}</td>
+  </tr>`).join('\n');
+
+  const chargeRows = charges.map((it) =>
+    `<div class="patti-charge-row"><span>${esc(it.name)}</span><span>${money(it.amount)}</span></div>`
+  ).join('\n');
+
+  return `<div class="patti-section">
+    <div class="patti-shop">
+      ${esc(shop.shopName || 'RVC Vegetable Shop')}
+      ${shop.shopAddress ? `<div class="patti-shop-addr">${esc(shop.shopAddress)}</div>` : ''}
+    </div>
+    <div class="patti-meta">
+      <span>No: ${esc(bill.billNo || '—')}</span>
+      <span>${fmtDate(bill.date)}</span>
+    </div>
+    <div class="patti-customer">${esc(bill.customerName)}</div>
+    <table class="patti-table">
+      <thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amt</th></tr></thead>
+      <tbody>${itemRows}</tbody>
+    </table>
+    ${chargeRows ? `<div class="patti-charges">${chargeRows}</div>` : ''}
+    ${charges.length > 0 ? `<div class="patti-charge-row" style="font-weight:bold;font-size:8px"><span>Goods</span><span>${money(goodsSum)}</span></div>` : ''}
+    <div class="patti-total"><span>TOTAL</span><span>${money(bill.total)}</span></div>
+    <div class="patti-sign">Authorized Signatory</div>
+  </div>`;
+}
+
+function pattiSheet(bills: BillPrintData[], shop: ShopProfile): string {
+  // Group bills into pages of 6
+  const pages: BillPrintData[][] = [];
+  for (let i = 0; i < bills.length; i += 6) {
+    pages.push(bills.slice(i, i + 6));
+  }
+
+  const sheets = pages.map((pageBills, pageIdx) => {
+    // Fill to 6 sections with empty placeholders if fewer than 6
+    const sections: string[] = pageBills.map((b) => pattiSection(b, shop));
+    while (sections.length < 6) {
+      sections.push('<div class="patti-section"></div>');
+    }
+    return `<div class="patti-sheet patti-page-break">${sections.join('\n')}</div>`;
+  }).join('\n');
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Patti - ${esc(shop.shopName || 'RVC')}</title>
+  <style>${PATTI_STYLES}</style></head><body>
+  ${sheets}
+  <button class="print-btn no-print" onclick="window.print()">Print Patti</button>
+  <script>window.onload=function(){setTimeout(function(){window.print()},300)}</script>
+  </body></html>`;
+}
+
 export function renderBillHtml(bill: BillPrintData, shop: ShopProfile, format: BillFormat): string {
   switch (format) {
     case 'itemized':
       return itemizedBill(bill, shop);
     case 'market':
       return marketBill(bill, shop);
+    case 'patti':
+      return pattiSheet([bill], shop);
     case 'simple':
     default:
       return simpleBill(bill, shop);
@@ -352,6 +474,11 @@ export function renderBillHtml(bill: BillPrintData, shop: ShopProfile, format: B
 export function renderBillsHtml(bills: BillPrintData[], shop: ShopProfile, format: BillFormat): string {
   if (bills.length === 0) {
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>No bills</title></head><body><p style="text-align:center;padding:40px;font-family:sans-serif">No bills found for this customer.</p></body></html>`;
+  }
+
+  // Patti format: 6 bills per A4 page
+  if (format === 'patti') {
+    return pattiSheet(bills, shop);
   }
 
   // Extract just the <style> and <body> content from each bill

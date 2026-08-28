@@ -140,7 +140,7 @@ export default function QuickBillPage() {
     }
   };
 
-  const printSavedBill = (format: 'simple' | 'itemized' | 'market') => {
+  const printSavedBill = (format: 'simple' | 'itemized' | 'market' | 'patti') => {
     if (!savedBill) return;
     const billItems = savedBill.items.map((r) => ({
       name: r.name,
@@ -184,6 +184,9 @@ export default function QuickBillPage() {
             </button>
             <button onClick={() => printSavedBill('market')} className="rounded-md bg-[var(--bg-secondary)] px-4 py-2 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-secondary-hover)]">
               {t('billFormatMarket')}
+            </button>
+            <button onClick={() => printSavedBill('patti')} className="rounded-md bg-[var(--bg-secondary)] px-4 py-2 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-secondary-hover)]">
+              {t('billFormatPatti')}
             </button>
           </div>
           <div className="flex gap-2 pt-2">

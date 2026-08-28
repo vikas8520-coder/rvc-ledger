@@ -670,6 +670,9 @@ export default function UploadPage() {
               <button onClick={() => printSavedUploadBill('market')} className="rounded-md bg-[var(--bg-secondary)] px-4 py-2 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-secondary-hover)]">
                 {t('billFormatMarket')}
               </button>
+              <button onClick={() => printSavedUploadBill('patti')} className="rounded-md bg-[var(--bg-secondary)] px-4 py-2 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-secondary-hover)]">
+                {t('billFormatPatti')}
+              </button>
             </div>
           </div>
           <a href="/" className="inline-block rounded bg-[var(--bg-primary)] px-4 py-2 text-[var(--text-on-primary)]">{t('viewDashboard')}</a>
