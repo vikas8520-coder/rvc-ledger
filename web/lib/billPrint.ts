@@ -41,268 +41,298 @@ function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-const BASE_STYLES = `
+// ============================================================
+// SHARED HELPERS
+// ============================================================
+
+function printScript(label = 'Print'): string {
+  return `<button class="print-btn no-print" onclick="window.print()">${label}</button><script>window.onload=function(){setTimeout(function(){window.print()},300)}</script>`;
+}
+
+// ============================================================
+// FORMAT 1: SIMPLE — thermal receipt style
+// Narrow, monospace, minimal. Looks like a shop receipt.
+// ============================================================
+
+const SIMPLE_STYLES = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Georgia', 'Times New Roman', serif; color: #222; line-height: 1.5; padding: 20px; }
-  .bill { max-width: 700px; margin: 0 auto; }
-  .shop-header { text-align: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #8b2e2e; }
-  .shop-name { font-size: 22px; font-weight: bold; color: #8b2e2e; }
-  .shop-addr { font-size: 12px; color: #666; margin-top: 2px; }
-  .shop-phone { font-size: 12px; color: #666; }
-  .bill-title { text-align: center; font-size: 16px; font-weight: bold; margin: 12px 0; text-transform: uppercase; letter-spacing: 1px; }
-  .meta { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 12px; }
-  .meta div { line-height: 1.8; }
-  .meta .label { color: #888; font-size: 11px; text-transform: uppercase; }
-  table { width: 100%; border-collapse: collapse; margin: 8px 0; }
-  th { background: #f5f0e6; font-size: 11px; text-transform: uppercase; padding: 6px 8px; text-align: left; border-bottom: 2px solid #8b2e2e; }
-  td { padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 13px; }
-  td.num, th.num { text-align: right; }
-  .total-row { font-weight: bold; font-size: 15px; border-top: 2px solid #8b2e2e; }
-  .total-row td { border-bottom: none; padding-top: 8px; }
-  .charges-section { margin-top: 8px; }
-  .charges-section th { background: #faf5ec; }
-  .grand-total { text-align: right; font-size: 18px; font-weight: bold; color: #8b2e2e; margin-top: 12px; padding-top: 8px; border-top: 2px solid #8b2e2e; }
-  .signature { margin-top: 40px; display: flex; justify-content: space-between; font-size: 12px; color: #888; }
-  .signature-line { border-top: 1px solid #999; padding-top: 4px; min-width: 180px; text-align: center; }
-  .footer { text-align: center; font-size: 10px; color: #aaa; margin-top: 20px; padding-top: 10px; border-top: 1px dashed #ccc; }
-  .market-info { background: #f9f6f0; border: 1px solid #e0d8c8; border-radius: 4px; padding: 8px 12px; margin: 8px 0; font-size: 12px; }
-  .market-info strong { color: #5a4a3a; }
-  @media print {
-    body { padding: 0; }
-    .bill { max-width: 100%; }
-    .no-print { display: none; }
-  }
-  .print-btn { display: block; margin: 16px auto 0; padding: 8px 24px; background: #8b2e2e; color: white; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; }
-  .print-btn:hover { background: #6b2222; }
+  body { font-family: 'Courier New', monospace; color: #000; padding: 10px; }
+  .receipt { max-width: 380px; margin: 0 auto; }
+  .r-shop { text-align: center; border-bottom: 1px dashed #999; padding-bottom: 8px; margin-bottom: 8px; }
+  .r-shop-name { font-size: 16px; font-weight: bold; }
+  .r-shop-addr { font-size: 11px; }
+  .r-shop-phone { font-size: 11px; }
+  .r-title { text-align: center; font-size: 13px; font-weight: bold; margin: 8px 0; letter-spacing: 2px; }
+  .r-meta { font-size: 11px; line-height: 1.6; margin-bottom: 8px; }
+  .r-meta-row { display: flex; justify-content: space-between; }
+  .r-divider { border-top: 1px dashed #999; margin: 6px 0; }
+  .r-item { display: flex; justify-content: space-between; font-size: 12px; line-height: 1.6; }
+  .r-item-name { flex: 1; }
+  .r-item-amt { font-weight: bold; }
+  .r-item-sub { font-size: 10px; color: #666; padding-left: 12px; }
+  .r-charge { display: flex; justify-content: space-between; font-size: 11px; color: #555; line-height: 1.6; }
+  .r-total { display: flex; justify-content: space-between; font-size: 16px; font-weight: bold; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 6px 0; margin-top: 6px; }
+  .r-footer { text-align: center; font-size: 10px; color: #888; margin-top: 12px; }
+  .r-sign { margin-top: 30px; font-size: 11px; text-align: center; border-top: 1px solid #999; padding-top: 4px; }
+  .print-btn { display: block; margin: 12px auto 0; padding: 6px 18px; background: #333; color: #fff; border: none; font-size: 12px; cursor: pointer; }
+  @media print { body { padding: 0; } .no-print { display: none; } }
 `;
 
-function shopHeader(shop: ShopProfile): string {
-  return `
-    <div class="shop-header">
-      <div class="shop-name">${esc(shop.shopName || 'RVC Vegetable Shop')}</div>
-      ${shop.shopAddress ? `<div class="shop-addr">${esc(shop.shopAddress)}</div>` : ''}
-      ${shop.shopPhone ? `<div class="shop-phone">${esc(shop.shopPhone)}</div>` : ''}
-    </div>`;
-}
-
-function metaBlock(bill: BillPrintData): string {
-  return `
-    <div class="meta">
-      <div>
-        <div class="label">Customer</div>
-        <div><strong>${esc(bill.customerName)}</strong></div>
-      </div>
-      <div style="text-align: right;">
-        <div class="label">Bill No</div>
-        <div>${esc(bill.billNo || '—')}</div>
-        <div class="label" style="margin-top:4px;">Date</div>
-        <div>${fmtDate(bill.date)}</div>
-      </div>
-    </div>`;
-}
-
-function signatureBlock(): string {
-  return `
-    <div class="signature">
-      <div class="signature-line">Customer Signature</div>
-      <div class="signature-line">For ${esc('Shop Name')}</div>
-    </div>`;
-}
-
-function footerBlock(shop: ShopProfile): string {
-  return `
-    <div class="footer">
-      Thank you for your business · ${esc(shop.shopName || 'RVC Vegetable Shop')}<br>
-      Generated on ${new Date().toLocaleString('en-IN')}
-    </div>`;
-}
-
-function printScript(): string {
-  return `<button class="print-btn no-print" onclick="window.print()">Print Bill</button><script>window.onload=function(){setTimeout(function(){window.print()},300)}</script>`;
-}
-
-// Format 1: Simple — plain item list with total
 function simpleBill(bill: BillPrintData, shop: ShopProfile): string {
-  const itemRows = bill.items
-    .filter((it) => it.kind !== 'charge')
-    .map((it, i) => {
-      const display = it.display || '';
-      return `<tr>
-        <td>${i + 1}</td>
-        <td>${esc(it.name)}</td>
-        <td>${esc(display)}</td>
-        <td class="num">${money(it.amount)}</td>
-      </tr>`;
-    })
-    .join('\n');
-
+  const items = bill.items.filter((it) => it.kind !== 'charge');
   const charges = bill.items.filter((it) => it.kind === 'charge');
-  const chargesRows = charges
-    .map((it) => `<tr><td>${esc(it.name)}</td><td class="num">${money(it.amount)}</td></tr>`)
-    .join('\n');
-
   const goodsSum = goodsTotal(bill.items);
-  const chargesSum = chargesTotal(bill.items);
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Bill ${esc(bill.billNo || '')}</title>
-  <style>${BASE_STYLES}</style></head><body>
-  <div class="bill">
-    ${shopHeader(shop)}
-    <div class="bill-title">Bill</div>
-    ${metaBlock(bill)}
-    <table>
-      <thead><tr><th>#</th><th>Item</th><th>Qty × Rate</th><th class="num">Amount</th></tr></thead>
-      <tbody>
-        ${itemRows}
-        ${chargesRows}
-      </tbody>
-      <tfoot>
-        ${charges.length > 0 ? `<tr class="total-row"><td colspan="3">Goods Total</td><td class="num">${money(goodsSum)}</td></tr>` : ''}
-        ${charges.length > 0 ? charges.map((it) => `<tr><td colspan="3">${esc(it.name)}</td><td class="num">${money(it.amount)}</td></tr>`).join('') : ''}
-        <tr class="total-row"><td colspan="3">Total</td><td class="num">${money(bill.total)}</td></tr>
-      </tfoot>
-    </table>
-    <div class="grand-total">Total: ${money(bill.total)}</div>
-    ${signatureBlock().replace('Shop Name', esc(shop.shopName || 'Shop'))}
-    ${footerBlock(shop)}
+  const itemLines = items.map((it) => {
+    const sub = [it.qty, it.rate].filter(Boolean).join(' × ');
+    return `<div class="r-item">
+      <span class="r-item-name">${esc(it.name)}</span>
+      <span class="r-item-amt">${money(it.amount)}</span>
+    </div>${sub ? `<div class="r-item-sub">${esc(sub)}</div>` : ''}`;
+  }).join('\n');
+
+  const chargeLines = charges.map((it) =>
+    `<div class="r-charge"><span>${esc(it.name)}</span><span>${money(it.amount)}</span></div>`
+  ).join('\n');
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${esc(bill.billNo || '')}</title>
+  <style>${SIMPLE_STYLES}</style></head><body>
+  <div class="receipt">
+    <div class="r-shop">
+      <div class="r-shop-name">${esc(shop.shopName || 'RVC Vegetable Shop')}</div>
+      ${shop.shopAddress ? `<div class="r-shop-addr">${esc(shop.shopAddress)}</div>` : ''}
+      ${shop.shopPhone ? `<div class="r-shop-phone">${esc(shop.shopPhone)}</div>` : ''}
+    </div>
+    <div class="r-title">RECEIPT</div>
+    <div class="r-meta">
+      <div class="r-meta-row"><span>Bill No:</span><span>${esc(bill.billNo || '—')}</span></div>
+      <div class="r-meta-row"><span>Date:</span><span>${fmtDate(bill.date)}</span></div>
+      <div class="r-meta-row"><span>Customer:</span><span>${esc(bill.customerName)}</span></div>
+    </div>
+    <div class="r-divider"></div>
+    ${itemLines}
+    ${charges.length > 0 ? `<div class="r-divider"></div>${chargeLines}<div class="r-charge" style="font-weight:bold"><span>Goods Total</span><span>${money(goodsSum)}</span></div>` : ''}
+    <div class="r-total">
+      <span>TOTAL</span>
+      <span>${money(bill.total)}</span>
+    </div>
+    <div class="r-sign">Authorized Signature</div>
+    <div class="r-footer">Thank you! · ${esc(shop.shopName || 'RVC')}</div>
   </div>
-  ${printScript()}
+  ${printScript('Print Receipt')}
   </body></html>`;
 }
 
-// Format 2: Itemized — full table with qty, rate, amount columns + charges section
-function itemizedBill(bill: BillPrintData, shop: ShopProfile): string {
-  const itemRows = bill.items
-    .filter((it) => it.kind !== 'charge')
-    .map((it, i) => {
-      const qty = it.qty || '—';
-      const rate = it.rate || '—';
-      return `<tr>
-        <td>${i + 1}</td>
-        <td>${esc(it.name)}</td>
-        <td class="num">${esc(qty)}</td>
-        <td class="num">${esc(rate)}</td>
-        <td class="num">${money(it.amount)}</td>
-      </tr>`;
-    })
-    .join('\n');
+// ============================================================
+// FORMAT 2: ITEMIZED — professional invoice with grid table
+// Boxed layout, grid lines, blue-gray header
+// ============================================================
 
+const ITEMIZED_STYLES = `
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Arial', 'Helvetica', sans-serif; color: #1a1a1a; padding: 20px; }
+  .invoice { max-width: 750px; margin: 0 auto; }
+  .inv-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #2c3e50; padding-bottom: 12px; margin-bottom: 16px; }
+  .inv-shop-name { font-size: 24px; font-weight: bold; color: #2c3e50; }
+  .inv-shop-addr { font-size: 12px; color: #666; margin-top: 2px; }
+  .inv-shop-phone { font-size: 12px; color: #666; }
+  .inv-title-box { background: #2c3e50; color: #fff; padding: 8px 20px; text-align: center; }
+  .inv-title { font-size: 18px; font-weight: bold; letter-spacing: 2px; }
+  .inv-meta { display: flex; justify-content: space-between; margin: 12px 0; font-size: 13px; }
+  .inv-meta-left, .inv-meta-right { line-height: 1.7; }
+  .inv-meta-label { font-size: 10px; text-transform: uppercase; color: #999; }
+  .inv-meta-val { font-weight: bold; }
+  .inv-table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+  .inv-table th { background: #2c3e50; color: #fff; font-size: 11px; text-transform: uppercase; padding: 8px; text-align: left; }
+  .inv-table th.num { text-align: right; }
+  .inv-table td { padding: 7px 8px; border: 1px solid #ddd; font-size: 13px; }
+  .inv-table td.num { text-align: right; }
+  .inv-table tbody tr:nth-child(even) { background: #f8f9fa; }
+  .inv-goods-total { font-weight: bold; background: #eef2f7; }
+  .inv-goods-total td { border: 1px solid #ccc; }
+  .inv-charges { margin-top: 12px; }
+  .inv-charges th { background: #34495e; }
+  .inv-grand-total { margin-top: 16px; text-align: right; }
+  .inv-grand-total-box { display: inline-block; background: #2c3e50; color: #fff; padding: 10px 24px; font-size: 20px; font-weight: bold; }
+  .inv-signature { margin-top: 50px; display: flex; justify-content: space-between; font-size: 12px; color: #888; }
+  .inv-sig-line { border-top: 1px solid #aaa; padding-top: 4px; min-width: 200px; text-align: center; }
+  .inv-footer { text-align: center; font-size: 10px; color: #aaa; margin-top: 20px; border-top: 1px solid #eee; padding-top: 8px; }
+  .print-btn { display: block; margin: 16px auto 0; padding: 8px 24px; background: #2c3e50; color: #fff; border: none; border-radius: 4px; font-size: 14px; cursor: pointer; }
+  @media print { body { padding: 0; } .no-print { display: none; } }
+`;
+
+function itemizedBill(bill: BillPrintData, shop: ShopProfile): string {
+  const items = bill.items.filter((it) => it.kind !== 'charge');
   const charges = bill.items.filter((it) => it.kind === 'charge');
   const goodsSum = goodsTotal(bill.items);
   const chargesSum = chargesTotal(bill.items);
 
-  const chargesTable = charges.length > 0
-    ? `<div class="charges-section">
-        <table>
-          <thead><tr><th>Charges</th><th class="num">Amount</th></tr></thead>
-          <tbody>
-            ${charges.map((it) => `<tr><td>${esc(it.name)}</td><td class="num">${money(it.amount)}</td></tr>`).join('')}
-            <tr class="total-row"><td>Total Charges</td><td class="num">${money(chargesSum)}</td></tr>
-          </tbody>
-        </table>
-      </div>`
-    : '';
+  const itemRows = items.map((it, i) => `<tr>
+    <td style="text-align:center">${i + 1}</td>
+    <td>${esc(it.name)}</td>
+    <td class="num">${esc(it.qty || '—')}</td>
+    <td class="num">${esc(it.rate || '—')}</td>
+    <td class="num">${money(it.amount)}</td>
+  </tr>`).join('\n');
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Bill ${esc(bill.billNo || '')}</title>
-  <style>${BASE_STYLES}</style></head><body>
-  <div class="bill">
-    ${shopHeader(shop)}
-    <div class="bill-title">Invoice / Bill</div>
-    ${metaBlock(bill)}
-    <table>
+  const chargesTable = charges.length > 0 ? `
+    <table class="inv-table inv-charges">
+      <thead><tr><th>Charges</th><th class="num">Amount</th></tr></thead>
+      <tbody>
+        ${charges.map((it) => `<tr><td>${esc(it.name)}</td><td class="num">${money(it.amount)}</td></tr>`).join('\n')}
+        <tr class="inv-goods-total"><td>Total Charges</td><td class="num">${money(chargesSum)}</td></tr>
+      </tbody>
+    </table>` : '';
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Invoice ${esc(bill.billNo || '')}</title>
+  <style>${ITEMIZED_STYLES}</style></head><body>
+  <div class="invoice">
+    <div class="inv-header">
+      <div>
+        <div class="inv-shop-name">${esc(shop.shopName || 'RVC Vegetable Shop')}</div>
+        ${shop.shopAddress ? `<div class="inv-shop-addr">${esc(shop.shopAddress)}</div>` : ''}
+        ${shop.shopPhone ? `<div class="inv-shop-phone">${esc(shop.shopPhone)}</div>` : ''}
+      </div>
+      <div class="inv-title-box">
+        <div class="inv-title">INVOICE</div>
+      </div>
+    </div>
+    <div class="inv-meta">
+      <div class="inv-meta-left">
+        <div class="inv-meta-label">Bill To</div>
+        <div class="inv-meta-val">${esc(bill.customerName)}</div>
+      </div>
+      <div class="inv-meta-right" style="text-align:right">
+        <div class="inv-meta-label">Bill No</div>
+        <div class="inv-meta-val">${esc(bill.billNo || '—')}</div>
+        <div class="inv-meta-label" style="margin-top:4px">Date</div>
+        <div class="inv-meta-val">${fmtDate(bill.date)}</div>
+      </div>
+    </div>
+    <table class="inv-table">
       <thead>
-        <tr><th>#</th><th>Item Name</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr>
+        <tr><th style="width:30px">#</th><th>Item Name</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr>
       </thead>
       <tbody>
         ${itemRows}
       </tbody>
       <tfoot>
-        <tr class="total-row"><td colspan="4">Goods Total</td><td class="num">${money(goodsSum)}</td></tr>
+        <tr class="inv-goods-total"><td colspan="4">Goods Total</td><td class="num">${money(goodsSum)}</td></tr>
       </tfoot>
     </table>
     ${chargesTable}
-    <div class="grand-total">Grand Total: ${money(bill.total)}</div>
-    ${signatureBlock().replace('Shop Name', esc(shop.shopName || 'Shop'))}
-    ${footerBlock(shop)}
+    <div class="inv-grand-total">
+      <div class="inv-grand-total-box">GRAND TOTAL: ${money(bill.total)}</div>
+    </div>
+    <div class="inv-signature">
+      <div class="inv-sig-line">Customer Signature</div>
+      <div class="inv-sig-line">For ${esc(shop.shopName || 'Shop')}</div>
+    </div>
+    <div class="inv-footer">This is a computer-generated invoice · ${new Date().toLocaleString('en-IN')}</div>
   </div>
-  ${printScript()}
+  ${printScript('Print Invoice')}
   </body></html>`;
 }
 
-// Format 3: Market yard — includes market info, lot no, vehicle no, charge breakdown
+// ============================================================
+// FORMAT 3: MARKET YARD — mandi style with bordered boxes
+// Green/brown earthy tones, prominent market info box
+// ============================================================
+
+const MARKET_STYLES = `
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Verdana', 'Geneva', sans-serif; color: #2d2200; padding: 20px; }
+  .mandi { max-width: 750px; margin: 0 auto; }
+  .mandi-header { text-align: center; border: 3px double #5a7a3a; padding: 10px; margin-bottom: 12px; background: #f4f8ee; }
+  .mandi-shop { font-size: 22px; font-weight: bold; color: #3a5a1a; }
+  .mandi-addr { font-size: 11px; color: #5a6a3a; }
+  .mandi-phone { font-size: 11px; color: #5a6a3a; }
+  .mandi-title { font-size: 16px; font-weight: bold; text-align: center; background: #5a7a3a; color: #fff; padding: 6px; margin: 12px 0; letter-spacing: 3px; }
+  .mandi-info-box { border: 2px solid #5a7a3a; padding: 10px; margin: 10px 0; background: #f8fbf4; }
+  .mandi-info-row { display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; line-height: 1.8; }
+  .mandi-info-item { min-width: 150px; }
+  .mandi-info-label { font-size: 10px; text-transform: uppercase; color: #7a8a5a; }
+  .mandi-info-val { font-weight: bold; color: #2d2200; }
+  .mandi-meta { display: flex; justify-content: space-between; font-size: 12px; margin: 10px 0; }
+  .mandi-table { width: 100%; border-collapse: collapse; margin: 8px 0; border: 2px solid #5a7a3a; }
+  .mandi-table th { background: #5a7a3a; color: #fff; font-size: 11px; padding: 6px; text-align: left; text-transform: uppercase; }
+  .mandi-table th.num { text-align: right; }
+  .mandi-table td { padding: 5px 6px; border: 1px solid #c5d5a5; font-size: 12px; }
+  .mandi-table td.num { text-align: right; }
+  .mandi-table tbody tr:nth-child(even) { background: #f4f8ee; }
+  .mandi-goods-total { font-weight: bold; background: #e8f0d8 !important; }
+  .mandi-charges-box { border: 2px solid #8a6a3a; padding: 8px; margin: 10px 0; background: #faf6ee; }
+  .mandi-charges-title { font-size: 12px; font-weight: bold; color: #5a4a2a; margin-bottom: 6px; text-transform: uppercase; }
+  .mandi-charge-row { display: flex; justify-content: space-between; font-size: 12px; line-height: 1.8; }
+  .mandi-charges-total { display: flex; justify-content: space-between; font-weight: bold; border-top: 1px solid #8a6a3a; margin-top: 4px; padding-top: 4px; font-size: 13px; }
+  .mandi-bill-total { display: flex; justify-content: space-between; background: #5a7a3a; color: #fff; padding: 10px 16px; font-size: 18px; font-weight: bold; margin-top: 12px; }
+  .mandi-sign { margin-top: 40px; display: flex; justify-content: space-between; font-size: 11px; color: #888; }
+  .mandi-sig-line { border-top: 1px solid #aaa; padding-top: 4px; min-width: 180px; text-align: center; }
+  .mandi-footer { text-align: center; font-size: 10px; color: #aaa; margin-top: 16px; }
+  .print-btn { display: block; margin: 16px auto 0; padding: 8px 24px; background: #5a7a3a; color: #fff; border: none; border-radius: 4px; font-size: 14px; cursor: pointer; }
+  @media print { body { padding: 0; } .no-print { display: none; } }
+`;
+
 function marketBill(bill: BillPrintData, shop: ShopProfile): string {
   const m = bill.market || {};
   const yard = m.marketYard ? yardById(m.marketYard) : null;
   const yardName = yard?.name || m.marketYard || '—';
-  const marketType = m.marketType || '—';
-
-  const marketInfo = `
-    <div class="market-info">
-      <strong>Market Yard:</strong> ${esc(yardName)} &nbsp;|&nbsp;
-      <strong>Type:</strong> ${esc(marketType)}<br>
-      ${m.sellerName ? `<strong>Seller:</strong> ${esc(m.sellerName)} &nbsp;` : ''}
-      ${m.lotNo ? `| <strong>Lot No:</strong> ${esc(m.lotNo)} &nbsp;` : ''}
-      ${m.vehicleNo ? `| <strong>Vehicle:</strong> ${esc(m.vehicleNo)}` : ''}
-    </div>`;
-
-  const itemRows = bill.items
-    .filter((it) => it.kind !== 'charge')
-    .map((it, i) => {
-      const qty = it.qty || '—';
-      const rate = it.rate || '—';
-      return `<tr>
-        <td>${i + 1}</td>
-        <td>${esc(it.name)}</td>
-        <td class="num">${esc(qty)}</td>
-        <td class="num">${esc(rate)}</td>
-        <td class="num">${money(it.amount)}</td>
-      </tr>`;
-    })
-    .join('\n');
-
+  const items = bill.items.filter((it) => it.kind !== 'charge');
   const charges = bill.items.filter((it) => it.kind === 'charge');
   const goodsSum = goodsTotal(bill.items);
+  const chargesSum = chargesTotal(bill.items);
 
-  // Group charges by code for market format
-  const chargeRows = charges
-    .map((it) => `<tr><td>${esc(it.name)}</td><td class="num">${money(it.amount)}</td></tr>`)
-    .join('\n');
+  const itemRows = items.map((it, i) => `<tr>
+    <td style="text-align:center">${i + 1}</td>
+    <td>${esc(it.name)}</td>
+    <td class="num">${esc(it.qty || '—')}</td>
+    <td class="num">${esc(it.rate || '—')}</td>
+    <td class="num">${money(it.amount)}</td>
+  </tr>`).join('\n');
 
-  const chargesTable = charges.length > 0
-    ? `<div class="charges-section">
-        <table>
-          <thead><tr><th>Charges / Commission</th><th class="num">Amount</th></tr></thead>
-          <tbody>
-            ${chargeRows}
-          </tbody>
-        </table>
-      </div>`
-    : '';
+  const chargesBox = charges.length > 0 ? `
+    <div class="mandi-charges-box">
+      <div class="mandi-charges-title">Charges / Commission</div>
+      ${charges.map((it) => `<div class="mandi-charge-row"><span>${esc(it.name)}</span><span>${money(it.amount)}</span></div>`).join('\n')}
+      <div class="mandi-charges-total"><span>Total Charges</span><span>${money(chargesSum)}</span></div>
+    </div>` : '';
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Bill ${esc(bill.billNo || '')}</title>
-  <style>${BASE_STYLES}</style></head><body>
-  <div class="bill">
-    ${shopHeader(shop)}
-    <div class="bill-title">Market Bill</div>
-    ${metaBlock(bill)}
-    ${marketInfo}
-    <table>
-      <thead>
-        <tr><th>#</th><th>Item</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr>
-      </thead>
-      <tbody>
-        ${itemRows}
-      </tbody>
-      <tfoot>
-        <tr class="total-row"><td colspan="4">Goods Total</td><td class="num">${money(goodsSum)}</td></tr>
-      </tfoot>
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Market Bill ${esc(bill.billNo || '')}</title>
+  <style>${MARKET_STYLES}</style></head><body>
+  <div class="mandi">
+    <div class="mandi-header">
+      <div class="mandi-shop">${esc(shop.shopName || 'RVC Vegetable Shop')}</div>
+      ${shop.shopAddress ? `<div class="mandi-addr">${esc(shop.shopAddress)}</div>` : ''}
+      ${shop.shopPhone ? `<div class="mandi-phone">${esc(shop.shopPhone)}</div>` : ''}
+    </div>
+    <div class="mandi-title">MARKET BILL</div>
+    <div class="mandi-meta">
+      <div><strong>Customer:</strong> ${esc(bill.customerName)}</div>
+      <div style="text-align:right"><strong>Bill No:</strong> ${esc(bill.billNo || '—')} &nbsp; <strong>Date:</strong> ${fmtDate(bill.date)}</div>
+    </div>
+    <div class="mandi-info-box">
+      <div class="mandi-info-row">
+        <div class="mandi-info-item"><div class="mandi-info-label">Market Yard</div><div class="mandi-info-val">${esc(yardName)}</div></div>
+        <div class="mandi-info-item"><div class="mandi-info-label">Market Type</div><div class="mandi-info-val">${esc(m.marketType || '—')}</div></div>
+        <div class="mandi-info-item"><div class="mandi-info-label">Seller</div><div class="mandi-info-val">${esc(m.sellerName || '—')}</div></div>
+        <div class="mandi-info-item"><div class="mandi-info-label">Lot No</div><div class="mandi-info-val">${esc(m.lotNo || '—')}</div></div>
+        <div class="mandi-info-item"><div class="mandi-info-label">Vehicle No</div><div class="mandi-info-val">${esc(m.vehicleNo || '—')}</div></div>
+      </div>
+    </div>
+    <table class="mandi-table">
+      <thead><tr><th style="width:30px">#</th><th>Item</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead>
+      <tbody>${itemRows}</tbody>
+      <tfoot><tr class="mandi-goods-total"><td colspan="4">Goods Total</td><td class="num">${money(goodsSum)}</td></tr></tfoot>
     </table>
-    ${chargesTable}
-    <div class="grand-total">Bill Total: ${money(bill.total)}</div>
-    ${signatureBlock().replace('Shop Name', esc(shop.shopName || 'Shop'))}
-    ${footerBlock(shop)}
+    ${chargesBox}
+    <div class="mandi-bill-total"><span>BILL TOTAL</span><span>${money(bill.total)}</span></div>
+    <div class="mandi-sign">
+      <div class="mandi-sig-line">Customer Signature</div>
+      <div class="mandi-sig-line">For ${esc(shop.shopName || 'Shop')}</div>
+    </div>
+    <div class="mandi-footer">Market bill · ${new Date().toLocaleString('en-IN')}</div>
   </div>
-  ${printScript()}
+  ${printScript('Print Market Bill')}
   </body></html>`;
 }
 
@@ -318,11 +348,63 @@ export function renderBillHtml(bill: BillPrintData, shop: ShopProfile, format: B
   }
 }
 
+// Print multiple bills in one window (each on its own page)
+export function renderBillsHtml(bills: BillPrintData[], shop: ShopProfile, format: BillFormat): string {
+  if (bills.length === 0) {
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>No bills</title></head><body><p style="text-align:center;padding:40px;font-family:sans-serif">No bills found for this customer.</p></body></html>`;
+  }
+
+  // Extract just the <style> and <body> content from each bill
+  const pages = bills.map((bill, i) => {
+    const html = renderBillHtml(bill, shop, format);
+    // Extract style content
+    const styleMatch = html.match(/<style>([\s\S]*?)<\/style>/);
+    const styleContent = styleMatch ? styleMatch[1] : '';
+    // Extract body content (between <body> and </body>)
+    const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/);
+    const bodyContent = bodyMatch ? bodyMatch[1] : '';
+    // Wrap each bill in a div with its own scoped style and page break
+    return `<div class="bill-page" style="page-break-after: ${i < bills.length - 1 ? 'always' : 'auto'}">
+      <style scoped>${styleContent}</style>
+      ${bodyContent}
+    </div>`;
+  }).join('\n');
+
+  // Combine all styles at the top, then all pages
+  const allStyles = bills.map((bill) => {
+    const html = renderBillHtml(bill, shop, format);
+    const styleMatch = html.match(/<style>([\s\S]*?)<\/style>/);
+    return styleMatch ? styleMatch[1] : '';
+  }).join('\n');
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Bills - ${esc(bills[0].customerName)}</title>
+  <style>${allStyles}
+    .bill-page { min-height: 100vh; }
+    .no-print { display: none; }
+    @media print { .bill-page { page-break-after: always; } .bill-page:last-child { page-break-after: auto; } }
+  </style></head><body>
+  ${pages}
+  <button class="print-btn no-print" style="display:block;margin:16px auto 0;padding:8px 24px;background:#333;color:#fff;border:none;border-radius:4px;font-size:14px;cursor:pointer" onclick="window.print()">Print All</button>
+  <script>window.onload=function(){setTimeout(function(){window.print()},300)}</script>
+  </body></html>`;
+}
+
 export function printBill(bill: BillPrintData, shop: ShopProfile, format: BillFormat): void {
   const html = renderBillHtml(bill, shop, format);
   const win = window.open('', '_blank');
   if (!win) {
     alert('Please allow popups to print the bill');
+    return;
+  }
+  win.document.write(html);
+  win.document.close();
+}
+
+export function printBills(bills: BillPrintData[], shop: ShopProfile, format: BillFormat): void {
+  const html = renderBillsHtml(bills, shop, format);
+  const win = window.open('', '_blank');
+  if (!win) {
+    alert('Please allow popups to print bills');
     return;
   }
   win.document.write(html);

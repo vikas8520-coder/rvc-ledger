@@ -16,7 +16,7 @@ import {
   statementText,
   waLink,
 } from '@/lib/statement';
-import { printBill, txnToBillData } from '@/lib/billPrint';
+import { printBill, printBills, txnToBillData } from '@/lib/billPrint';
 
 export default function CustomerLedgerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -147,13 +147,14 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
       win.document.write(html);
       win.document.close();
     } else {
-      // Print all bills in selected format — one bill per page
+      // Print ALL bills in selected format — each bill on its own page
       const bills = customer.txns.filter((tx) => tx.type === 'bill');
-      if (bills.length === 0) return;
-      // For now, print the first bill in selected format
-      // (user can print individual bills from the ledger table)
-      const bill = bills[0];
-      printBill(txnToBillData(bill, customer.name), shopSettings, format);
+      if (bills.length === 0) {
+        alert('No bills found for this customer');
+        return;
+      }
+      const billData = bills.map((b) => txnToBillData(b, customer.name));
+      printBills(billData, shopSettings, format);
     }
   };
 
