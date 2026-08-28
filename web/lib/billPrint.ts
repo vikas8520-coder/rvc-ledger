@@ -340,3 +340,120 @@ export function txnToBillData(txn: TxnView, customerName: string): BillPrintData
     market: txn.market,
   };
 }
+
+// ============================================================
+// CREDIT LEDGER PRINT — matches RVC "All" credit ledger format
+// Two-column dot-matrix style: account code, name, amount, grand total
+// ============================================================
+
+export interface CreditLedgerEntry {
+  code: string;      // account code or "OB"
+  name: string;      // customer name (uppercase)
+  phone?: string;    // optional phone on its own line
+  amount: number;    // outstanding amount
+  isCredit?: boolean; // "Cr" — credit in your favor
+}
+
+const LEDGER_STYLES = `
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Courier New', 'Courier', monospace; color: #000; line-height: 1.4; padding: 15px; font-size: 11px; }
+  .ledger { max-width: 800px; margin: 0 auto; }
+  .ledger-header { text-align: center; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 6px; }
+  .ledger-title { font-size: 16px; font-weight: bold; letter-spacing: 2px; }
+  .ledger-sub { font-size: 11px; margin-top: 2px; }
+  .ledger-date { font-size: 11px; }
+  .columns { display: flex; gap: 20px; margin-top: 8px; }
+  .column { flex: 1; }
+  .entry { white-space: pre; font-size: 11px; line-height: 1.5; }
+  .entry-code { display: inline-block; width: 45px; }
+  .entry-name { display: inline-block; }
+  .entry-dots { color: #999; }
+  .entry-amt { float: right; font-weight: bold; }
+  .entry-phone { padding-left: 50px; color: #444; font-size: 10px; }
+  .entry-cr { color: #000; font-style: italic; }
+  .total-section { margin-top: 12px; text-align: right; }
+  .total-line { border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 6px 0; font-size: 14px; font-weight: bold; }
+  .total-label { display: inline-block; min-width: 200px; text-align: right; }
+  .page-footer { text-align: center; font-size: 10px; color: #888; margin-top: 15px; padding-top: 8px; border-top: 1px dashed #ccc; }
+  .print-btn { display: block; margin: 15px auto 0; padding: 6px 20px; background: #8b2e2e; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; }
+  .print-btn:hover { background: #6b2222; }
+  @media print {
+    body { padding: 0; font-size: 10px; }
+    .ledger { max-width: 100%; }
+    .no-print { display: none; }
+    .columns { gap: 15px; }
+  }
+`;
+
+function ledgerEntryHtml(entry: CreditLedgerEntry): string {
+  const code = (entry.code || '').padEnd(4).slice(0, 4);
+  const amtStr = entry.isCredit ? `${entry.amount} Cr` : String(entry.amount);
+  const phoneLine = entry.phone ? `<div class="entry-phone">${esc(entry.phone)}</div>` : '';
+  return `<div class="entry">
+    <span class="entry-code">${esc(code)}</span>
+    <span class="entry-name">${esc(entry.name.toUpperCase())}</span>
+    <span class="entry-dots"> ${'.'.repeat(4)} </span>
+    <span class="entry-amt ${entry.isCredit ? 'entry-cr' : ''}">${esc(amtStr)}</span>
+    ${phoneLine}
+  </div>`;
+}
+
+export function renderCreditLedgerHtml(
+  entries: CreditLedgerEntry[],
+  shop: ShopProfile,
+  date: string,
+  title = 'All'
+): string {
+  const total = entries.reduce((s, e) => s + (e.isCredit ? -e.amount : e.amount), 0);
+  const totalStr = total.toLocaleString('en-IN');
+
+  // Split entries into two columns
+  const mid = Math.ceil(entries.length / 2);
+  const leftCol = entries.slice(0, mid);
+  const rightCol = entries.slice(mid);
+
+  const leftHtml = leftCol.map(ledgerEntryHtml).join('\n');
+  const rightHtml = rightCol.map(ledgerEntryHtml).join('\n');
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(shop.shopName || 'RVC')} - ${esc(title)}</title>
+  <style>${LEDGER_STYLES}</style></head><body>
+  <div class="ledger">
+    <div class="ledger-header">
+      <div class="ledger-title">${esc((shop.shopName || 'RVC').toUpperCase())}</div>
+      <div class="ledger-sub">${esc(title.toUpperCase())}</div>
+      <div class="ledger-date">Date: ${esc(date)}</div>
+    </div>
+    <div class="columns">
+      <div class="column">${leftHtml}</div>
+      <div class="column">${rightHtml}</div>
+    </div>
+    <div class="total-section">
+      <div class="total-line">
+        <span class="total-label">Total :</span> ${esc(totalStr)}
+      </div>
+    </div>
+    <div class="page-footer no-print">
+      ${esc(shop.shopName || 'RVC Ledger')} · ${entries.length} customers · Generated ${new Date().toLocaleString('en-IN')}
+    </div>
+  </div>
+  <button class="print-btn no-print" onclick="window.print()">Print Ledger</button>
+  <script>window.onload=function(){setTimeout(function(){window.print()},300)}</script>
+  </body></html>`;
+}
+
+export function printCreditLedger(
+  entries: CreditLedgerEntry[],
+  shop: ShopProfile,
+  date?: string,
+  title?: string
+): void {
+  const d = date || new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: '2-digit' }).replace(/\//g, '-');
+  const html = renderCreditLedgerHtml(entries, shop, d, title);
+  const win = window.open('', '_blank');
+  if (!win) {
+    alert('Please allow popups to print the ledger');
+    return;
+  }
+  win.document.write(html);
+  win.document.close();
+}

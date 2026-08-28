@@ -1,18 +1,41 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useI18n } from '../components/I18nProvider';
 import { useDashboard } from '../components/useDashboard';
 import AgingBadge from '../components/AgingBadge';
 import { fmt } from '@/lib/format';
 import { computeAging, customersCsv, downloadCsv } from '@/lib/statement';
+import { printCreditLedger, CreditLedgerEntry, ShopProfile } from '@/lib/billPrint';
 
 export default function CustomersPage() {
   const { t } = useI18n();
   const { customers, loading } = useDashboard();
   const [q, setQ] = useState('');
   const [sort, setSort] = useState<'due' | 'name' | 'oldest'>('due');
+  const [shopSettings, setShopSettings] = useState<ShopProfile>({});
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((r) => r.json())
+      .then((d) => setShopSettings(d.settings || {}))
+      .catch(() => {});
+  }, []);
+
+  const printLedger = () => {
+    const entries: CreditLedgerEntry[] = customers
+      .filter((c) => c.due > 0)
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((c, i) => ({
+        code: String(i + 1),
+        name: c.name,
+        phone: c.phone || undefined,
+        amount: Math.round(c.due),
+        isCredit: false,
+      }));
+    printCreditLedger(entries, shopSettings, undefined, 'All');
+  };
 
   const list = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -56,6 +79,13 @@ export default function CustomersPage() {
             className="rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-3 py-1.5 text-sm"
           >
             {t('exportCsv')}
+          </button>
+          <button
+            onClick={printLedger}
+            disabled={customers.filter((c) => c.due > 0).length === 0}
+            className="rounded-md bg-[var(--bg-primary)] px-3 py-1.5 text-sm text-[var(--text-on-primary)] disabled:opacity-50"
+          >
+            {t('printCreditLedger')}
           </button>
         </div>
       </div>

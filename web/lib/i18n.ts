@@ -246,6 +246,9 @@ const dictionary: Record<Lang, Record<string, string>> = {
     billFormatMarket: 'Market yard (with charges)',
     printBill: 'Print bill',
     printThisBill: 'Print this bill',
+    printCreditLedger: 'Print credit ledger',
+    creditLedger: 'Credit ledger',
+    creditLedgerHelp: 'Print all customers with outstanding balances in ledger format.',
   },
   te: {
     appTitle: 'RVC లెడ్గర్',
@@ -466,6 +469,9 @@ const dictionary: Record<Lang, Record<string, string>> = {
     billFormatMarket: 'మార్కెట్ యార్డ్ (ఛార్జీలతో)',
     printBill: 'బిల్ ప్రింట్',
     printThisBill: 'ఈ బిల్ ప్రింట్',
+    printCreditLedger: 'క్రెడిట్ లెడ్జర్ ప్రింట్',
+    creditLedger: 'క్రెడిట్ లెడ్జర్',
+    creditLedgerHelp: 'అన్ని కస్టమర్‌ల బాకీలను లెడ్జర్ ఫార్మాట్‌లో ప్రింట్ చేయండి.',
   },
   hi: {
     appTitle: 'RVC लेजर',
@@ -686,6 +692,9 @@ const dictionary: Record<Lang, Record<string, string>> = {
     billFormatMarket: 'मार्केट यार्ड (चार्ज के साथ)',
     printBill: 'बिल प्रिंट करें',
     printThisBill: 'यह बिल प्रिंट करें',
+    printCreditLedger: 'क्रेडिट लेजर प्रिंट करें',
+    creditLedger: 'क्रेडिट लेजर',
+    creditLedgerHelp: 'सभी ग्राहकों की बकाया राशि लेजर प्रारूप में प्रिंट करें।',
   },
   all: {},
 };
