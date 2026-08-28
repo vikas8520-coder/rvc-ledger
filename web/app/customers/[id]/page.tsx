@@ -16,7 +16,7 @@ import {
   statementText,
   waLink,
 } from '@/lib/statement';
-import { printBill, printBills, txnToBillData } from '@/lib/billPrint';
+import { printBill, printBills, printCreditLedger, txnToBillData, CreditLedgerEntry } from '@/lib/billPrint';
 
 export default function CustomerLedgerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -146,6 +146,24 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
       </body></html>`;
       win.document.write(html);
       win.document.close();
+    } else if (format === 'market') {
+      // Credit ledger format — all customers with outstanding balances
+      // Two-column: account code + name + amount, grand total (NO bill items)
+      const entries: CreditLedgerEntry[] = customers
+        .filter((c) => c.due > 0)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((c, i) => ({
+          code: String(i + 1),
+          name: c.name,
+          phone: c.phone || undefined,
+          amount: Math.round(c.due),
+          isCredit: false,
+        }));
+      if (entries.length === 0) {
+        alert('No customers with outstanding balances');
+        return;
+      }
+      printCreditLedger(entries, shopSettings, undefined, 'All');
     } else {
       // Print ALL bills in selected format — each bill on its own page
       const bills = customer.txns.filter((tx) => tx.type === 'bill');
@@ -254,7 +272,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
                   onClick={() => printStatement('market')}
                   className="whitespace-nowrap rounded px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]"
                 >
-                  {t('billFormatMarket')}
+                  {t('printCreditLedger')} (all customers, no items)
                 </button>
               </span>
             )}
