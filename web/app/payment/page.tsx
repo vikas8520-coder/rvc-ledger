@@ -18,6 +18,7 @@ export default function PaymentPage() {
   const [date, setDate] = useState(today());
   const [amount, setAmount] = useState('');
   const [notes, setNotes] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi' | 'credit'>('cash');
   const [status, setStatus] = useState<'idle' | 'saving' | 'done' | 'error'>('idle');
   const [error, setError] = useState('');
 
@@ -39,7 +40,7 @@ export default function PaymentPage() {
       const res = await fetch('/api/payments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerName: customer, date, amount: Number(amount), notes }),
+        body: JSON.stringify({ customerName: customer, date, amount: Number(amount), notes, paymentMethod }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Save failed');
@@ -94,11 +95,24 @@ export default function PaymentPage() {
         </div>
 
         <div>
+          <label className="text-sm text-[var(--text-muted)]">{t('paymentMethod')}</label>
+          <select
+            value={paymentMethod}
+            onChange={(e) => setPaymentMethod(e.target.value as 'cash' | 'upi' | 'credit')}
+            className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2"
+          >
+            <option value="cash">{t('cash')}</option>
+            <option value="upi">{t('upi')}</option>
+            <option value="credit">{t('credit')}</option>
+          </select>
+        </div>
+
+        <div>
           <label className="text-sm text-[var(--text-muted)]">{t('notes')}</label>
           <input
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="e.g. Cash / UPI"
+            placeholder={t('notes')}
             className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2"
           />
         </div>

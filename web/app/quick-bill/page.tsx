@@ -36,6 +36,7 @@ export default function QuickBillPage() {
   const [error, setError] = useState('');
   const [savedBill, setSavedBill] = useState<{ customerName: string; date: string; billNo: string; total: number; items: BillRow[] } | null>(null);
   const [shopSettings, setShopSettings] = useState<ShopProfile>({});
+  const [customerData, setCustomerData] = useState<{ name: string; due: number; creditLimit: number | null }[]>([]);
 
   useEffect(() => {
     Promise.all([
@@ -48,6 +49,7 @@ export default function QuickBillPage() {
         setCatalog(cat.items || []);
         setStock(stk.stock || []);
         setCustomers((dash.customers || []).map((c: any) => c.name));
+        setCustomerData((dash.customers || []).map((c: any) => ({ name: c.name, due: c.due, creditLimit: c.creditLimit ?? null })));
         setShopSettings(settings.settings || {});
       })
       .catch(() => {})
@@ -86,6 +88,14 @@ export default function QuickBillPage() {
   };
 
   const total = rows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+
+  // Credit limit check
+  const selectedCustomer = customerData.find((c) => c.name.toLowerCase() === customerName.trim().toLowerCase());
+  const creditWarning = selectedCustomer && selectedCustomer.creditLimit && selectedCustomer.creditLimit > 0
+    ? (selectedCustomer.due + total > selectedCustomer.creditLimit
+      ? `${t('creditLimitWarning')}: ${fmt(selectedCustomer.creditLimit)} · ${t('currentDue')}: ${fmt(selectedCustomer.due)} · ${t('afterThisBill')}: ${fmt(selectedCustomer.due + total)}`
+      : null)
+    : null;
 
   const save = async () => {
     setStatus('saving');
@@ -232,6 +242,12 @@ export default function QuickBillPage() {
               />
             </div>
           </section>
+
+          {creditWarning && (
+            <div className="rounded-lg bg-[var(--bg-warning)] bg-opacity-20 border border-[var(--bg-warning)] px-3 py-2">
+              <p className="text-xs text-[#c4622d] font-medium">⚠ {creditWarning}</p>
+            </div>
+          )}
 
           <section className="rounded-lg bg-[var(--bg-card)] p-3">
             <p className="mb-2 text-xs font-semibold text-[var(--text-muted)]">{t('addItemToBill')}</p>

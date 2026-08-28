@@ -147,3 +147,55 @@ export interface TxnView {
   items: TxnItemView[];
   market?: Partial<MarketMeta>;
 }
+
+/* ---- Daily operations ---- */
+
+export interface DailySummary {
+  date: string;
+  /* Purchases (from farmers) */
+  purchased: number;
+  purchaseCount: number;
+  /* Sales (to retailers) */
+  sold: number;
+  saleCount: number;
+  /* Payments collected from customers */
+  collected: number;
+  /* Payments made to suppliers */
+  supplierPaid: number;
+  /* Expenses */
+  expenses: number;
+  /* Wastage cost */
+  wastageCost: number;
+  /* Computed */
+  netCash: number; // collected - supplierPaid - expenses
+  estProfit: number; // sold - purchased (rough, same-day)
+}
+
+export interface ItemRateEntry {
+  itemName: string;
+  time: string; // HH:MM
+  rate: number;
+  qty: string | null;
+  customerName?: string;
+  billNo?: string | null;
+}
+
+export interface ItemRateHistory {
+  itemName: string;
+  entries: ItemRateEntry[];
+  firstRate: number | null;
+  lastRate: number | null;
+  minRate: number | null;
+  maxRate: number | null;
+  trend: 'up' | 'down' | 'flat' | 'mixed';
+}
+
+export interface OverdueCustomer {
+  id: string;
+  name: string;
+  phone: string | null;
+  due: number;
+  oldestDays: number;
+  bucket: 'current' | 'due7' | 'due15' | 'due30';
+  oldestDate: string | null;
+}

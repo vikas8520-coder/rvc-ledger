@@ -8,18 +8,23 @@ import TxnCard from './components/TxnCard';
 import AgingBadge from './components/AgingBadge';
 import { fmt, thisMonthKey } from '@/lib/format';
 import { computeAging } from '@/lib/statement';
-import { StockLevel } from '@/lib/types';
+import { StockLevel, DailySummary } from '@/lib/types';
 
 export default function Home() {
   const { t } = useI18n();
   const { customers, configured, loading } = useDashboard();
   const [stock, setStock] = useState<StockLevel[]>([]);
+  const [daily, setDaily] = useState<DailySummary | null>(null);
 
   useEffect(() => {
     fetch('/api/stock')
       .then((r) => r.json())
       .then((d) => setStock(d.stock || []))
       .catch(() => setStock([]));
+    fetch('/api/daily-summary')
+      .then((r) => r.json())
+      .then((d) => setDaily(d))
+      .catch(() => setDaily(null));
   }, []);
 
   const totalBilled = customers.reduce((s, c) => s + c.billed, 0);
@@ -56,6 +61,22 @@ export default function Home() {
   return (
     <div className="space-y-5">
       <p className="text-xs text-[var(--text-faint)]">{configured ? t('liveFrom') : 'Preview from local CSV'}</p>
+
+      {/* Today's snapshot */}
+      {daily && (daily.sold > 0 || daily.purchased > 0 || daily.collected > 0) && (
+        <section className="rounded-lg bg-[var(--bg-card)] p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-sm font-semibold">{t('dailyOps')} — {today}</h2>
+            <Link href="/daily" className="text-xs text-[var(--bg-primary)] hover:underline">{t('dailyOps')} →</Link>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <MiniStat label={t('soldToday')} value={fmt(daily.sold)} />
+            <MiniStat label={t('purchasedToday')} value={fmt(daily.purchased)} />
+            <MiniStat label={t('collectedToday')} value={fmt(daily.collected)} accent="green" />
+            <MiniStat label={t('estProfit')} value={fmt(daily.estProfit)} accent={daily.estProfit >= 0 ? 'green' : 'red'} />
+          </div>
+        </section>
+      )}
 
       <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Stat label={t('due')} value={fmt(totalDue)} accent />
@@ -150,6 +171,16 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
     <div className="rounded-lg bg-[var(--bg-card)] px-3 py-2.5">
       <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">{label}</p>
       <p className={`text-lg font-bold sm:text-xl ${accent ? 'text-[var(--bg-primary)]' : ''}`}>{value}</p>
+    </div>
+  );
+}
+
+function MiniStat({ label, value, accent }: { label: string; value: string; accent?: 'green' | 'red' }) {
+  const colorClass = accent === 'green' ? 'text-[var(--bg-success)]' : accent === 'red' ? 'text-[var(--bg-primary)]' : '';
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">{label}</p>
+      <p className={`text-base font-bold ${colorClass}`}>{value}</p>
     </div>
   );
 }

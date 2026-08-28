@@ -62,6 +62,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <Link href="/" className={`rounded-md px-3 py-1.5 ${tabClass('/', true)}`}>
                   {t('navOverview')}
                 </Link>
+                <Link href="/daily" className={`rounded-md px-3 py-1.5 ${tabClass('/daily')}`}>
+                  {t('dailyOps')}
+                </Link>
+                <Link href="/rates" className={`rounded-md px-3 py-1.5 ${tabClass('/rates')}`}>
+                  {t('rateSheet')}
+                </Link>
                 <Link href="/customers" className={`rounded-md px-3 py-1.5 ${tabClass('/customers')}`}>
                   {t('navCustomers')}
                 </Link>
@@ -167,6 +173,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <nav className="flex gap-1 text-sm">
               <Link href="/" className={`rounded-md px-3 py-1.5 ${tabClass('/', true)}`}>
                 {t('navOverview')}
+              </Link>
+              <Link href="/daily" className={`rounded-md px-3 py-1.5 ${tabClass('/daily')}`}>
+                {t('dailyOps')}
+              </Link>
+              <Link href="/rates" className={`rounded-md px-3 py-1.5 ${tabClass('/rates')}`}>
+                {t('rateSheet')}
               </Link>
               <Link href="/customers" className={`rounded-md px-3 py-1.5 ${tabClass('/customers')}`}>
                 {t('navCustomers')}

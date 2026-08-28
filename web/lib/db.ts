@@ -1,5 +1,5 @@
 import { neon, NeonQueryFunction } from '@neondatabase/serverless';
-import { Customer, BillData, BillItem, TxnView, PurchaseData, PurchaseView, Supplier, WastageEntry, CatalogItem, StockLevel, ExpenseEntry } from './types';
+import { Customer, BillData, BillItem, TxnView, PurchaseData, PurchaseView, Supplier, WastageEntry, CatalogItem, StockLevel, ExpenseEntry, DailySummary, ItemRateHistory, ItemRateEntry, OverdueCustomer } from './types';
 import { decodeMarketNotes, encodeMarketNotes, detectCharge, parseDisplay, type ChargeKind } from './market';
 import seed from '../data/seed.json';
 
@@ -115,6 +115,7 @@ async function ensureSchema() {
     )
   `;
   await sql`ALTER TABLE customers ADD COLUMN IF NOT EXISTS credit_limit NUMERIC(12,2)`;
+  await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'credit'`;
   await sql`
     CREATE TABLE IF NOT EXISTS app_settings (
       key TEXT PRIMARY KEY,
@@ -484,7 +485,7 @@ export async function saveBill(shopId: string, bill: BillData): Promise<void> {
   }
 }
 
-export async function recordPayment(shopId: string, customerName: string, date: string, amount: number, notes: string): Promise<void> {
+export async function recordPayment(shopId: string, customerName: string, date: string, amount: number, notes: string, paymentMethod: string = 'credit'): Promise<void> {
   await ensureSchema();
   const sql = getSql();
 
@@ -498,8 +499,8 @@ export async function recordPayment(shopId: string, customerName: string, date: 
   if (!customer) throw new Error('Could not upsert customer');
 
   await sql`
-    INSERT INTO transactions (customer_id, date, bill_no, bill_amount, amount_paid, notes, image_path, shop_id)
-    VALUES (${customer.id}, ${date}, NULL, 0, ${amount}, ${notes || 'Payment received'}, NULL, ${shopId})
+    INSERT INTO transactions (customer_id, date, bill_no, bill_amount, amount_paid, notes, image_path, shop_id, payment_method)
+    VALUES (${customer.id}, ${date}, NULL, 0, ${amount}, ${notes || 'Payment received'}, NULL, ${shopId}, ${paymentMethod})
   `;
 }
 
@@ -1155,4 +1156,192 @@ export async function clearAllData(shopId: string): Promise<{ deleted: number }>
   await sql`DELETE FROM expenses WHERE shop_id = ${shopId}`;
   // Keep customers and suppliers (they are master data)
   return { deleted };
+}
+
+/* ---- Daily operations summary ---- */
+
+export async function getDailySummary(shopId: string, date: string): Promise<DailySummary> {
+  if (!isDbConfigured()) {
+    return { date, purchased: 0, purchaseCount: 0, sold: 0, saleCount: 0, collected: 0, supplierPaid: 0, expenses: 0, wastageCost: 0, netCash: 0, estProfit: 0 };
+  }
+  await ensureSchema();
+  const sql = getSql();
+
+  // Purchases today
+  const purchases = await sql`SELECT id, total FROM purchases WHERE date = ${date} AND shop_id = ${shopId}`;
+  const purchased = (purchases as any[]).reduce((s, p) => s + Number(p.total), 0);
+
+  // Sales + collections today (from transactions)
+  const txns = await sql`SELECT bill_amount, amount_paid FROM transactions WHERE date = ${date} AND shop_id = ${shopId}`;
+  const sold = (txns as any[]).reduce((s, t) => s + (Number(t.bill_amount) > 0 ? Number(t.bill_amount) : 0), 0);
+  const saleCount = (txns as any[]).filter((t) => Number(t.bill_amount) > 0).length;
+  const collected = (txns as any[]).reduce((s, t) => s + (Number(t.amount_paid) > 0 ? Number(t.amount_paid) : 0), 0);
+
+  // Supplier payments today
+  const supPayments = await sql`SELECT amount FROM supplier_payments WHERE date = ${date} AND shop_id = ${shopId}`;
+  const supplierPaid = (supPayments as any[]).reduce((s, p) => s + Number(p.amount), 0);
+
+  // Expenses today
+  const expenses = await sql`SELECT amount FROM expenses WHERE date = ${date} AND shop_id = ${shopId}`;
+  const expensesTotal = (expenses as any[]).reduce((s, e) => s + Number(e.amount), 0);
+
+  // Wastage today
+  const wastage = await sql`SELECT est_cost FROM wastage WHERE date = ${date} AND shop_id = ${shopId}`;
+  const wastageCost = (wastage as any[]).reduce((s, w) => s + Number(w.est_cost), 0);
+
+  const netCash = collected - supplierPaid - expensesTotal;
+  const estProfit = sold - purchased;
+
+  return {
+    date,
+    purchased,
+    purchaseCount: purchases.length,
+    sold,
+    saleCount,
+    collected,
+    supplierPaid,
+    expenses: expensesTotal,
+    wastageCost,
+    netCash,
+    estProfit,
+  };
+}
+
+/* ---- Item rate history for a date (price tracking through the day) ---- */
+
+export async function getItemRateHistory(shopId: string, date: string): Promise<ItemRateHistory[]> {
+  if (!isDbConfigured()) return [];
+  await ensureSchema();
+  const sql = getSql();
+
+  // Get all bill items for the given date, with transaction created_at for time
+  const rows = await sql`
+    SELECT bi.confirmed_name as name, bi.qty, bi.rate, bi.amount, t.bill_no, t.created_at, c.name as customer_name
+    FROM bill_items bi
+    JOIN transactions t ON bi.transaction_id = t.id
+    JOIN customers c ON t.customer_id = c.id
+    WHERE t.date = ${date}
+      AND (bi.kind = 'item' OR bi.kind IS NULL)
+      AND bi.shop_id = ${shopId}
+    ORDER BY t.created_at ASC
+  `;
+
+  const { parseRate, itemKey } = await import('./units');
+
+  const byItem = new Map<string, ItemRateEntry[]>();
+  const nameMap = new Map<string, string>();
+
+  for (const r of rows as any[]) {
+    const key = itemKey(r.name);
+    if (!key) continue;
+    const rate = parseRate(r.rate);
+    if (!rate || rate.value <= 0) continue;
+
+    const createdAt = r.created_at;
+    let timeStr = '';
+    if (createdAt) {
+      const d = new Date(createdAt);
+      timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
+
+    const entry: ItemRateEntry = {
+      itemName: r.name,
+      time: timeStr,
+      rate: rate.value,
+      qty: (r.qty as string) || null,
+      customerName: r.customer_name,
+      billNo: (r.bill_no as string) || null,
+    };
+
+    const arr = byItem.get(key) || [];
+    arr.push(entry);
+    byItem.set(key, arr);
+    nameMap.set(key, r.name);
+  }
+
+  const out: ItemRateHistory[] = [];
+  for (const [key, entries] of byItem) {
+    const rates = entries.map((e) => e.rate);
+    const firstRate = rates[0] ?? null;
+    const lastRate = rates[rates.length - 1] ?? null;
+    const minRate = rates.length > 0 ? Math.min(...rates) : null;
+    const maxRate = rates.length > 0 ? Math.max(...rates) : null;
+
+    let trend: 'up' | 'down' | 'flat' | 'mixed' = 'flat';
+    if (entries.length >= 2) {
+      if (firstRate! > lastRate!) trend = 'down';
+      else if (firstRate! < lastRate!) trend = 'up';
+      else {
+        // Check if rates are all the same or mixed
+        const allSame = rates.every((r) => r === rates[0]);
+        trend = allSame ? 'flat' : 'mixed';
+      }
+    }
+
+    out.push({
+      itemName: nameMap.get(key) || key,
+      entries,
+      firstRate,
+      lastRate,
+      minRate,
+      maxRate,
+      trend,
+    });
+  }
+
+  return out.sort((a, b) => a.itemName.localeCompare(b.itemName));
+}
+
+/* ---- Overdue customers for batch reminders ---- */
+
+export async function getOverdueCustomers(shopId: string, minDays = 1): Promise<OverdueCustomer[]> {
+  if (!isDbConfigured()) return [];
+  await ensureSchema();
+  const sql = getSql();
+
+  const customers = await getCustomers(shopId);
+  const now = new Date();
+
+  const out: OverdueCustomer[] = [];
+  for (const c of customers) {
+    if (c.due <= 0.5) continue;
+
+    // Compute aging
+    const bills = c.txns
+      .filter((t) => t.type === 'bill')
+      .map((t) => ({ date: t.date, remaining: t.amount }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    let pool = c.txns.filter((t) => t.type === 'payment').reduce((s, t) => s + t.amount, 0);
+    for (const bill of bills) {
+      if (pool <= 0) break;
+      const used = Math.min(pool, bill.remaining);
+      bill.remaining -= used;
+      pool -= used;
+    }
+
+    const oldest = bills.find((b) => b.remaining > 0.009);
+    if (!oldest) continue;
+
+    const [y, m, d] = oldest.date.split('-').map(Number);
+    if (!y || !m || !d) continue;
+    const start = new Date(y, m - 1, d).getTime();
+    const days = Math.max(0, Math.floor((now.getTime() - start) / 86400000));
+
+    if (days < minDays) continue;
+
+    const bucket = days >= 30 ? 'due30' : days >= 15 ? 'due15' : days >= 7 ? 'due7' : 'current';
+
+    out.push({
+      id: c.id,
+      name: c.name,
+      phone: c.phone ?? null,
+      due: c.due,
+      oldestDays: days,
+      bucket,
+      oldestDate: oldest.date,
+    });
+  }
+
+  return out.sort((a, b) => b.oldestDays - a.oldestDays);
 }
