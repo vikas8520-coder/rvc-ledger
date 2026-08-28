@@ -62,7 +62,6 @@ export default function UploadPage() {
   const [shopSettings, setShopSettings] = useState<ShopProfile>({});
   const [savedItems, setSavedItems] = useState<BillItem[]>([]);
   const [learnedAliases, setLearnedAliases] = useState<Record<string, string>>({});
-  const [aliasSavedIdx, setAliasSavedIdx] = useState<number | null>(null);
 
   useEffect(() => {
     fetch('/api/customers')
@@ -218,29 +217,6 @@ export default function UploadPage() {
     recalc(next);
   };
 
-  const saveItemAlias = async (idx: number) => {
-    const it = items[idx];
-    if (!it || !it.raw.trim() || !it.confirmed.trim()) return;
-    const raw = it.raw.trim();
-    const confirmed = it.confirmed.trim();
-    // Extract the English meaning from "Name (English)" format
-    const meaning = confirmed.match(/\(([^)]+)\)$/)?.[1]?.trim() || confirmed;
-    try {
-      const res = await fetch('/api/catalog/aliases', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ alias: raw, itemName: meaning }),
-      });
-      if (res.ok) {
-        const newAliases = { ...learnedAliases, [raw.toLowerCase()]: meaning };
-        setLearnedAliases(newAliases);
-        setRuntimeAliases(newAliases);
-        setAliasSavedIdx(idx);
-        setTimeout(() => setAliasSavedIdx(null), 2000);
-      }
-    } catch {}
-  };
-
   const updateMarket = (patch: Partial<MarketMeta>) => {
     setMarket((prev) => {
       const next = { ...prev, ...patch };
@@ -297,6 +273,35 @@ export default function UploadPage() {
       setStep('done');
       // Store for printing
       setSavedItems(billItems);
+
+      // Auto-learn: save aliases for every item where the user corrected the name.
+      // This happens in the background — no button click needed.
+      // Only for actual items (not charges), and only when raw != confirmed meaning.
+      for (const it of items) {
+        if (it.kind === 'charge') continue;
+        if (!it.raw.trim() || !it.confirmed.trim()) continue;
+        const meaning = it.confirmed.match(/\(([^)]+)\)$/)?.[1]?.trim() || it.confirmed.trim();
+        const rawLower = it.raw.trim().toLowerCase();
+        // Only save if this correction isn't already known
+        if (learnedAliases[rawLower] !== meaning) {
+          try {
+            await fetch('/api/catalog/aliases', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ alias: it.raw.trim(), itemName: meaning }),
+            });
+          } catch {}
+        }
+      }
+      // Refresh learned aliases in memory
+      try {
+        const ar = await fetch('/api/catalog/aliases');
+        const ad = await ar.json();
+        if (ad.aliases) {
+          setLearnedAliases(ad.aliases);
+          setRuntimeAliases(ad.aliases);
+        }
+      } catch {}
     } catch (err: any) {
       setSaveError(err.message || 'Save failed');
       setStep('review');
@@ -503,7 +508,6 @@ export default function UploadPage() {
               {items.map((it, idx) => {
                 const rawLower = it.raw.trim().toLowerCase();
                 const alreadyLearned = learnedAliases[rawLower] === (it.confirmed.match(/\(([^)]+)\)$/)?.[1]?.trim() || it.confirmed.trim());
-                const canLearn = it.kind !== 'charge' && it.raw.trim() && it.confirmed.trim() && !alreadyLearned;
                 return (
                 <div key={idx} className="grid gap-2 rounded-xl bg-[var(--bg-base)] p-3 sm:grid-cols-12">
                   <input
@@ -519,16 +523,7 @@ export default function UploadPage() {
                       className={`flex-1 rounded border bg-[var(--bg-input)] p-2 text-sm ${it.kind === 'charge' ? 'border-[#c4a574] italic' : 'border-[var(--border-light)]'}`}
                       placeholder={t('confirmedName')}
                     />
-                    {canLearn && (
-                      <button
-                        onClick={() => saveItemAlias(idx)}
-                        className={`shrink-0 rounded px-2 py-1 text-xs font-medium ${aliasSavedIdx === idx ? 'bg-[var(--bg-success)] text-[var(--text-on-primary)]' : 'bg-[var(--bg-secondary)] text-[var(--text-on-primary)] hover:opacity-80'}`}
-                        title={t('rememberAlias')}
-                      >
-                        {aliasSavedIdx === idx ? '✓' : '⟳'}
-                      </button>
-                    )}
-                    {alreadyLearned && (
+                    {alreadyLearned && it.kind !== 'charge' && (
                       <span className="shrink-0 self-center text-xs text-[var(--bg-success)]" title={t('aliasKnown')}>✓</span>
                     )}
                   </div>

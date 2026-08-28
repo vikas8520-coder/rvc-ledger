@@ -1,10 +1,9 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import Link from 'next/link';
 import { useI18n } from '../components/I18nProvider';
 import { Card, SectionHeader, Button, PageHeader } from '../components/ui';
-import { CameraIcon, CheckIcon, AlertIcon, GraduationIcon } from '../components/Icons';
+import { CameraIcon, CheckIcon, AlertIcon } from '../components/Icons';
 import { recognizeBill, OcrProgress } from '@/lib/ocr';
 import { parseDate } from '@/lib/parser';
 import { distance } from 'fastest-levenshtein';
@@ -194,6 +193,29 @@ export default function PaymentPage() {
       setNotes('');
       setOcrHint(null);
       setOcrStep('idle');
+
+      // Auto-learn: if OCR produced any text (even garbage), save the most
+      // promising lines as aliases for the customer name. Next time the same
+      // handwriting appears, the system will recognize the customer.
+      if (ocrRawText.trim() && customer) {
+        const lines = ocrRawText.split('\n').map((l) => l.trim()).filter(Boolean);
+        for (const line of lines) {
+          // Skip lines that are pure numbers or too short
+          if (/^\d+$/.test(line)) continue;
+          if (line.length < 3 || line.length > 40) continue;
+          // Skip lines that are clearly garbage (mostly non-alphanumeric)
+          const cleanChars = line.replace(/[^a-zA-Z\u0C00-\u0C7F\u0900-\u097F]/g, '');
+          if (cleanChars.length < 2) continue;
+          // Save this line as an alias for the customer
+          try {
+            await fetch('/api/catalog/aliases', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ alias: line, itemName: customer }),
+            });
+          } catch {}
+        }
+      }
     } catch (err: any) {
       setError(err.message || 'Save failed');
       setStatus('error');
@@ -294,16 +316,11 @@ export default function PaymentPage() {
               </div>
             )}
 
-            {/* Actions: try again, go to training, or fill manually */}
+            {/* Actions: try again or fill manually */}
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
                 <span className="flex items-center gap-1.5"><CameraIcon size={14} /> {t('scanAgain')}</span>
               </Button>
-              <Link href="/training">
-                <Button variant="outline" size="sm">
-                  <span className="flex items-center gap-1.5"><GraduationIcon size={14} /> {t('goToTraining')}</span>
-                </Button>
-              </Link>
               <Button
                 variant="primary"
                 size="sm"

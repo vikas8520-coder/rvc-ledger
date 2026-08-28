@@ -11,7 +11,6 @@ import {
   HomeIcon, UsersIcon, TruckIcon, StoreIcon, PackageIcon, ChartIcon,
   SettingsIcon, CalendarIcon, TrendingIcon, CameraIcon, PlusIcon,
   DollarIcon, MenuIcon, XIcon, FileIcon, BoxIcon, LayersIcon,
-  GraduationIcon,
 } from './Icons';
 
 // Check if Clerk production keys are configured (determined at build time)
@@ -37,7 +36,6 @@ const SECONDARY_NAV: NavItem[] = [
   { href: '/wastage', label: 'navWastage', icon: PackageIcon },
   { href: '/expenses', label: 'navExpenses', icon: DollarIcon },
   { href: '/catalog', label: 'navCatalog', icon: LayersIcon },
-  { href: '/training', label: 'navTraining', icon: GraduationIcon },
   { href: '/reports', label: 'navReports', icon: ChartIcon },
   { href: '/settings', label: 'settings', icon: SettingsIcon },
 ];
