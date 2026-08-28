@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useI18n } from '../components/I18nProvider';
+import { Card, SectionHeader, StatCard, EmptyState, StatSkeleton, PageHeader } from '../components/ui';
+import { CalendarIcon, DollarIcon, TrendingIcon, PackageIcon, BoxIcon, AlertIcon } from '../components/Icons';
 import { fmt } from '@/lib/format';
 import { DailySummary, StockLevel, Customer } from '@/lib/types';
 
@@ -35,7 +37,16 @@ export default function DailyOpsPage() {
       .finally(() => setLoading(false));
   }, [date]);
 
-  if (loading) return <p className="py-10 text-center text-sm text-[var(--text-faint)]">{t('loading')}</p>;
+  if (loading) {
+    return (
+      <div className="space-y-5">
+        <PageHeader title={t('dailyOps')} />
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <StatSkeleton /><StatSkeleton /><StatSkeleton /><StatSkeleton />
+        </div>
+      </div>
+    );
+  }
 
   const totalDue = customers.reduce((s, c) => s + c.due, 0);
   const todayBills = customers.flatMap((c) =>
@@ -51,31 +62,34 @@ export default function DailyOpsPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-lg font-semibold">{t('dailyOps')}</h1>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-1.5 text-sm"
-        />
-      </div>
+      <PageHeader
+        title={t('dailyOps')}
+        subtitle={date}
+        actions={
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2 text-sm"
+          />
+        }
+      />
 
       {/* P&L Summary */}
       {summary && (
         <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Stat label={t('purchasedToday')} value={fmt(summary.purchased)} sub={`${summary.purchaseCount} ${t('entries')}`} />
-          <Stat label={t('soldToday')} value={fmt(summary.sold)} sub={`${summary.saleCount} ${t('bills')}`} />
-          <Stat label={t('collectedToday')} value={fmt(summary.collected)} accent="green" />
-          <Stat label={t('estProfit')} value={fmt(summary.estProfit)} accent={summary.estProfit >= 0 ? 'green' : 'red'} />
+          <StatCard label={t('purchasedToday')} value={fmt(summary.purchased)} sub={`${summary.purchaseCount} ${t('entries')}`} icon={<PackageIcon size={14} />} />
+          <StatCard label={t('soldToday')} value={fmt(summary.sold)} sub={`${summary.saleCount} ${t('bills')}`} icon={<TrendingIcon size={14} />} />
+          <StatCard label={t('collectedToday')} value={fmt(summary.collected)} accent="success" icon={<DollarIcon size={14} />} />
+          <StatCard label={t('estProfit')} value={fmt(summary.estProfit)} accent={summary.estProfit >= 0 ? 'success' : 'primary'} icon={<TrendingIcon size={14} />} />
         </section>
       )}
 
       {/* Cash position */}
       {summary && (
-        <section className="rounded-lg bg-[var(--bg-card)] p-3">
-          <h2 className="mb-2 text-sm font-semibold">{t('cashPosition')}</h2>
-          <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+        <Card>
+          <SectionHeader title={t('cashPosition')} icon={<DollarIcon size={16} />} />
+          <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
             <div>
               <p className="text-[10px] uppercase text-[var(--text-muted)]">{t('collected')}</p>
               <p className="font-semibold text-[var(--bg-success)]">{fmt(summary.collected)}</p>
@@ -95,25 +109,25 @@ export default function DailyOpsPage() {
               </p>
             </div>
           </div>
-        </section>
+        </Card>
       )}
 
       {/* Outstanding credit + stock value */}
       <section className="grid grid-cols-2 gap-2">
-        <Stat label={t('totalOutstanding')} value={fmt(totalDue)} accent="red" />
-        <Stat label={t('stockValue')} value={fmt(stockValue)} />
+        <StatCard label={t('totalOutstanding')} value={fmt(totalDue)} accent="primary" icon={<DollarIcon size={14} />} />
+        <StatCard label={t('stockValue')} value={fmt(stockValue)} icon={<BoxIcon size={14} />} />
       </section>
 
       {/* Today's sales */}
-      <section className="rounded-lg bg-[var(--bg-card)] p-3">
-        <h2 className="mb-2 text-sm font-semibold">{t('todaySales')} ({todayBills.length})</h2>
+      <Card>
+        <SectionHeader title={`${t('todaySales')} (${todayBills.length})`} icon={<TrendingIcon size={16} />} />
         {todayBills.length === 0 ? (
-          <p className="text-sm text-[var(--text-faint)]">{t('noSalesToday')}</p>
+          <EmptyState icon={<TrendingIcon size={40} />} title={t('noSalesToday')} />
         ) : (
           <ul className="divide-y divide-[var(--border-light)]">
             {todayBills.map((tx) => (
               <li key={tx.id}>
-                <Link href={`/customers/${tx.customerId}`} className="flex items-center justify-between gap-2 py-2 hover:opacity-80">
+                <Link href={`/customers/${tx.customerId}`} className="flex items-center justify-between gap-2 py-2.5 hover:opacity-80">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{tx.customerName}</p>
                     <p className="text-[11px] text-[var(--text-muted)]">{tx.billNo || 'Bill'}</p>
@@ -124,18 +138,18 @@ export default function DailyOpsPage() {
             ))}
           </ul>
         )}
-      </section>
+      </Card>
 
       {/* Today's collections */}
-      <section className="rounded-lg bg-[var(--bg-card)] p-3">
-        <h2 className="mb-2 text-sm font-semibold">{t('todayCollections')} ({todayPayments.length})</h2>
+      <Card>
+        <SectionHeader title={`${t('todayCollections')} (${todayPayments.length})`} icon={<DollarIcon size={16} />} />
         {todayPayments.length === 0 ? (
-          <p className="text-sm text-[var(--text-faint)]">{t('noCollectionsToday')}</p>
+          <EmptyState icon={<DollarIcon size={40} />} title={t('noCollectionsToday')} />
         ) : (
           <ul className="divide-y divide-[var(--border-light)]">
             {todayPayments.map((tx) => (
               <li key={tx.id}>
-                <Link href={`/customers/${tx.customerId}`} className="flex items-center justify-between gap-2 py-2 hover:opacity-80">
+                <Link href={`/customers/${tx.customerId}`} className="flex items-center justify-between gap-2 py-2.5 hover:opacity-80">
                   <span className="truncate text-sm font-medium">{tx.customerName}</span>
                   <span className="shrink-0 text-sm font-semibold text-[var(--bg-success)]">{fmt(tx.amount)}</span>
                 </Link>
@@ -143,49 +157,42 @@ export default function DailyOpsPage() {
             ))}
           </ul>
         )}
-      </section>
+      </Card>
 
       {/* Stock alerts */}
       {(lowStock.length > 0 || outStock.length > 0) && (
-        <section className="rounded-lg bg-[var(--bg-card)] p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">{t('stockAlerts')}</h2>
-            <Link href="/stock" className="text-xs text-[var(--bg-primary)] hover:underline">{t('navStock')} →</Link>
-          </div>
+        <Card>
+          <SectionHeader
+            title={t('stockAlerts')}
+            icon={<AlertIcon size={16} />}
+            action={<Link href="/stock" className="text-xs text-[var(--bg-primary)] hover:underline">{t('navStock')} →</Link>}
+          />
           <div className="flex flex-wrap gap-2">
             {outStock.map((s) => (
-              <span key={s.itemKey} className="rounded-md bg-[var(--bg-primary)] px-2 py-1 text-xs text-[var(--text-on-primary)]">
+              <span key={s.itemKey} className="rounded-lg bg-[var(--bg-primary)] px-2.5 py-1 text-xs text-[var(--text-on-primary)]">
                 {s.itemName} — {t('outOfStock')}
               </span>
             ))}
             {lowStock.map((s) => (
-              <span key={s.itemKey} className="rounded-md bg-[var(--bg-warning)] px-2 py-1 text-xs text-[var(--text-primary)]">
+              <span key={s.itemKey} className="rounded-lg bg-[var(--bg-warning)] px-2.5 py-1 text-xs text-[var(--text-primary)]">
                 {s.itemName} — {s.qty} {s.unit || ''} {t('lowStock')}
               </span>
             ))}
           </div>
-        </section>
+        </Card>
       )}
 
       {/* Wastage */}
       {summary && summary.wastageCost > 0 && (
-        <section className="rounded-lg bg-[var(--bg-warning)] bg-opacity-20 p-3">
-          <p className="text-sm">
-            <span className="font-semibold">{t('navWastage')}:</span> {fmt(summary.wastageCost)}
-          </p>
-        </section>
+        <Card className="border-[var(--bg-warning)]">
+          <div className="flex items-center gap-2">
+            <AlertIcon size={16} className="text-[#c4622d]" />
+            <p className="text-sm">
+              <span className="font-semibold">{t('navWastage')}:</span> {fmt(summary.wastageCost)}
+            </p>
+          </div>
+        </Card>
       )}
-    </div>
-  );
-}
-
-function Stat({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: 'green' | 'red' }) {
-  const colorClass = accent === 'green' ? 'text-[var(--bg-success)]' : accent === 'red' ? 'text-[var(--bg-primary)]' : '';
-  return (
-    <div className="rounded-lg bg-[var(--bg-card)] px-3 py-2.5">
-      <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">{label}</p>
-      <p className={`text-lg font-bold sm:text-xl ${colorClass}`}>{value}</p>
-      {sub && <p className="text-[10px] text-[var(--text-faint)]">{sub}</p>}
     </div>
   );
 }

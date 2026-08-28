@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useI18n } from '../components/I18nProvider';
+import { Card, EmptyState, PageHeader, StatSkeleton } from '../components/ui';
+import { TrendingIcon, ClockIcon } from '../components/Icons';
 import { fmt } from '@/lib/format';
 import { ItemRateHistory } from '@/lib/types';
 
@@ -40,28 +42,36 @@ export default function RateSheetPage() {
       .finally(() => setLoading(false));
   }, [date]);
 
-  if (loading) return <p className="py-10 text-center text-sm text-[var(--text-faint)]">{t('loading')}</p>;
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <PageHeader title={t('rateSheet')} subtitle={t('rateSheetHelp')} />
+        <div className="space-y-2">
+          {[1,2,3].map((i) => <div key={i} className="h-20 animate-pulse rounded-xl bg-[var(--bg-card)]" />)}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-lg font-semibold">{t('rateSheet')}</h1>
-        <div className="flex gap-2">
+      <PageHeader
+        title={t('rateSheet')}
+        subtitle={t('rateSheetHelp')}
+        actions={
           <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-1.5 text-sm"
+            className="rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2 text-sm"
           />
-        </div>
-      </div>
-
-      <p className="text-xs text-[var(--text-faint)]">{t('rateSheetHelp')}</p>
+        }
+      />
 
       {items.length === 0 ? (
-        <p className="rounded-lg bg-[var(--bg-card)] p-4 text-center text-sm text-[var(--text-faint)]">
-          {t('noRateData')}
-        </p>
+        <Card>
+          <EmptyState icon={<TrendingIcon size={48} />} title={t('noRateData')} />
+        </Card>
       ) : (
         <div className="space-y-2">
           {items.map((item) => {
@@ -71,7 +81,7 @@ export default function RateSheetPage() {
               : null;
 
             return (
-              <div key={item.itemName} className="rounded-lg bg-[var(--bg-card)] p-3">
+              <Card key={item.itemName} padding="p-3">
                 <button
                   onClick={() => setExpanded(isExpanded ? null : item.itemName)}
                   className="flex w-full items-center justify-between gap-2 text-left"
@@ -83,7 +93,7 @@ export default function RateSheetPage() {
                         {TREND_LABELS[item.trend]}
                       </span>
                     </p>
-                    <p className="text-[11px] text-[var(--text-muted)]">
+                    <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
                       {item.entries.length} {t('sales')} · {t('range')}: {fmt(item.minRate || 0)} – {fmt(item.maxRate || 0)}
                     </p>
                   </div>
@@ -123,7 +133,7 @@ export default function RateSheetPage() {
                     </table>
                   </div>
                 )}
-              </div>
+              </Card>
             );
           })}
         </div>

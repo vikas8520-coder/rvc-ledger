@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../components/I18nProvider';
+import { Card, SectionHeader, Button, EmptyState, PageHeader, StatCard, StatSkeleton } from '../components/ui';
+import { ChartIcon, DownloadIcon, TrendingIcon, DollarIcon, PackageIcon } from '../components/Icons';
 import { fmt } from '@/lib/format';
 import { Customer, PurchaseView, WastageEntry, ExpenseEntry } from '@/lib/types';
 import { monthlySummary, itemStats, topCustomers } from '@/lib/reports';
@@ -89,25 +91,40 @@ export default function ReportsPage() {
     downloadCsv('rvc-item-rates.csv', rows);
   };
 
-  if (loading) return <p className="text-sm text-[var(--text-faint)]">{t('loading')}</p>;
+  if (loading) {
+    return (
+      <div className="space-y-5">
+        <PageHeader title={t('navReports')} subtitle={t('reportsHelp')} />
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <StatSkeleton /><StatSkeleton /><StatSkeleton /><StatSkeleton />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
-      <h1 className="text-lg font-semibold">{t('navReports')}</h1>
-      <p className="text-xs text-[var(--text-faint)]">{t('reportsHelp')}</p>
+      <PageHeader title={t('navReports')} subtitle={t('reportsHelp')} />
+
+      {/* Summary stats */}
+      <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <StatCard label={t('estProfit')} value={fmt(totalEstProfit)} accent={totalEstProfit >= 0 ? 'success' : 'primary'} icon={<TrendingIcon size={14} />} />
+        <StatCard label={t('totalWastage')} value={fmt(totalWastage)} accent="warning" icon={<PackageIcon size={14} />} />
+        <StatCard label={t('totalExpenses')} value={fmt(totalExpenses)} icon={<DollarIcon size={14} />} />
+        <StatCard label={t('netProfit')} value={fmt(netEstProfit)} accent={netEstProfit >= 0 ? 'success' : 'primary'} icon={<TrendingIcon size={14} />} />
+      </section>
 
       {/* Monthly summary */}
-      <section className="rounded-lg bg-[var(--bg-card)] p-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold">{t('month')}</h2>
-          <button onClick={exportMonths} className="text-xs text-[var(--bg-success)] hover:underline">
-            {t('exportReport')}
-          </button>
-        </div>
+      <Card>
+        <SectionHeader
+          title={t('month')}
+          icon={<ChartIcon size={16} />}
+          action={<Button variant="outline" size="sm" onClick={exportMonths}><span className="flex items-center gap-1.5"><DownloadIcon size={14} /> {t('exportReport')}</span></Button>}
+        />
         {months.length === 0 ? (
-          <p className="py-3 text-center text-sm text-[var(--text-faint)]">{t('noData')}</p>
+          <EmptyState icon={<ChartIcon size={40} />} title={t('noData')} />
         ) : (
-          <table className="mt-2 w-full text-sm tabular-nums">
+          <table className="w-full text-sm tabular-nums">
             <thead>
               <tr className="text-left text-[11px] text-[var(--text-muted)]">
                 <th className="py-1">{t('month')}</th>
@@ -128,20 +145,19 @@ export default function ReportsPage() {
             </tbody>
           </table>
         )}
-      </section>
+      </Card>
 
       {/* Item rates & margins */}
-      <section className="rounded-lg bg-[var(--bg-card)] p-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold">{t('itemRates')}</h2>
-          <button onClick={exportItems} className="text-xs text-[var(--bg-success)] hover:underline">
-            {t('exportReport')}
-          </button>
-        </div>
+      <Card>
+        <SectionHeader
+          title={t('itemRates')}
+          icon={<TrendingIcon size={16} />}
+          action={<Button variant="outline" size="sm" onClick={exportItems}><span className="flex items-center gap-1.5"><DownloadIcon size={14} /> {t('exportReport')}</span></Button>}
+        />
         {items.length === 0 ? (
-          <p className="py-3 text-center text-sm text-[var(--text-faint)]">{t('noData')}</p>
+          <EmptyState icon={<TrendingIcon size={40} />} title={t('noData')} />
         ) : (
-          <div className="mt-2 overflow-x-auto">
+          <div className="overflow-x-auto">
             <table className="w-full text-[12px] tabular-nums">
               <thead>
                 <tr className="text-left text-[11px] text-[var(--text-muted)]">
@@ -186,12 +202,10 @@ export default function ReportsPage() {
                     <td className="py-1.5 text-right text-[var(--bg-success)]">{fmt(totalEstProfit)}</td>
                   </tr>
                   {totalWastage > 0 && (
-                    <>
-                      <tr className="text-[var(--bg-primary)]">
-                        <td className="py-1.5" colSpan={5}>{t('totalWastage')}</td>
-                        <td className="py-1.5 text-right">-{fmt(totalWastage)}</td>
-                      </tr>
-                    </>
+                    <tr className="text-[var(--bg-primary)]">
+                      <td className="py-1.5" colSpan={5}>{t('totalWastage')}</td>
+                      <td className="py-1.5 text-right">-{fmt(totalWastage)}</td>
+                    </tr>
                   )}
                   {totalExpenses > 0 && (
                     <tr className="text-[var(--bg-primary)]">
@@ -208,15 +222,15 @@ export default function ReportsPage() {
             </table>
           </div>
         )}
-      </section>
+      </Card>
 
       {/* Top customers */}
-      <section className="rounded-lg bg-[var(--bg-card)] p-3">
-        <h2 className="text-sm font-semibold">{t('topCustomers')}</h2>
+      <Card>
+        <SectionHeader title={t('topCustomers')} icon={<DollarIcon size={16} />} />
         {top.length === 0 ? (
-          <p className="py-3 text-center text-sm text-[var(--text-faint)]">{t('noData')}</p>
+          <EmptyState icon={<DollarIcon size={40} />} title={t('noData')} />
         ) : (
-          <table className="mt-2 w-full text-sm tabular-nums">
+          <table className="w-full text-sm tabular-nums">
             <tbody>
               {top.map((c) => (
                 <tr key={c.id} className="border-t border-[var(--border-light)]">
@@ -228,7 +242,7 @@ export default function ReportsPage() {
             </tbody>
           </table>
         )}
-      </section>
+      </Card>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { I18nProvider } from "./components/I18nProvider";
+import { ToastProvider } from "./components/ui";
 import AppShell from "./components/AppShell";
 import ServiceWorkerRegister from "./components/ServiceWorkerRegister";
 
@@ -39,8 +40,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <ClerkProvider afterSignOutUrl="/sign-in">
           <ThemeProvider>
             <I18nProvider>
-              <AppShell>{children}</AppShell>
-              <ServiceWorkerRegister />
+              <ToastProvider>
+                <AppShell>{children}</AppShell>
+                <ServiceWorkerRegister />
+              </ToastProvider>
             </I18nProvider>
           </ThemeProvider>
         </ClerkProvider>

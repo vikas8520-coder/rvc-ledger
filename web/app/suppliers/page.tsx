@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useI18n } from '../components/I18nProvider';
+import { Card, SectionHeader, StatCard, Button, EmptyState, ListSkeleton, PageHeader } from '../components/ui';
+import { StoreIcon, SearchIcon, DownloadIcon, DollarIcon, XIcon, CheckIcon } from '../components/Icons';
 import { fmt } from '@/lib/format';
 import { downloadCsv, suppliersCsv } from '@/lib/statement';
 import { Supplier } from '@/lib/types';
@@ -69,45 +71,56 @@ export default function SuppliersPage() {
     }
   };
 
-  if (loading) return <p className="py-10 text-center text-sm text-[var(--text-faint)]">{t('loading')}</p>;
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <PageHeader title={t('navSuppliers')} />
+        <ListSkeleton rows={5} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-lg font-semibold">{t('navSuppliers')}</h1>
-        <div className="flex flex-wrap gap-2">
+      <PageHeader
+        title={t('navSuppliers')}
+        subtitle={`${suppliers.length} ${t('supplier')}`}
+      />
+
+      <StatCard label={t('totalSupplierBalance')} value={fmt(totalBalance)} accent="primary" icon={<DollarIcon size={14} />} />
+
+      {/* Action bar */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <SearchIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-faint)]" />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder={t('searchSuppliers')}
-            className="min-w-0 flex-1 rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-1.5 text-sm sm:w-56 sm:flex-none"
+            className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] pl-9 pr-3 py-2 text-sm"
           />
-          <button
-            onClick={() => downloadCsv('rvc-suppliers.csv', suppliersCsv(suppliers))}
-            className="rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-3 py-1.5 text-sm"
-          >
-            {t('exportCsv')}
-          </button>
-          <button
-            onClick={() => setShowPay(true)}
-            className="rounded-md bg-[var(--bg-success)] px-3 py-1.5 text-sm text-[var(--text-on-primary)]"
-          >
-            {t('paySupplier')}
-          </button>
         </div>
-      </div>
-
-      {/* Total outstanding to suppliers */}
-      <div className="rounded-lg bg-[var(--bg-card)] px-3 py-2.5">
-        <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">{t('totalSupplierBalance')}</p>
-        <p className="text-lg font-bold text-[var(--bg-primary)]">{fmt(totalBalance)}</p>
+        <Button variant="outline" size="sm" onClick={() => downloadCsv('rvc-suppliers.csv', suppliersCsv(suppliers))}>
+          <span className="flex items-center gap-1.5"><DownloadIcon size={14} /> {t('exportCsv')}</span>
+        </Button>
+        <Button variant="success" size="sm" onClick={() => setShowPay(true)}>
+          <span className="flex items-center gap-1.5"><DollarIcon size={14} /> {t('paySupplier')}</span>
+        </Button>
       </div>
 
       {/* Payment form */}
       {showPay && (
-        <section className="rounded-lg bg-[var(--bg-card)] p-4 space-y-3">
-          <h2 className="text-sm font-semibold">{t('supplierPayment')}</h2>
-          <div className="grid gap-2 sm:grid-cols-3">
+        <Card>
+          <SectionHeader
+            title={t('paySupplier')}
+            icon={<DollarIcon size={16} />}
+            action={
+              <button onClick={() => setShowPay(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                <XIcon size={16} />
+              </button>
+            }
+          />
+          <div className="grid gap-3 sm:grid-cols-3">
             <div>
               <label className="text-xs text-[var(--text-muted)]">{t('supplier')}</label>
               <input
@@ -115,7 +128,7 @@ export default function SuppliersPage() {
                 value={paySupplier}
                 onChange={(e) => setPaySupplier(e.target.value)}
                 placeholder={t('selectSupplier')}
-                className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
+                className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2 text-sm"
               />
               <datalist id="supplier-list">
                 {suppliers.map((s) => <option key={s.id} value={s.name} />)}
@@ -128,7 +141,7 @@ export default function SuppliersPage() {
                 value={payAmount}
                 onChange={(e) => setPayAmount(e.target.value)}
                 placeholder="₹0"
-                className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
+                className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2 text-sm"
               />
             </div>
             <div>
@@ -137,57 +150,65 @@ export default function SuppliersPage() {
                 type="date"
                 value={payDate}
                 onChange={(e) => setPayDate(e.target.value)}
-                className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
+                className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2 text-sm"
               />
             </div>
           </div>
-          <div>
+          <div className="mt-3">
             <label className="text-xs text-[var(--text-muted)]">{t('notes')}</label>
             <input
               value={payNotes}
               onChange={(e) => setPayNotes(e.target.value)}
               placeholder={t('notes')}
-              className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
+              className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2 text-sm"
             />
           </div>
-          {payError && <p className="text-center text-sm text-[var(--bg-primary)]">{payError}</p>}
-          <div className="flex gap-2">
-            <button
-              onClick={submitPayment}
-              disabled={paying}
-              className="rounded-md bg-[var(--bg-success)] px-4 py-2 text-sm font-semibold text-[var(--text-on-primary)] disabled:opacity-50"
-            >
+          {payError && <p className="mt-3 text-sm text-[var(--bg-primary)]">{payError}</p>}
+          <div className="mt-4 flex gap-2">
+            <Button variant="success" onClick={submitPayment} disabled={paying}>
               {paying ? t('saving') : t('recordPayment')}
-            </button>
-            <button
-              onClick={() => setShowPay(false)}
-              className="rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-4 py-2 text-sm"
-            >
+            </Button>
+            <Button variant="outline" onClick={() => setShowPay(false)}>
               {t('cancel')}
-            </button>
+            </Button>
           </div>
-        </section>
+        </Card>
       )}
 
-      {list.length === 0 && <p className="text-sm text-[var(--text-faint)]">{t('noSuppliers')}</p>}
-
-      <ul className="divide-y divide-[var(--border-light)] overflow-hidden rounded-lg bg-[var(--bg-card)]">
-        {list.map((s) => (
-          <li key={s.id}>
-            <Link href={`/suppliers/${s.id}`} className="flex items-center justify-between gap-3 px-3 py-3 hover:bg-[#efe8db]">
-              <div className="min-w-0">
-                <p className="truncate font-medium">{s.name}</p>
-                <p className="text-[11px] text-[var(--text-muted)]">
-                  {t('purchased')} {fmt(s.purchased)} · {t('paid')} {fmt(s.paid)}
-                </p>
-              </div>
-              <p className={`shrink-0 text-sm font-semibold ${s.balance > 0 ? 'text-[var(--bg-primary)]' : 'text-[var(--bg-success)]'}`}>
-                {fmt(s.balance)}
-              </p>
-            </Link>
-          </li>
-        ))}
-      </ul>
+      {/* Supplier list */}
+      {list.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={<StoreIcon size={48} />}
+            title={t('noSuppliers')}
+            description="Add suppliers by recording purchases from farmers."
+            action={{ label: t('navPurchases'), href: '/purchases' }}
+          />
+        </Card>
+      ) : (
+        <Card padding="p-0">
+          <ul className="divide-y divide-[var(--border-light)]">
+            {list.map((s) => (
+              <li key={s.id}>
+                <Link href={`/suppliers/${s.id}`} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-[var(--bg-card-hover)] transition-colors">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{s.name}</p>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                      {t('purchased')} {fmt(s.purchased)} · {t('paid')} {fmt(s.paid)}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className={`text-sm font-semibold ${s.balance > 0 ? 'text-[var(--bg-primary)]' : 'text-[var(--bg-success)]'}`}>
+                      {fmt(s.balance)}
+                    </p>
+                    <p className="text-[10px] text-[var(--text-faint)]">{s.balance > 0 ? t('due') : t('paid')}</p>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
     </div>
   );
 }

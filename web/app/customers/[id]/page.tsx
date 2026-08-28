@@ -7,6 +7,8 @@ import { useDashboard } from '../../components/useDashboard';
 import TxnCard from '../../components/TxnCard';
 import LedgerTable from '../../components/LedgerTable';
 import AgingBadge from '../../components/AgingBadge';
+import { Card, SectionHeader, StatCard, Button, EmptyState, PageHeader } from '../../components/ui';
+import { ArrowLeftIcon, MessageIcon, DownloadIcon, PrinterIcon, PhoneIcon, DollarIcon, CheckIcon, UsersIcon } from '../../components/Icons';
 import { fmt, fmtDate } from '@/lib/format';
 import {
   computeAging,
@@ -45,17 +47,26 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
   }, []);
 
   if (loading) {
-    return <p className="py-10 text-center text-sm text-[var(--text-faint)]">{t('loading')}</p>;
+    return (
+      <div className="space-y-4">
+        <div className="h-5 w-32 animate-pulse rounded bg-[var(--bg-card-hover)]" />
+        <div className="h-8 w-48 animate-pulse rounded bg-[var(--bg-card-hover)]" />
+        <div className="grid grid-cols-3 gap-2">
+          {[1,2,3].map((i) => <div key={i} className="h-20 animate-pulse rounded-xl bg-[var(--bg-card)]" />)}
+        </div>
+      </div>
+    );
   }
 
   if (!customer) {
     return (
-      <div className="space-y-3">
-        <p className="text-sm text-[var(--text-faint)]">{t('noCustomers')}</p>
-        <Link href="/customers" className="text-sm text-[var(--bg-primary)] hover:underline">
-          {t('allCustomers')}
-        </Link>
-      </div>
+      <Card>
+        <EmptyState
+          icon={<UsersIcon size={48} />}
+          title={t('noCustomers')}
+          action={{ label: t('allCustomers'), href: '/customers' }}
+        />
+      </Card>
     );
   }
 
@@ -179,14 +190,14 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
   return (
     <div className="space-y-4">
       <div>
-        <Link href="/customers" className="text-xs text-[var(--bg-primary)] hover:underline">
-          ← {t('allCustomers')}
+        <Link href="/customers" className="flex items-center gap-1 text-xs text-[var(--bg-primary)] hover:underline">
+          <ArrowLeftIcon size={14} /> {t('allCustomers')}
         </Link>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           <h1 className="text-xl font-bold">{customer.name}</h1>
           <AgingBadge aging={aging} />
         </div>
-        <p className="text-xs text-[var(--text-muted)]">
+        <p className="text-xs text-[var(--text-muted)] mt-1">
           {t('bills')} {bills} · {t('payments')} {payments}
           {aging.oldestDate
             ? ` · ${t('oldestUnpaid')} ${fmtDate(aging.oldestDate)} (${aging.oldestDays} ${t('days')})`
@@ -195,83 +206,52 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
       </div>
 
       <section className="grid grid-cols-3 gap-2">
-        <div className="rounded-lg bg-[var(--bg-card)] px-3 py-2">
-          <p className="text-[10px] uppercase text-[var(--text-muted)]">{t('billed')}</p>
-          <p className="font-bold">{fmt(customer.billed)}</p>
-        </div>
-        <div className="rounded-lg bg-[var(--bg-card)] px-3 py-2">
-          <p className="text-[10px] uppercase text-[var(--text-muted)]">{t('paid')}</p>
-          <p className="font-bold">{fmt(customer.paid)}</p>
-        </div>
-        <div className="rounded-lg bg-[var(--bg-card)] px-3 py-2">
-          <p className="text-[10px] uppercase text-[var(--text-muted)]">{t('due')}</p>
-          <p className="font-bold text-[var(--bg-primary)]">{fmt(customer.due)}</p>
-        </div>
+        <StatCard label={t('billed')} value={fmt(customer.billed)} />
+        <StatCard label={t('paid')} value={fmt(customer.paid)} accent="success" />
+        <StatCard label={t('due')} value={fmt(customer.due)} accent="primary" />
       </section>
 
-      <section className="rounded-lg bg-[var(--bg-card)] p-3">
+      <Card>
+        <SectionHeader title={t('actions')} icon={<DollarIcon size={16} />} />
         <div className="flex flex-wrap gap-2">
           <a
             href={waLink(reminderText(customer), customer.phone)}
             target="_blank"
             rel="noopener noreferrer"
-            className={`rounded-md px-3 py-1.5 text-sm text-[var(--text-on-primary)] ${customer.due > 0 ? 'bg-[var(--bg-success)]' : 'bg-[#a8a095] pointer-events-none'}`}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-[var(--text-on-primary)] ${customer.due > 0 ? 'bg-[var(--bg-success)] hover:bg-[var(--bg-success-hover)]' : 'bg-[#a8a095] pointer-events-none'}`}
           >
-            {t('sendReminder')}
+            <MessageIcon size={14} /> {t('sendReminder')}
           </a>
           <a
             href={waLink(statementText(customer), customer.phone)}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-md bg-[var(--bg-primary)] px-3 py-1.5 text-sm text-[var(--text-on-primary)]"
+            className="flex items-center gap-1.5 rounded-lg bg-[var(--bg-primary)] px-3 py-1.5 text-sm font-medium text-[var(--text-on-primary)] hover:bg-[var(--bg-primary-hover)]"
           >
-            {t('shareStatement')}
+            <MessageIcon size={14} /> {t('shareStatement')}
           </a>
-          <button
-            onClick={copyStatement}
-            className="rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-3 py-1.5 text-sm"
-          >
-            {copied ? t('copied') : t('copyStatement')}
-          </button>
-          <button
-            onClick={() =>
-              downloadCsv(`${customer.name.replace(/\s+/g, '-')}-ledger.csv`, customerCsv(customer))
-            }
-            className="rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-3 py-1.5 text-sm"
-          >
-            {t('exportCsv')}
-          </button>
+          <Button variant="outline" size="sm" onClick={copyStatement}>
+            <span className="flex items-center gap-1.5">{copied ? <><CheckIcon size={14} /> {t('copied')}</> : t('copyStatement')}</span>
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => downloadCsv(`${customer.name.replace(/\s+/g, '-')}-ledger.csv`, customerCsv(customer))}>
+            <span className="flex items-center gap-1.5"><DownloadIcon size={14} /> {t('exportCsv')}</span>
+          </Button>
           <span className="relative">
-            <button
-              onClick={printPdf}
-              className="rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-3 py-1.5 text-sm"
-            >
-              {t('downloadPdf')} ▾
-            </button>
+            <Button variant="outline" size="sm" onClick={printPdf}>
+              <span className="flex items-center gap-1.5"><PrinterIcon size={14} /> {t('downloadPdf')} ▾</span>
+            </Button>
             {showPdfFormats && (
-              <span className="absolute right-0 top-9 z-10 flex flex-col gap-0.5 rounded-md border border-[var(--border-light)] bg-[var(--bg-input)] p-1 shadow-lg">
-                <button
-                  onClick={() => printStatement('statement')}
-                  className="whitespace-nowrap rounded px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]"
-                >
+              <span className="absolute right-0 top-9 z-10 flex flex-col gap-0.5 rounded-lg border border-[var(--border-light)] bg-[var(--bg-input)] p-1 shadow-lg">
+                <button onClick={() => printStatement('statement')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
                   Customer statement (all transactions)
                 </button>
-                <button
-                  onClick={() => printStatement('simple')}
-                  className="whitespace-nowrap rounded px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]"
-                >
+                <button onClick={() => printStatement('simple')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
                   {t('billFormatSimple')}
                 </button>
-                <button
-                  onClick={() => printStatement('itemized')}
-                  className="whitespace-nowrap rounded px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]"
-                >
+                <button onClick={() => printStatement('itemized')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
                   {t('billFormatItemized')}
                 </button>
-                <button
-                  onClick={() => printStatement('market')}
-                  className="whitespace-nowrap rounded px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]"
-                >
+                <button onClick={() => printStatement('market')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
                   {t('printCreditLedger')} (all customers, no items)
                 </button>
               </span>
@@ -279,50 +259,56 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
           </span>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <label className="text-xs text-[var(--text-muted)]">{t('creditLimit')}</label>
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[var(--border-light)] pt-3">
+          <label className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+            <DollarIcon size={14} /> {t('creditLimit')}
+          </label>
           <input
             value={creditLimit}
             onChange={(e) => setCreditLimit(e.target.value)}
             placeholder={t('noCreditLimit')}
             inputMode="decimal"
-            className="min-w-0 flex-1 rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1 text-sm sm:w-48 sm:flex-none"
+            className="min-w-0 flex-1 rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-1.5 text-sm sm:w-48 sm:flex-none"
           />
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={saveCreditLimit}
             disabled={creditStatus === 'saving'}
-            className="rounded-md bg-[var(--bg-secondary)] px-3 py-1 text-sm text-[var(--text-on-primary)] disabled:opacity-50"
           >
             {creditStatus === 'saved' ? t('saved') : t('setCreditLimit')}
-          </button>
+          </Button>
           {customer.creditLimit && customer.due > customer.creditLimit && (
-            <span className="text-xs text-[var(--bg-primary)]">
+            <span className="text-xs text-[var(--bg-primary)] font-medium">
               {t('creditOver')} {fmt(customer.due - (customer.creditLimit || 0))}
             </span>
           )}
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <label className="text-xs text-[var(--text-muted)]">{t('phone')}</label>
+          <label className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+            <PhoneIcon size={14} /> {t('phone')}
+          </label>
           <input
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder={t('addPhone')}
             inputMode="tel"
-            className="min-w-0 flex-1 rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1 text-sm sm:w-48 sm:flex-none"
+            className="min-w-0 flex-1 rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-1.5 text-sm sm:w-48 sm:flex-none"
           />
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={savePhone}
             disabled={phoneStatus === 'saving'}
-            className="rounded-md bg-[var(--bg-secondary)] px-3 py-1 text-sm text-[var(--text-on-primary)] disabled:opacity-50"
           >
             {phoneStatus === 'saved' ? t('saved') : t('savePhone')}
-          </button>
+          </Button>
         </div>
-      </section>
+      </Card>
 
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold">{t('ledger')}</h2>
+        <SectionHeader title={t('ledger')} />
         <LedgerTable customer={customer} shop={shopSettings} defaultFormat={(shopSettings.billFormat as any) || 'itemized'} />
       </section>
     </div>

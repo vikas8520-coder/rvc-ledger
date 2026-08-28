@@ -6,6 +6,8 @@ import { useI18n } from './components/I18nProvider';
 import { useDashboard } from './components/useDashboard';
 import TxnCard from './components/TxnCard';
 import AgingBadge from './components/AgingBadge';
+import { Card, SectionHeader, StatCard, EmptyState, StatSkeleton, ListSkeleton, PageHeader } from './components/ui';
+import { UsersIcon, DollarIcon, PackageIcon, CalendarIcon, TrendingIcon, CameraIcon } from './components/Icons';
 import { fmt, thisMonthKey } from '@/lib/format';
 import { computeAging } from '@/lib/statement';
 import { StockLevel, DailySummary } from '@/lib/types';
@@ -15,12 +17,14 @@ export default function Home() {
   const { customers, configured, loading } = useDashboard();
   const [stock, setStock] = useState<StockLevel[]>([]);
   const [daily, setDaily] = useState<DailySummary | null>(null);
+  const [stockLoading, setStockLoading] = useState(true);
 
   useEffect(() => {
     fetch('/api/stock')
       .then((r) => r.json())
       .then((d) => setStock(d.stock || []))
-      .catch(() => setStock([]));
+      .catch(() => setStock([]))
+      .finally(() => setStockLoading(false));
     fetch('/api/daily-summary')
       .then((r) => r.json())
       .then((d) => setDaily(d))
@@ -40,10 +44,6 @@ export default function Home() {
     (s, c) => s + c.txns.filter((t) => t.type === 'payment' && t.date.startsWith(month)).reduce((a, t) => a + t.amount, 0),
     0
   );
-  const todayBilled = customers.reduce(
-    (s, c) => s + c.txns.filter((t) => t.type === 'bill' && t.date === today).reduce((a, t) => a + t.amount, 0),
-    0
-  );
 
   const lowStock = stock.filter((s) => s.qty > 0 && s.qty < 5);
   const outStock = stock.filter((s) => s.qty <= 0);
@@ -55,7 +55,14 @@ export default function Home() {
     .slice(0, 8);
 
   if (loading) {
-    return <p className="py-10 text-center text-sm text-[var(--text-faint)]">{t('loading')}</p>;
+    return (
+      <div className="space-y-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <StatSkeleton /><StatSkeleton /><StatSkeleton /><StatSkeleton />
+        </div>
+        <ListSkeleton rows={4} />
+      </div>
+    );
   }
 
   return (
@@ -64,77 +71,95 @@ export default function Home() {
 
       {/* Today's snapshot */}
       {daily && (daily.sold > 0 || daily.purchased > 0 || daily.collected > 0) && (
-        <section className="rounded-lg bg-[var(--bg-card)] p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">{t('dailyOps')} — {today}</h2>
-            <Link href="/daily" className="text-xs text-[var(--bg-primary)] hover:underline">{t('dailyOps')} →</Link>
+        <Card>
+          <SectionHeader
+            title={`${t('dailyOps')} — ${today}`}
+            icon={<CalendarIcon size={16} />}
+            action={<Link href="/daily" className="text-xs text-[var(--bg-primary)] hover:underline">{t('dailyOps')} →</Link>}
+          />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">{t('soldToday')}</p>
+              <p className="text-base font-bold">{fmt(daily.sold)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">{t('purchasedToday')}</p>
+              <p className="text-base font-bold">{fmt(daily.purchased)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">{t('collectedToday')}</p>
+              <p className="text-base font-bold text-[var(--bg-success)]">{fmt(daily.collected)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">{t('estProfit')}</p>
+              <p className={`text-base font-bold ${daily.estProfit >= 0 ? 'text-[var(--bg-success)]' : 'text-[var(--bg-primary)]'}`}>
+                {fmt(daily.estProfit)}
+              </p>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <MiniStat label={t('soldToday')} value={fmt(daily.sold)} />
-            <MiniStat label={t('purchasedToday')} value={fmt(daily.purchased)} />
-            <MiniStat label={t('collectedToday')} value={fmt(daily.collected)} accent="green" />
-            <MiniStat label={t('estProfit')} value={fmt(daily.estProfit)} accent={daily.estProfit >= 0 ? 'green' : 'red'} />
-          </div>
-        </section>
+        </Card>
       )}
 
+      {/* Main stats */}
       <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Stat label={t('due')} value={fmt(totalDue)} accent />
-        <Stat label={t('billed')} value={fmt(totalBilled)} />
-        <Stat label={t('paid')} value={fmt(totalPaid)} />
-        <Stat label={t('customersCount')} value={String(customers.length)} />
+        <StatCard label={t('due')} value={fmt(totalDue)} accent="primary" icon={<DollarIcon size={14} />} />
+        <StatCard label={t('billed')} value={fmt(totalBilled)} icon={<TrendingIcon size={14} />} />
+        <StatCard label={t('paid')} value={fmt(totalPaid)} accent="success" icon={<DollarIcon size={14} />} />
+        <StatCard label={t('customersCount')} value={String(customers.length)} icon={<UsersIcon size={14} />} />
       </section>
 
+      {/* Month stats */}
       <section className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <Stat label={`${t('thisMonth')} · ${t('billed')}`} value={fmt(monthBilled)} />
-        <Stat label={`${t('thisMonth')} · ${t('paid')}`} value={fmt(monthPaid)} />
-        <Stat label={t('bills')} value={String(customers.reduce((s, c) => s + c.txns.filter((t) => t.type === 'bill').length, 0))} />
+        <StatCard label={`${t('thisMonth')} · ${t('billed')}`} value={fmt(monthBilled)} />
+        <StatCard label={`${t('thisMonth')} · ${t('paid')}`} value={fmt(monthPaid)} />
+        <StatCard label={t('bills')} value={String(customers.reduce((s, c) => s + c.txns.filter((t) => t.type === 'bill').length, 0))} />
       </section>
 
-      {todayBilled > 0 && (
-        <section className="rounded-lg bg-[var(--bg-success)] px-4 py-3 text-[var(--text-on-primary)]">
-          <p className="text-xs opacity-80">{t('date')}: {today}</p>
-          <p className="text-2xl font-bold">{fmt(todayBilled)}</p>
-        </section>
-      )}
-
+      {/* Stock alerts */}
       {(lowStock.length > 0 || outStock.length > 0) && (
-        <section className="rounded-lg bg-[var(--bg-card)] p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">{t('navStock')}</h2>
-            <Link href="/stock" className="text-xs text-[var(--bg-primary)] hover:underline">{t('navStock')} →</Link>
-          </div>
+        <Card>
+          <SectionHeader
+            title={t('navStock')}
+            icon={<PackageIcon size={16} />}
+            action={<Link href="/stock" className="text-xs text-[var(--bg-primary)] hover:underline">{t('navStock')} →</Link>}
+          />
           <div className="flex flex-wrap gap-2">
             {outStock.map((s) => (
-              <span key={s.itemKey} className="rounded-md bg-[var(--bg-primary)] px-2 py-1 text-xs text-[var(--text-on-primary)]">
+              <span key={s.itemKey} className="rounded-lg bg-[var(--bg-primary)] px-2.5 py-1 text-xs text-[var(--text-on-primary)]">
                 {s.itemName} — {t('outOfStock')}
               </span>
             ))}
             {lowStock.map((s) => (
-              <span key={s.itemKey} className="rounded-md bg-[var(--bg-warning)] px-2 py-1 text-xs text-[var(--text-primary)]">
+              <span key={s.itemKey} className="rounded-lg bg-[var(--bg-warning)] px-2.5 py-1 text-xs text-[var(--text-primary)]">
                 {s.itemName} — {s.qty} {s.unit || ''} {t('lowStock')}
               </span>
             ))}
           </div>
-        </section>
+        </Card>
       )}
 
       {customers.length === 0 && (
-        <p className="rounded-lg bg-[var(--bg-card)] p-4 text-center text-sm text-[var(--text-faint)]">{t('noCustomers')}</p>
+        <Card>
+          <EmptyState
+            icon={<UsersIcon size={48} />}
+            title={t('noCustomers')}
+            description="Upload a bill or create a quick bill to get started."
+            action={{ label: t('uploadBill'), href: '/upload' }}
+          />
+        </Card>
       )}
 
       <section className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-lg bg-[var(--bg-card)] p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">{t('topDues')}</h2>
-            <Link href="/customers" className="text-xs text-[var(--bg-primary)] hover:underline">
-              {t('allCustomers')}
-            </Link>
-          </div>
+        <Card>
+          <SectionHeader
+            title={t('topDues')}
+            icon={<DollarIcon size={16} />}
+            action={<Link href="/customers" className="text-xs text-[var(--bg-primary)] hover:underline">{t('allCustomers')}</Link>}
+          />
           <ul className="divide-y divide-[var(--border-light)]">
             {topDues.map((c) => (
               <li key={c.id}>
-                <Link href={`/customers/${c.id}`} className="flex items-center justify-between gap-2 py-2 hover:opacity-80">
+                <Link href={`/customers/${c.id}`} className="flex items-center justify-between gap-2 py-2.5 hover:opacity-80">
                   <span className="flex min-w-0 items-center gap-2">
                     <span className="truncate font-medium">{c.name}</span>
                     <AgingBadge aging={computeAging(c.txns)} />
@@ -145,42 +170,26 @@ export default function Home() {
             ))}
             {topDues.length === 0 && <li className="py-3 text-sm text-[var(--text-faint)]">{t('noCustomers')}</li>}
           </ul>
-        </div>
+        </Card>
 
-        <div className="rounded-lg bg-[var(--bg-card)] p-3">
-          <h2 className="mb-2 text-sm font-semibold">{t('recentActivity')}</h2>
-          {recent.length === 0 && <p className="text-sm text-[var(--text-faint)]">{t('noActivity')}</p>}
-          <div className="space-y-2">
-            {recent.map((txn) => (
-              <div key={txn.id}>
-                <Link href={`/customers/${txn.customerId}`} className="mb-1 block text-[11px] text-[var(--bg-primary)] hover:underline">
-                  {txn.customerName}
-                </Link>
-                <TxnCard txn={txn} compact />
-              </div>
-            ))}
-          </div>
-        </div>
+        <Card>
+          <SectionHeader title={t('recentActivity')} icon={<CalendarIcon size={16} />} />
+          {recent.length === 0 ? (
+            <p className="text-sm text-[var(--text-faint)] py-3">{t('noActivity')}</p>
+          ) : (
+            <div className="space-y-2">
+              {recent.map((txn) => (
+                <div key={txn.id}>
+                  <Link href={`/customers/${txn.customerId}`} className="mb-1 block text-[11px] text-[var(--bg-primary)] hover:underline">
+                    {txn.customerName}
+                  </Link>
+                  <TxnCard txn={txn} compact />
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
       </section>
-    </div>
-  );
-}
-
-function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <div className="rounded-lg bg-[var(--bg-card)] px-3 py-2.5">
-      <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">{label}</p>
-      <p className={`text-lg font-bold sm:text-xl ${accent ? 'text-[var(--bg-primary)]' : ''}`}>{value}</p>
-    </div>
-  );
-}
-
-function MiniStat({ label, value, accent }: { label: string; value: string; accent?: 'green' | 'red' }) {
-  const colorClass = accent === 'green' ? 'text-[var(--bg-success)]' : accent === 'red' ? 'text-[var(--bg-primary)]' : '';
-  return (
-    <div>
-      <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">{label}</p>
-      <p className={`text-base font-bold ${colorClass}`}>{value}</p>
     </div>
   );
 }
