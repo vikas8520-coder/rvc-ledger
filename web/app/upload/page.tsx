@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { recognizeBill, OcrProgress, smartRecognizeBill, SmartOcrProgress, OcrSource, GeminiBill } from '@/lib/ocr';
+import { recognizeBill, OcrProgress, smartRecognizeBill, SmartOcrProgress, OcrSource, GeminiBill, DailySummary } from '@/lib/ocr';
 import { parseBillText, buildDisplay } from '@/lib/parser';
 import { BillItem } from '@/lib/types';
 import { classifyScript, setRuntimeAliases, getRuntimeAlias } from '@/lib/catalog';
@@ -45,6 +45,7 @@ export default function UploadPage() {
   const [ocrSource, setOcrSource] = useState<OcrSource | null>(null);
   const [geminiBills, setGeminiBills] = useState<GeminiBill[]>([]);
   const [selectedBillIdx, setSelectedBillIdx] = useState(0);
+  const [dailySummary, setDailySummary] = useState<DailySummary | null>(null);
 
   const [customerList, setCustomerList] = useState<string[]>([]);
   const [customerSelect, setCustomerSelect] = useState('__new__');
@@ -161,14 +162,15 @@ export default function UploadPage() {
 
     setDate(bill.date || '');
     setBillNo(bill.bill_no || '');
-    setTotal(bill.total || 0);
+    setTotal(bill.total_amount || 0);
 
-    const editable = (bill.items || []).map((it) => ({
-      raw: it.name,
-      confirmed: it.name,
-      qty: it.qty || '',
-      rate: it.rate || '',
-      amount: it.amount || 0,
+    // Convert entries (bags/weight/name) into item rows
+    const editable = (bill.entries || []).map((entry) => ({
+      raw: entry.name || '',
+      confirmed: entry.name || '',
+      qty: entry.weight_kg ? `${entry.weight_kg} kg` : (entry.bags ? `${entry.bags} bags` : ''),
+      rate: '',
+      amount: 0,
       kind: 'item' as const,
       chargeCode: null,
     }));
@@ -190,6 +192,7 @@ export default function UploadPage() {
     setOcrSource(null);
     setGeminiBills([]);
     setSelectedBillIdx(0);
+    setDailySummary(null);
     setCustomerSelect('__new__');
     setCustomerInput('');
     setCustomer('');
@@ -209,6 +212,7 @@ export default function UploadPage() {
       // If Gemini returned structured bills, use those directly
       if (result.bills && result.bills.length > 0) {
         setGeminiBills(result.bills);
+        setDailySummary(result.dailySummary || null);
         // Load the first bill into the form
         loadGeminiBill(result.bills[0]);
         setStep('review');
@@ -442,6 +446,28 @@ export default function UploadPage() {
               {ocrSource === 'gemini' ? `✓ ${t('ocrAIBadge')}` : `✓ ${t('ocrLocalBadge')}`}
             </div>
           )}
+          {dailySummary && (dailySummary.bags_covers || dailySummary.bigbags || dailySummary.total_bags) && (
+            <div className="rounded-2xl bg-[var(--bg-card)] p-4">
+              <p className="mb-2 text-sm font-medium">Today's Stock Summary</p>
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div>
+                  <p className="text-2xl font-bold">{dailySummary.bags_covers ?? '?'}</p>
+                  <p className="text-xs text-[var(--text-muted)]">Bags / Covers</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{dailySummary.bigbags ?? '?'}</p>
+                  <p className="text-xs text-[var(--text-muted)]">Big Bags / Bastas</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{dailySummary.total_bags ?? '?'}</p>
+                  <p className="text-xs text-[var(--text-muted)]">Total</p>
+                </div>
+              </div>
+              {dailySummary.notes && (
+                <p className="mt-2 text-xs text-[var(--text-muted)]">Notes: {dailySummary.notes}</p>
+              )}
+            </div>
+          )}
           {geminiBills.length > 1 && (
             <div className="rounded-2xl bg-[var(--bg-card)] p-4">
               <p className="mb-2 text-sm font-medium">Multiple bills found in this image ({geminiBills.length})</p>
@@ -456,7 +482,7 @@ export default function UploadPage() {
                     className={`rounded-lg px-3 py-1.5 text-sm ${idx === selectedBillIdx ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]' : 'bg-[var(--bg-secondary)] text-[var(--text-on-primary)]'}`}
                   >
                     {bill.customer_name || `Bill ${idx + 1}`}
-                    {bill.total ? ` · ₹${bill.total}` : ''}
+                    {bill.total_amount ? ` · ₹${bill.total_amount}` : ''}
                   </button>
                 ))}
               </div>

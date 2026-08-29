@@ -192,26 +192,35 @@ export async function recognizeBill(
 
 export type OcrSource = 'tesseract' | 'gemini';
 
-export interface GeminiItem {
-  name: string;
-  qty: string | null;
-  rate: string | null;
-  amount: number | null;
+export interface GeminiEntry {
+  bags: number | null;
+  weight_kg: number | null;
+  name: string | null;
 }
 
 export interface GeminiBill {
   customer_name: string;
   date: string | null;
   bill_no: string | null;
-  items: GeminiItem[];
-  total: number | null;
+  entries: GeminiEntry[];
+  total_bags: number | null;
+  total_weight: number | null;
+  total_amount: number | null;
+}
+
+export interface DailySummary {
+  bags_covers: number | null;
+  bigbags: number | null;
+  total_bags: number | null;
+  notes: string | null;
 }
 
 export interface OcrResult {
   text: string;
   source: OcrSource;
   tesseractText?: string;
-  bills?: GeminiBill[]; // structured data from Gemini
+  bills?: GeminiBill[];
+  dailySummary?: DailySummary;
 }
 
 export interface SmartOcrProgress {
@@ -319,8 +328,7 @@ async function compressImageForApi(file: File, maxWidth = 1600, quality = 0.8): 
  * Call the server-side Gemini OCR API route.
  * Returns structured bill data + raw text.
  */
-async function recognizeWithGemini(file: File): Promise<{ text: string; bills: GeminiBill[] }> {
-  // Compress image before sending — large photos cause 413 errors
+async function recognizeWithGemini(file: File): Promise<{ text: string; bills: GeminiBill[]; dailySummary?: DailySummary }> {
   const { base64: imageBase64, mimeType } = await compressImageForApi(file);
 
   const response = await fetch('/api/ocr/gemini', {
@@ -338,6 +346,7 @@ async function recognizeWithGemini(file: File): Promise<{ text: string; bills: G
   return {
     text: data.rawText || '',
     bills: data.bills || [],
+    dailySummary: data.dailySummary,
   };
 }
 
@@ -391,6 +400,7 @@ export async function smartRecognizeBill(
         source: 'gemini',
         tesseractText,
         bills: geminiResult.bills,
+        dailySummary: geminiResult.dailySummary,
       };
     }
 
