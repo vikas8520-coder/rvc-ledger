@@ -196,8 +196,8 @@ export default function CustomersPage() {
           <EmptyState
             icon={<UsersIcon size={48} />}
             title={q ? t('noCustomers') : t('noCustomers')}
-            description={q ? 'Try a different search term.' : 'Add customers by creating bills or uploading bills.'}
-            action={q ? undefined : { label: t('quickBill'), href: '/quick-bill' }}
+            description={q ? 'Try a different search term.' : 'Add customers by recording sales.'}
+            action={q ? undefined : { label: t('sell'), href: '/sell' }}
           />
         </Card>
       ) : (

@@ -127,13 +127,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             <LanguageSwitcher />
             <ThemeToggle />
-            {/* Desktop action buttons */}
+            {/* Desktop action buttons — same 3 as mobile bottom bar */}
             <Link
-              href="/quick-bill"
+              href="/receive"
               className="hidden sm:flex items-center gap-1.5 rounded-lg bg-[var(--bg-secondary)] px-3 py-1.5 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-secondary-hover)]"
             >
-              <PlusIcon size={14} />
-              {t('quickBill')}
+              <TruckIcon size={14} />
+              {t('receiveStock')}
+            </Link>
+            <Link
+              href="/sell"
+              className="hidden sm:flex items-center gap-1.5 rounded-lg bg-[var(--bg-primary)] px-3 py-1.5 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-primary-hover)]"
+            >
+              <StoreIcon size={14} />
+              {t('sell')}
             </Link>
             <Link
               href="/payment"
@@ -141,13 +148,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             >
               <DollarIcon size={14} />
               {t('recordPayment')}
-            </Link>
-            <Link
-              href="/upload"
-              className="hidden sm:flex items-center gap-1.5 rounded-lg bg-[var(--bg-primary)] px-3 py-1.5 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-primary-hover)]"
-            >
-              <CameraIcon size={14} />
-              {t('uploadBill')}
             </Link>
             {/* Mobile menu toggle */}
             <button

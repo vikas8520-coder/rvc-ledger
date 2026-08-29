@@ -143,8 +143,8 @@ export default function Home() {
           <EmptyState
             icon={<UsersIcon size={48} />}
             title={t('noCustomers')}
-            description="Upload a bill or create a quick bill to get started."
-            action={{ label: t('uploadBill'), href: '/upload' }}
+            description="Record stock received from a farmer or make a sale to get started."
+            action={{ label: t('receiveStock'), href: '/receive' }}
           />
         </Card>
       )}

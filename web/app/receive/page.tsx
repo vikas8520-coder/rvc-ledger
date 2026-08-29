@@ -20,6 +20,28 @@ interface BagGroup {
   pricePerKg: string;
 }
 
+interface Charge {
+  id: string;
+  type: 'hamali' | 'tulai' | 'bardana' | 'safai' | 'jhadai' | 'dami' | 'commission' | 'marketfee' | 'advance' | 'other';
+  label: string;
+  rateType: 'per_bag' | 'flat' | 'percent';
+  rate: string;
+  amount: string;
+}
+
+const CHARGE_TYPES: { type: Charge['type']; label: string; defaultRateType: Charge['rateType']; hint: string }[] = [
+  { type: 'hamali', label: 'Hamali (Labour)', defaultRateType: 'per_bag', hint: '₹ per bag — loading/unloading' },
+  { type: 'tulai', label: 'Tulai (Weighing)', defaultRateType: 'per_bag', hint: '₹ per bag — weighing charge' },
+  { type: 'bardana', label: 'Bardana (Bags/Crates)', defaultRateType: 'per_bag', hint: '₹ per bag — packaging cost' },
+  { type: 'safai', label: 'Safai (Cleaning)', defaultRateType: 'flat', hint: '₹ flat — floor cleaning' },
+  { type: 'jhadai', label: 'Jhadai (Sieving)', defaultRateType: 'flat', hint: '₹ flat — cleaning produce' },
+  { type: 'dami', label: 'Dami', defaultRateType: 'flat', hint: '₹ flat — traditional deduction' },
+  { type: 'commission', label: 'Commission (Arhat)', defaultRateType: 'percent', hint: '% of sale value' },
+  { type: 'marketfee', label: 'Market Fee (APMC)', defaultRateType: 'percent', hint: '% of sale value — buyer pays' },
+  { type: 'advance', label: 'Advance Recovery', defaultRateType: 'flat', hint: '₹ flat — recover prior advance' },
+  { type: 'other', label: 'Other Charge', defaultRateType: 'flat', hint: '₹ flat — custom deduction' },
+];
+
 export default function ReceivePage() {
   const { t } = useI18n();
   const [date, setDate] = useState(today());
@@ -31,6 +53,8 @@ export default function ReceivePage() {
     { id: newId(), weightKg: '', numBags: '', pricePerKg: '' },
   ]);
   const [samePrice, setSamePrice] = useState(true);
+  const [charges, setCharges] = useState<Charge[]>([]);
+  const [showCharges, setShowCharges] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [saved, setSaved] = useState(false);
@@ -46,6 +70,16 @@ export default function ReceivePage() {
   const totalBagsReceived = num(bagsCovers) + num(bigbags);
   const stockWeight = bagGroups.reduce((s, g) => s + num(g.weightKg) * num(g.numBags), 0);
   const stockValue = bagGroups.reduce((s, g) => s + num(g.weightKg) * num(g.numBags) * num(g.pricePerKg), 0);
+
+  // Calculate charge amounts
+  const totalBags = bagGroups.reduce((s, g) => s + num(g.numBags), 0);
+  const chargeAmounts = charges.map((c) => {
+    if (c.rateType === 'per_bag') return num(c.rate) * totalBags;
+    if (c.rateType === 'percent') return (stockValue * num(c.rate)) / 100;
+    return num(c.amount) || num(c.rate);
+  });
+  const totalCharges = chargeAmounts.reduce((s, a) => s + a, 0);
+  const netToFarmer = stockValue - totalCharges;
 
   const addBagGroup = () => {
     const lastPrice = samePrice && bagGroups.length > 0 ? bagGroups[0].pricePerKg : '';
@@ -63,13 +97,38 @@ export default function ReceivePage() {
     }
   }, [samePrice]);
 
+  const addCharge = (type: Charge['type']) => {
+    const def = CHARGE_TYPES.find((c) => c.type === type)!;
+    setCharges([...charges, {
+      id: newId(),
+      type,
+      label: def.label,
+      rateType: def.defaultRateType,
+      rate: '',
+      amount: '',
+    }]);
+  };
+
+  const updateCharge = (id: string, field: keyof Charge, value: string) => {
+    setCharges(charges.map((c) => (c.id === id ? { ...c, [field]: value } : c)));
+  };
+
+  const removeCharge = (id: string) => setCharges(charges.filter((c) => c.id !== id));
+
   const canSave = productName.trim() && totalBagsReceived > 0 && farmerName.trim();
 
   const handleSave = async () => {
     setSaving(true);
     setSaveError('');
     try {
-      const purchaseItems = bagGroups
+      const purchaseItems: Array<{
+        name: string;
+        qty: string | null;
+        rate: string | null;
+        amount: number;
+        kind: 'item' | 'charge';
+        chargeCode: null;
+      }> = bagGroups
         .filter((g) => num(g.numBags) > 0)
         .map((g) => ({
           name: productName,
@@ -77,10 +136,25 @@ export default function ReceivePage() {
           rate: g.pricePerKg || null,
           amount: num(g.weightKg) * num(g.numBags) * num(g.pricePerKg),
           kind: 'item' as const,
-          chargeCode: null,
+          chargeCode: null as null,
         }));
 
-      const total = purchaseItems.reduce((s, i) => s + i.amount, 0);
+      // Add charges as line items
+      charges.forEach((c, i) => {
+        const amt = chargeAmounts[i];
+        if (amt > 0) {
+          purchaseItems.push({
+            name: c.label,
+            qty: c.rateType === 'per_bag' ? `${c.rate}/bag × ${totalBags}` : c.rateType === 'percent' ? `${c.rate}%` : null,
+            rate: null,
+            amount: -amt,
+            kind: 'charge' as const,
+            chargeCode: null,
+          });
+        }
+      });
+
+      const total = stockValue - totalCharges;
 
       const res = await fetch('/api/purchases', {
         method: 'POST',
@@ -107,6 +181,7 @@ export default function ReceivePage() {
   const reset = () => {
     setProductName(''); setFarmerName(''); setBagsCovers(''); setBigbags('');
     setBagGroups([{ id: newId(), weightKg: '', numBags: '', pricePerKg: '' }]);
+    setCharges([]); setShowCharges(false);
     setSaved(false); setSaveError('');
   };
 
@@ -116,7 +191,10 @@ export default function ReceivePage() {
         <div className="rounded-2xl bg-[var(--bg-success)] p-6 text-center text-[var(--text-on-primary)]">
           <p className="text-2xl font-bold">✓ Stock Received</p>
           <p className="mt-1 text-sm opacity-90">{productName} from {farmerName}</p>
-          <p className="text-sm opacity-90">{totalBagsReceived} bags · {stockWeight} kg · {fmt(stockValue)}</p>
+          <p className="text-sm opacity-90">{totalBagsReceived} bags · {stockWeight} kg · Gross {fmt(stockValue)}</p>
+          {totalCharges > 0 && (
+            <p className="text-sm opacity-90">Deductions: {fmt(totalCharges)} · Net to farmer: {fmt(netToFarmer)}</p>
+          )}
         </div>
         <button onClick={reset} className="w-full rounded-lg bg-[var(--bg-primary)] py-3 text-sm font-medium text-[var(--text-on-primary)]">
           Receive More Stock
@@ -127,6 +205,7 @@ export default function ReceivePage() {
 
   return (
     <div className="space-y-4">
+      {/* Stock details */}
       <div className="rounded-2xl bg-[var(--bg-card)] p-4 space-y-3">
         <p className="text-sm font-medium">Receive Stock from Farmer</p>
 
@@ -174,6 +253,7 @@ export default function ReceivePage() {
         )}
       </div>
 
+      {/* Bag weight details */}
       <div className="rounded-2xl bg-[var(--bg-card)] p-4 space-y-3">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium">Bag Details (weight & price)</p>
@@ -218,8 +298,98 @@ export default function ReceivePage() {
         {stockWeight > 0 && (
           <div className="rounded-lg bg-[var(--bg-secondary)] px-3 py-2 text-sm">
             Total: <span className="font-bold">{stockWeight} kg</span>
-            {stockValue > 0 && <span> · {fmt(stockValue)}</span>}
+            {stockValue > 0 && <span> · Gross {fmt(stockValue)}</span>}
           </div>
+        )}
+      </div>
+
+      {/* Optional charges section */}
+      <div className="rounded-2xl bg-[var(--bg-card)] p-4 space-y-3">
+        <button onClick={() => setShowCharges(!showCharges)}
+          className="flex w-full items-center justify-between text-sm font-medium">
+          <span>Charges & Deductions {charges.length > 0 && `(${charges.length})`}</span>
+          <span className="text-xs text-[var(--text-muted)]">{showCharges ? '▲' : '▼'} Optional</span>
+        </button>
+
+        {showCharges && (
+          <>
+            {charges.length === 0 && (
+              <p className="text-xs text-[var(--text-muted)]">Add only the charges that apply to this sale. Skip what doesn't.</p>
+            )}
+
+            {charges.map((c, i) => (
+              <div key={c.id} className="rounded-lg border border-[var(--border-input)] p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium">{c.label}</span>
+                  <button onClick={() => removeCharge(c.id)} className="text-xs text-[var(--text-primary)]">Remove</button>
+                </div>
+                <div className="flex items-end gap-2">
+                  {c.rateType === 'per_bag' && (
+                    <>
+                      <div className="flex-1">
+                        <label className="text-xs text-[var(--text-muted)]">₹ per bag</label>
+                        <input type="number" value={c.rate} onChange={(e) => updateCharge(c.id, 'rate', e.target.value)}
+                          placeholder="3" inputMode="decimal"
+                          className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
+                      </div>
+                      <div className="flex-1 rounded-lg bg-[var(--bg-secondary)] px-3 py-2 text-sm">
+                        × {totalBags} bags = <span className="font-bold">{fmt(num(c.rate) * totalBags)}</span>
+                      </div>
+                    </>
+                  )}
+                  {c.rateType === 'percent' && (
+                    <>
+                      <div className="flex-1">
+                        <label className="text-xs text-[var(--text-muted)]">%</label>
+                        <input type="number" value={c.rate} onChange={(e) => updateCharge(c.id, 'rate', e.target.value)}
+                          placeholder="6" inputMode="decimal"
+                          className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
+                      </div>
+                      <div className="flex-1 rounded-lg bg-[var(--bg-secondary)] px-3 py-2 text-sm">
+                        {c.rate}% of {fmt(stockValue)} = <span className="font-bold">{fmt((stockValue * num(c.rate)) / 100)}</span>
+                      </div>
+                    </>
+                  )}
+                  {c.rateType === 'flat' && (
+                    <div className="flex-1">
+                      <label className="text-xs text-[var(--text-muted)]">₹ amount</label>
+                      <input type="number" value={c.amount} onChange={(e) => updateCharge(c.id, 'amount', e.target.value)}
+                        placeholder="100" inputMode="numeric"
+                        className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {/* Add charge buttons */}
+            <div className="flex flex-wrap gap-1.5">
+              {CHARGE_TYPES.filter((ct) => !charges.some((c) => c.type === ct.type)).map((ct) => (
+                <button key={ct.type} onClick={() => addCharge(ct.type)}
+                  title={ct.hint}
+                  className="rounded-lg border border-dashed border-[var(--border-input)] px-2.5 py-1.5 text-xs text-[var(--text-muted)] hover:border-[var(--bg-primary)]">
+                  + {ct.label}
+                </button>
+              ))}
+            </div>
+
+            {totalCharges > 0 && (
+              <div className="rounded-lg bg-[var(--bg-secondary)] px-3 py-2 space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-muted)]">Gross value</span>
+                  <span>{fmt(stockValue)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-muted)]">Total deductions</span>
+                  <span className="text-[var(--bg-primary)]">-{fmt(totalCharges)}</span>
+                </div>
+                <div className="flex justify-between border-t border-[var(--border-input)] pt-1 font-bold">
+                  <span>Net to farmer</span>
+                  <span className="text-[var(--bg-success)]">{fmt(netToFarmer)}</span>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
