@@ -4,10 +4,10 @@ import { requireShopAuth, AuthError } from '@/lib/auth';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
 
-// Try models in order — if one is overloaded (503), try the next
+// Models to try — gemini-3.6-flash is most reliable for vision OCR right now
 const GEMINI_MODELS = [
-  'gemini-flash-latest',
   'gemini-3.6-flash',
+  'gemini-flash-latest',
   'gemini-3.5-flash',
   'gemini-2.5-flash',
 ];
@@ -106,16 +106,21 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    // Try each model in order
+    // Try each model in order — with a 25s timeout per model so we
+    // don't burn the entire 120s Vercel limit on one overloaded model
     let lastError = '';
     for (const model of GEMINI_MODELS) {
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
       try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 25000);
         const response = await fetch(`${endpoint}?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
+          signal: controller.signal,
         });
+        clearTimeout(timeout);
 
         if (response.ok) {
           const data = await response.json();
