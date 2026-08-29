@@ -4,8 +4,13 @@ import { requireShopAuth, AuthError } from '@/lib/auth';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
 
-const GEMINI_MODEL = 'gemini-flash-latest';
-const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+// Try models in order — if one is overloaded (503), try the next
+const GEMINI_MODELS = [
+  'gemini-flash-latest',
+  'gemini-3.6-flash',
+  'gemini-3.5-flash',
+  'gemini-2.5-flash',
+];
 
 const SYSTEM_PROMPT = `You are an expert OCR assistant for a vegetable market shop in Telangana, India.
 You read photographs of bills and ledger entries that may be:
@@ -83,35 +88,60 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    const response = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    // Try each model in order — if one returns 503 (overloaded), try the next
+    let lastError = '';
+    for (const model of GEMINI_MODELS) {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+      try {
+        const response = await fetch(`${endpoint}?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error('Gemini API error:', response.status, errText);
-      return NextResponse.json(
-        { error: `Gemini API error: ${response.status}` },
-        { status: 502 }
-      );
+        if (response.ok) {
+          const data = await response.json();
+          const text =
+            data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+            data?.candidates?.[0]?.content?.parts
+              ?.filter((p: any) => p.text)
+              .map((p: any) => p.text)
+              .join('\n') ||
+            '';
+
+          if (text && text.trim() !== '') {
+            return NextResponse.json({ text: text.trim() });
+          }
+          // Empty result — try next model
+          lastError = 'No text extracted';
+          continue;
+        }
+
+        const errText = await response.text();
+        console.error(`Gemini ${model} error:`, response.status, errText);
+
+        if (response.status === 503 || response.status === 429) {
+          // Overloaded or rate limited — try next model
+          lastError = `Model ${model} overloaded (${response.status})`;
+          continue;
+        }
+
+        // Other errors (400, 404) — try next model
+        lastError = `Model ${model} error: ${response.status}`;
+        continue;
+      } catch (fetchErr: any) {
+        console.error(`Gemini ${model} fetch error:`, fetchErr);
+        lastError = fetchErr.message;
+        continue;
+      }
     }
 
-    const data = await response.json();
-    const text =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      data?.candidates?.[0]?.content?.parts
-        ?.filter((p: any) => p.text)
-        .map((p: any) => p.text)
-        .join('\n') ||
-      '';
-
-    if (!text || text.trim() === '') {
-      return NextResponse.json({ text: '', error: 'No text extracted' }, { status: 200 });
-    }
-
-    return NextResponse.json({ text: text.trim() });
+    // All models failed
+    console.error('All Gemini models failed:', lastError);
+    return NextResponse.json(
+      { error: lastError || 'All Gemini models unavailable' },
+      { status: 502 }
+    );
   } catch (err: any) {
     if (err instanceof AuthError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
