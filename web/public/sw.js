@@ -1,5 +1,5 @@
-const CACHE = 'rvc-ledger-v1';
-const SHELL = ['/', '/customers', '/purchases', '/suppliers', '/wastage', '/reports', '/manifest.json', '/icon.svg'];
+const CACHE = 'rvc-ledger-v3';
+const SHELL = ['/', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -37,17 +37,34 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache-first for static assets and pages
+  // Network-first for pages — always get the latest version
+  if (url.pathname.startsWith('/_next/static/')) {
+    // Cache-first for static assets (they have hashed names, so they're safe)
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) return cached;
+        return fetch(request).then((response) => {
+          if (response.ok && url.origin === self.location.origin) {
+            const copy = response.clone();
+            caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
+          }
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // Network-first for pages — fall back to cache when offline
   event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached;
-      return fetch(request).then((response) => {
+    fetch(request)
+      .then((response) => {
         if (response.ok && url.origin === self.location.origin) {
           const copy = response.clone();
           caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
         }
         return response;
-      }).catch(() => cached || caches.match('/'));
-    })
+      })
+      .catch(() => caches.match(request).then((cached) => cached || caches.match('/')))
   );
 });
