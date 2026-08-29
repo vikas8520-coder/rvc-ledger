@@ -165,15 +165,21 @@ export default function UploadPage() {
     setTotal(bill.total_amount || 0);
 
     // Convert entries (bags/weight/name) into item rows
-    const editable = (bill.entries || []).map((entry) => ({
-      raw: entry.name || '',
-      confirmed: entry.name || '',
-      qty: entry.weight_kg ? `${entry.weight_kg} kg` : (entry.bags ? `${entry.bags} bags` : ''),
-      rate: '',
-      amount: 0,
-      kind: 'item' as const,
-      chargeCode: null,
-    }));
+    // Prepend product name (e.g. "Mirchi") if available from daily summary
+    const productName = dailySummary?.product_name;
+    const editable = (bill.entries || []).map((entry) => {
+      const entryName = entry.name || '';
+      const fullDesc = productName ? `${productName} — ${entryName}` : entryName;
+      return {
+        raw: fullDesc,
+        confirmed: fullDesc,
+        qty: entry.weight_kg ? `${entry.weight_kg} kg` : (entry.bags ? `${entry.bags} bags` : ''),
+        rate: '',
+        amount: 0,
+        kind: 'item' as const,
+        chargeCode: null,
+      };
+    });
     setItems(editable);
     setUnparsed([]);
   };
@@ -446,9 +452,11 @@ export default function UploadPage() {
               {ocrSource === 'gemini' ? `✓ ${t('ocrAIBadge')}` : `✓ ${t('ocrLocalBadge')}`}
             </div>
           )}
-          {dailySummary && (dailySummary.bags_covers || dailySummary.bigbags || dailySummary.total_bags) && (
+          {dailySummary && (dailySummary.product_name || dailySummary.bags_covers || dailySummary.bigbags || dailySummary.total_bags) && (
             <div className="rounded-2xl bg-[var(--bg-card)] p-4">
-              <p className="mb-2 text-sm font-medium">Today's Stock Summary</p>
+              <p className="mb-2 text-sm font-medium">
+                Today's Stock Summary{dailySummary.product_name ? ` — ${dailySummary.product_name}` : ''}
+              </p>
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div>
                   <p className="text-2xl font-bold">{dailySummary.bags_covers ?? '?'}</p>

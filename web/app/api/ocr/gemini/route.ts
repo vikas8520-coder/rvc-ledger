@@ -18,6 +18,7 @@ You read photographs of daily sales ledger pages that may be handwritten in Telu
 The page has TWO sections:
 
 1. TOP SUMMARY (stock received that day):
+   - product_name: the product/vegetable being sold (e.g. "మిర్చి", "Mirchi", "Tomato") — keep original script
    - bags_covers: number of small bags/covers
    - bigbags: number of big bags/bastas
    - total_bags: total (bags_covers + bigbags)
@@ -34,6 +35,7 @@ The page has TWO sections:
 Output as JSON:
 {
   "daily_summary": {
+    "product_name": "మిర్చి",
     "bags_covers": 204,
     "bigbags": 90,
     "total_bags": 294,

@@ -209,6 +209,7 @@ export interface GeminiBill {
 }
 
 export interface DailySummary {
+  product_name: string | null;
   bags_covers: number | null;
   bigbags: number | null;
   total_bags: number | null;
