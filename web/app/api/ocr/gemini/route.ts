@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireShopAuth, AuthError } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 120;
 
-const GEMINI_MODEL = 'gemini-2.5-flash';
+const GEMINI_MODEL = 'gemini-flash-latest';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 const SYSTEM_PROMPT = `You are an expert OCR assistant for a vegetable market shop in Telangana, India.
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
       ],
       generationConfig: {
         temperature: 0.1,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 4096,
       },
     };
 
