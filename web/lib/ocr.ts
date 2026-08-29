@@ -295,28 +295,39 @@ export async function smartRecognizeBill(
   onProgress?: (msg: SmartOcrProgress) => void
 ): Promise<OcrResult> {
   // Step 1: Try Tesseract (free, local)
+  // Wrap in try/catch — Tesseract can crash on certain browsers/devices
+  // (WASM SIMD issues, missing SSE functions, etc.)
+  let tesseractText = '';
+  let tesseractCrashed = false;
+
   onProgress?.({ status: 'local_ocr', progress: 0, source: 'tesseract' });
 
-  const tesseractText = await recognizeBill(file, langs, (m) => {
-    onProgress?.({ status: m.status, progress: m.progress, source: 'tesseract' });
-  });
+  try {
+    tesseractText = await recognizeBill(file, langs, (m) => {
+      onProgress?.({ status: m.status, progress: m.progress, source: 'tesseract' });
+    });
+  } catch (err) {
+    console.error('Tesseract OCR crashed, falling back to Gemini:', err);
+    tesseractCrashed = true;
+    tesseractText = '';
+  }
 
-  // Step 2: Check if Tesseract result is good enough
-  if (isTesseractResultGoodEnough(tesseractText)) {
+  // Step 2: Check if Tesseract result is good enough (skip if it crashed)
+  if (!tesseractCrashed && isTesseractResultGoodEnough(tesseractText)) {
     onProgress?.({ status: 'done', progress: 1, source: 'tesseract' });
     return { text: tesseractText, source: 'tesseract', tesseractText };
   }
 
-  // Step 3: Tesseract failed — this is likely handwritten.
-  // Fall back to Gemini API (paid, but handles handwriting).
+  // Step 3: Tesseract failed or crashed — fall back to Gemini API.
+  // This handles both: handwritten bills (Tesseract can't read) and
+  // Tesseract crashes (WASM issues on certain devices).
   onProgress?.({ status: 'ai_ocr', progress: 0, source: 'gemini' });
 
   try {
     const geminiText = await recognizeWithGemini(file);
     onProgress?.({ status: 'done', progress: 1, source: 'gemini' });
 
-    // If Gemini also returns nothing, give back the Tesseract text
-    // (something is better than nothing for manual review)
+    // If Gemini also returns nothing, give back whatever we have
     if (!geminiText || geminiText.trim() === '' || geminiText.includes('[NO TEXT FOUND]')) {
       return { text: tesseractText, source: 'tesseract', tesseractText };
     }
@@ -324,8 +335,8 @@ export async function smartRecognizeBill(
     return { text: geminiText, source: 'gemini', tesseractText };
   } catch (err) {
     console.error('Gemini OCR fallback failed:', err);
-    // Return Tesseract result as last resort — user can correct manually
     onProgress?.({ status: 'ai_ocr_failed', progress: 1, source: 'gemini' });
+    // Return whatever Tesseract produced (may be empty) — user can correct manually
     return { text: tesseractText, source: 'tesseract', tesseractText };
   }
 }
