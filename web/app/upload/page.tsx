@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { recognizeBill, OcrProgress, smartRecognizeBill, SmartOcrProgress, OcrSource } from '@/lib/ocr';
+import { recognizeBill, OcrProgress, smartRecognizeBill, SmartOcrProgress, OcrSource, GeminiBill } from '@/lib/ocr';
 import { parseBillText, buildDisplay } from '@/lib/parser';
 import { BillItem } from '@/lib/types';
 import { classifyScript, setRuntimeAliases, getRuntimeAlias } from '@/lib/catalog';
@@ -43,6 +43,8 @@ export default function UploadPage() {
   const [progress, setProgress] = useState<SmartOcrProgress | null>(null);
   const [ocrText, setOcrText] = useState('');
   const [ocrSource, setOcrSource] = useState<OcrSource | null>(null);
+  const [geminiBills, setGeminiBills] = useState<GeminiBill[]>([]);
+  const [selectedBillIdx, setSelectedBillIdx] = useState(0);
 
   const [customerList, setCustomerList] = useState<string[]>([]);
   const [customerSelect, setCustomerSelect] = useState('__new__');
@@ -139,6 +141,41 @@ export default function UploadPage() {
     setNewCustomerConfirmed(false);
   };
 
+  // Load a Gemini-extracted structured bill into the form fields
+  const loadGeminiBill = (bill: GeminiBill) => {
+    // Set customer
+    if (bill.customer_name) {
+      const existing = customerList.find(
+        (c) => c.toLowerCase() === bill.customer_name.toLowerCase()
+      );
+      if (existing) {
+        setCustomerSelect(existing);
+        setCustomer(existing);
+      } else {
+        setCustomerSelect('__new__');
+        setCustomerInput(bill.customer_name);
+        setCustomer(bill.customer_name);
+        setNewCustomerConfirmed(true);
+      }
+    }
+
+    setDate(bill.date || '');
+    setBillNo(bill.bill_no || '');
+    setTotal(bill.total || 0);
+
+    const editable = (bill.items || []).map((it) => ({
+      raw: it.name,
+      confirmed: it.name,
+      qty: it.qty || '',
+      rate: it.rate || '',
+      amount: it.amount || 0,
+      kind: 'item' as const,
+      chargeCode: null,
+    }));
+    setItems(editable);
+    setUnparsed([]);
+  };
+
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -150,6 +187,9 @@ export default function UploadPage() {
 
     // Reset all fields from any previous upload
     setOcrText('');
+    setOcrSource(null);
+    setGeminiBills([]);
+    setSelectedBillIdx(0);
     setCustomerSelect('__new__');
     setCustomerInput('');
     setCustomer('');
@@ -165,6 +205,17 @@ export default function UploadPage() {
       });
       setOcrText(result.text);
       setOcrSource(result.source);
+
+      // If Gemini returned structured bills, use those directly
+      if (result.bills && result.bills.length > 0) {
+        setGeminiBills(result.bills);
+        // Load the first bill into the form
+        loadGeminiBill(result.bills[0]);
+        setStep('review');
+        return;
+      }
+
+      // Fallback: parse raw text with the existing parser
       const parsed = parseBillText(result.text);
 
       setDate(parsed.date || '');
@@ -389,6 +440,27 @@ export default function UploadPage() {
           {ocrSource && (
             <div className={`rounded-lg px-3 py-1.5 text-xs ${ocrSource === 'gemini' ? 'bg-[var(--bg-success)] text-[var(--text-on-primary)]' : 'bg-[var(--bg-secondary)] text-[var(--text-on-primary)]'}`}>
               {ocrSource === 'gemini' ? `✓ ${t('ocrAIBadge')}` : `✓ ${t('ocrLocalBadge')}`}
+            </div>
+          )}
+          {geminiBills.length > 1 && (
+            <div className="rounded-2xl bg-[var(--bg-card)] p-4">
+              <p className="mb-2 text-sm font-medium">Multiple bills found in this image ({geminiBills.length})</p>
+              <div className="flex flex-wrap gap-2">
+                {geminiBills.map((bill, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      setSelectedBillIdx(idx);
+                      loadGeminiBill(bill);
+                    }}
+                    className={`rounded-lg px-3 py-1.5 text-sm ${idx === selectedBillIdx ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]' : 'bg-[var(--bg-secondary)] text-[var(--text-on-primary)]'}`}
+                  >
+                    {bill.customer_name || `Bill ${idx + 1}`}
+                    {bill.total ? ` · ₹${bill.total}` : ''}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-[var(--text-muted)]">Review and save each bill one at a time. Click a name to load that bill.</p>
             </div>
           )}
           <section className="rounded-2xl bg-[var(--bg-card)] p-4">

@@ -12,30 +12,47 @@ const GEMINI_MODELS = [
   'gemini-2.5-flash',
 ];
 
-const SYSTEM_PROMPT = `You are an expert OCR assistant for a vegetable market shop in Telangana, India.
-You read photographs of bills and ledger entries that may be:
+const SYSTEM_PROMPT = `You are an expert OCR assistant for a vegetable market shop in Bowenpally, Telangana, India.
+You read photographs of bills and daily ledger pages that may be:
 - Handwritten in Telugu, Hindi, or English
 - Printed in any of those languages
 - Mixed language (e.g. Telugu names with English numbers)
-- Transliterated (Telugu written in English script)
+- A single bill for one customer, OR a daily ledger page with multiple customers
 
-Extract ALL text visible in the image, preserving the original structure:
-- Customer names (keep original script — Telugu, Hindi, or English)
-- Item names (keep original script)
-- Quantities and units (kg, g, pieces, dozen, etc.)
-- Rates and amounts (numbers)
-- Dates (any format)
-- Bill numbers
-- Any other text on the bill
+Your job: extract structured data from the image.
+
+For each customer bill visible in the image, extract:
+- customer_name: the customer name (keep original script — Telugu, Hindi, or English)
+- date: date if visible (format: YYYY-MM-DD, or null)
+- bill_no: bill number if visible (or null)
+- items: array of line items, each with:
+  - name: item/vegetable name (keep original script)
+  - qty: quantity as string (e.g. "10", "5 kg", "3")
+  - rate: rate per unit as string (e.g. "40", "25/kg") or null if not visible
+  - amount: total amount for this item as number (or null if not visible)
+- total: total bill amount as number (or null if not visible)
 
 Rules:
-1. Output ONLY the raw text as it appears on the bill — do not translate, do not summarize
-2. Preserve line breaks — each line on the bill should be a line in your output
-3. If you can read Telugu script, output Telugu script (do not transliterate to English)
-4. If the text is in English, output English
-5. If you cannot read something clearly, output your best guess followed by [?]
-6. Do not add commentary, explanations, or notes
-7. If the image is not a bill or contains no readable text, output: [NO TEXT FOUND]`;
+1. Keep names in their original script — do NOT transliterate Telugu to English
+2. If you cannot read a value, use null — do NOT guess numbers
+3. If the image is a single bill, return an array with one entry
+4. If the image is a daily ledger with multiple customers, return multiple entries
+5. Output ONLY a JSON array, no other text, no markdown, no explanation
+6. If the image has no readable text, return: []
+
+Example output:
+[
+  {
+    "customer_name": "రవి",
+    "date": "2026-08-29",
+    "bill_no": null,
+    "items": [
+      {"name": "టమాట", "qty": "10", "rate": "40", "amount": 400},
+      {"name": "Bendi", "qty": "5 kg", "rate": "30", "amount": 150}
+    ],
+    "total": 550
+  }
+]`;
 
 export async function POST(request: NextRequest) {
   try {
@@ -56,14 +73,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing image data' }, { status: 400 });
     }
 
-    // Validate MIME type — only allow image formats Gemini supports
+    // Validate MIME type
     const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
     if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
       return NextResponse.json({ error: 'Unsupported image format' }, { status: 400 });
     }
 
-    // Limit image size to 10MB decoded (base64 is ~33% larger than binary)
-    const MAX_BASE64_LENGTH = 14 * 1024 * 1024; // ~10MB binary → ~14MB base64
+    // Limit image size
+    const MAX_BASE64_LENGTH = 14 * 1024 * 1024;
     if (imageBase64.length > MAX_BASE64_LENGTH) {
       return NextResponse.json({ error: 'Image too large (max 10MB)' }, { status: 413 });
     }
@@ -84,11 +101,12 @@ export async function POST(request: NextRequest) {
       ],
       generationConfig: {
         temperature: 0.1,
-        maxOutputTokens: 4096,
+        maxOutputTokens: 8192,
+        responseMimeType: 'application/json',
       },
     };
 
-    // Try each model in order — if one returns 503 (overloaded), try the next
+    // Try each model in order
     let lastError = '';
     for (const model of GEMINI_MODELS) {
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
@@ -101,7 +119,7 @@ export async function POST(request: NextRequest) {
 
         if (response.ok) {
           const data = await response.json();
-          const text =
+          const rawText =
             data?.candidates?.[0]?.content?.parts?.[0]?.text ||
             data?.candidates?.[0]?.content?.parts
               ?.filter((p: any) => p.text)
@@ -109,10 +127,23 @@ export async function POST(request: NextRequest) {
               .join('\n') ||
             '';
 
-          if (text && text.trim() !== '') {
-            return NextResponse.json({ text: text.trim() });
+          if (rawText && rawText.trim() !== '') {
+            // Parse the JSON response
+            try {
+              const bills = JSON.parse(rawText);
+              if (Array.isArray(bills)) {
+                return NextResponse.json({ bills, rawText });
+              }
+              // If it's not an array, wrap it
+              if (bills && typeof bills === 'object') {
+                return NextResponse.json({ bills: [bills], rawText });
+              }
+            } catch (parseErr) {
+              console.error('JSON parse failed, returning raw text:', parseErr);
+              // If JSON parsing fails, return raw text for fallback parsing
+              return NextResponse.json({ bills: [], rawText });
+            }
           }
-          // Empty result — try next model
           lastError = 'No text extracted';
           continue;
         }
@@ -121,12 +152,10 @@ export async function POST(request: NextRequest) {
         console.error(`Gemini ${model} error:`, response.status, errText);
 
         if (response.status === 503 || response.status === 429) {
-          // Overloaded or rate limited — try next model
           lastError = `Model ${model} overloaded (${response.status})`;
           continue;
         }
 
-        // Other errors (400, 404) — try next model
         lastError = `Model ${model} error: ${response.status}`;
         continue;
       } catch (fetchErr: any) {
@@ -136,7 +165,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // All models failed
     console.error('All Gemini models failed:', lastError);
     return NextResponse.json(
       { error: lastError || 'All Gemini models unavailable' },

@@ -192,10 +192,26 @@ export async function recognizeBill(
 
 export type OcrSource = 'tesseract' | 'gemini';
 
+export interface GeminiItem {
+  name: string;
+  qty: string | null;
+  rate: string | null;
+  amount: number | null;
+}
+
+export interface GeminiBill {
+  customer_name: string;
+  date: string | null;
+  bill_no: string | null;
+  items: GeminiItem[];
+  total: number | null;
+}
+
 export interface OcrResult {
   text: string;
   source: OcrSource;
   tesseractText?: string;
+  bills?: GeminiBill[]; // structured data from Gemini
 }
 
 export interface SmartOcrProgress {
@@ -301,8 +317,9 @@ async function compressImageForApi(file: File, maxWidth = 1600, quality = 0.8): 
 
 /**
  * Call the server-side Gemini OCR API route.
+ * Returns structured bill data + raw text.
  */
-async function recognizeWithGemini(file: File): Promise<string> {
+async function recognizeWithGemini(file: File): Promise<{ text: string; bills: GeminiBill[] }> {
   // Compress image before sending — large photos cause 413 errors
   const { base64: imageBase64, mimeType } = await compressImageForApi(file);
 
@@ -318,7 +335,10 @@ async function recognizeWithGemini(file: File): Promise<string> {
   }
 
   const data = await response.json();
-  return data.text || '';
+  return {
+    text: data.rawText || '',
+    bills: data.bills || [],
+  };
 }
 
 /**
@@ -358,24 +378,32 @@ export async function smartRecognizeBill(
   }
 
   // Step 3: Tesseract failed or crashed — fall back to Gemini API.
-  // This handles both: handwritten bills (Tesseract can't read) and
-  // Tesseract crashes (WASM issues on certain devices).
   onProgress?.({ status: 'ai_ocr', progress: 0, source: 'gemini' });
 
   try {
-    const geminiText = await recognizeWithGemini(file);
+    const geminiResult = await recognizeWithGemini(file);
     onProgress?.({ status: 'done', progress: 1, source: 'gemini' });
 
-    // If Gemini also returns nothing, give back whatever we have
-    if (!geminiText || geminiText.trim() === '' || geminiText.includes('[NO TEXT FOUND]')) {
-      return { text: tesseractText, source: 'tesseract', tesseractText };
+    // If Gemini returns structured bills, use those
+    if (geminiResult.bills && geminiResult.bills.length > 0) {
+      return {
+        text: geminiResult.text,
+        source: 'gemini',
+        tesseractText,
+        bills: geminiResult.bills,
+      };
     }
 
-    return { text: geminiText, source: 'gemini', tesseractText };
+    // If Gemini returns raw text but no structured bills, use the text
+    if (geminiResult.text && geminiResult.text.trim() !== '') {
+      return { text: geminiResult.text, source: 'gemini', tesseractText };
+    }
+
+    // Both failed — return whatever we have
+    return { text: tesseractText, source: 'tesseract', tesseractText };
   } catch (err) {
     console.error('Gemini OCR fallback failed:', err);
     onProgress?.({ status: 'ai_ocr_failed', progress: 1, source: 'gemini' });
-    // Return whatever Tesseract produced (may be empty) — user can correct manually
     return { text: tesseractText, source: 'tesseract', tesseractText };
   }
 }
