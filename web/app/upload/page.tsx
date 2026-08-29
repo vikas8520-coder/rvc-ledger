@@ -147,6 +147,18 @@ export default function UploadPage() {
     setProgress(null);
     setSaveError('');
     setOcrSource(null);
+
+    // Reset all fields from any previous upload
+    setOcrText('');
+    setCustomerSelect('__new__');
+    setCustomerInput('');
+    setCustomer('');
+    setNewCustomerConfirmed(false);
+    setDate('');
+    setBillNo('');
+    setTotal(0);
+    setItems([]);
+    setUnparsed([]);
     try {
       const result = await smartRecognizeBill(f, ocrLangs, (m: SmartOcrProgress) => {
         setProgress(m);

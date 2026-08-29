@@ -244,19 +244,58 @@ function isTesseractResultGoodEnough(text: string): boolean {
 }
 
 /**
- * Convert a File to base64 for sending to the Gemini API.
+ * Compress and resize an image before sending to the Gemini API.
+ * Large photos (e.g. 3072x2304, 3MB+) cause 413 errors on Vercel
+ * serverless functions (body limit ~4.5MB). This resizes to max
+ * 1600px and compresses to JPEG quality 0.8, typically producing
+ * a base64 string under 1MB.
  */
-function fileToBase64(file: File): Promise<string> {
+async function compressImageForApi(file: File, maxWidth = 1600, quality = 0.8): Promise<{ base64: string; mimeType: string }> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      // Strip the data URL prefix (e.g. "data:image/jpeg;base64,")
-      const base64 = result.split(',')[1];
-      resolve(base64);
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let width = img.width;
+      let height = img.height;
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
+      }
+      if (height > maxWidth) {
+        width = Math.round((width * maxWidth) / height);
+        height = maxWidth;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Could not get canvas context'));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error('Could not compress image'));
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result as string;
+            const base64 = result.split(',')[1];
+            resolve({ base64, mimeType: 'image/jpeg' });
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        },
+        'image/jpeg',
+        quality
+      );
     };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
+    img.onerror = reject;
+    img.src = url;
   });
 }
 
@@ -264,8 +303,8 @@ function fileToBase64(file: File): Promise<string> {
  * Call the server-side Gemini OCR API route.
  */
 async function recognizeWithGemini(file: File): Promise<string> {
-  const imageBase64 = await fileToBase64(file);
-  const mimeType = file.type || 'image/jpeg';
+  // Compress image before sending — large photos cause 413 errors
+  const { base64: imageBase64, mimeType } = await compressImageForApi(file);
 
   const response = await fetch('/api/ocr/gemini', {
     method: 'POST',
