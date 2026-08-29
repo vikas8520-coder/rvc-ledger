@@ -40,10 +40,10 @@ const SECONDARY_NAV: NavItem[] = [
   { href: '/settings', label: 'settings', icon: SettingsIcon },
 ];
 
-// Mobile bottom bar — most used actions
+// Mobile bottom bar — 3 clear actions
 const MOBILE_ACTIONS: NavItem[] = [
-  { href: '/entry', label: 'newEntry', icon: PlusIcon },
-  { href: '/upload', label: 'uploadBill', icon: CameraIcon },
+  { href: '/receive', label: 'receiveStock', icon: TruckIcon },
+  { href: '/sell', label: 'sell', icon: StoreIcon },
   { href: '/payment', label: 'recordPayment', icon: DollarIcon },
 ];
 
