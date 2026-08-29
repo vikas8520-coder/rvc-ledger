@@ -42,8 +42,8 @@ const SECONDARY_NAV: NavItem[] = [
 
 // Mobile bottom bar — most used actions
 const MOBILE_ACTIONS: NavItem[] = [
+  { href: '/entry', label: 'newEntry', icon: PlusIcon },
   { href: '/upload', label: 'uploadBill', icon: CameraIcon },
-  { href: '/quick-bill', label: 'quickBill', icon: PlusIcon },
   { href: '/payment', label: 'recordPayment', icon: DollarIcon },
 ];
 
