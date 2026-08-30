@@ -1,13 +1,38 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useUser, useClerk } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 
+const CLERK_CONFIGURED = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+
 export default function OnboardingPage() {
-  const { user, isLoaded } = useUser();
-  const { signOut } = useClerk();
   const router = useRouter();
+  // Safe Clerk hook wrappers — only call when Clerk is configured
+  const [user, setUser] = useState<any>(null);
+  const [isLoaded, setIsLoaded] = useState(!CLERK_CONFIGURED);
+
+  useEffect(() => {
+    if (!CLERK_CONFIGURED) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const r = await fetch('/api/me');
+        const d = await r.json();
+        if (mounted && d.authenticated) {
+          setUser({ id: d.userId, email: d.email, name: d.name });
+        }
+        if (mounted) setIsLoaded(true);
+      } catch {
+        if (mounted) setIsLoaded(true);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const signOut = async () => {
+    if (!CLERK_CONFIGURED) return;
+    router.push('/');
+  };
   const [shopName, setShopName] = useState('');
   const [shopAddress, setShopAddress] = useState('');
   const [shopPhone, setShopPhone] = useState('');
@@ -123,7 +148,7 @@ export default function OnboardingPage() {
 
         <div className="mt-4 text-center">
           <button
-            onClick={() => signOut({ redirectUrl: '/sign-in' })}
+            onClick={() => signOut()}
             className="text-xs text-[var(--text-faint)] hover:text-[var(--text-secondary)]"
           >
             Sign out
