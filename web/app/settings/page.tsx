@@ -42,6 +42,11 @@ export default function SettingsPage() {
   const [clearMsg, setClearMsg] = useState('');
   const [clearConfirm, setClearConfirm] = useState(false);
 
+  // Subscription status
+  const [subStatus, setSubStatus] = useState<any>(null);
+  const [subPayments, setSubPayments] = useState<any[]>([]);
+  const [subPlans, setSubPlans] = useState<any[]>([]);
+
   useEffect(() => {
     fetch('/api/settings')
       .then((r) => r.json())
@@ -57,6 +62,16 @@ export default function SettingsPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    // Load subscription status
+    fetch('/api/subscription')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.status) setSubStatus(d.status);
+        if (d.payments) setSubPayments(d.payments);
+        if (d.plans) setSubPlans(d.plans);
+      })
+      .catch(() => {});
   }, []);
 
   const saveProfile = async () => {
@@ -177,6 +192,75 @@ export default function SettingsPage() {
   return (
     <div className="space-y-5">
       <h1 className="text-lg font-semibold">{t('settings')}</h1>
+
+      {/* Subscription Status */}
+      {subStatus && (
+        <section className="rounded-lg bg-[var(--bg-card)] p-4">
+          <h2 className="text-sm font-semibold">Subscription</h2>
+          {subStatus.status === 'none' ? (
+            <div className="mt-2">
+              <p className="text-xs text-[var(--text-faint)]">No active subscription. Contact your administrator to activate.</p>
+              {subPlans.length > 0 && (
+                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  {subPlans.map((p) => (
+                    <div key={p.id} className="rounded-lg border border-[var(--border-light)] p-3">
+                      <p className="text-sm font-semibold">{p.label}</p>
+                      <p className="text-lg font-bold text-[var(--text-primary)]">₹{p.price.toLocaleString('en-IN')}<span className="text-xs font-normal text-[var(--text-faint)]">/year</span></p>
+                      <p className="text-[11px] text-[var(--text-faint)] mt-1">Up to {p.maxShops} shop{p.maxShops !== 1 ? 's' : ''}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="mt-2 space-y-3">
+              <div className="flex flex-wrap gap-3">
+                <div className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  subStatus.status === 'active' ? 'bg-[var(--bg-success)] text-[var(--text-on-primary)]' : 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'
+                }`}>
+                  {subStatus.status === 'active' ? '✓ Active' : 'Expired'}
+                </div>
+                {subStatus.plan && (
+                  <span className="rounded-full bg-[var(--bg-card-hover)] px-3 py-1 text-xs font-medium capitalize">
+                    {subPlans.find((p) => p.id === subStatus.plan)?.label || subStatus.plan}
+                  </span>
+                )}
+                {subStatus.status === 'active' && (
+                  <span className="text-xs text-[var(--text-faint)] py-1">
+                    {subStatus.daysRemaining} days remaining · Until {subStatus.coversTo}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-[var(--text-faint)]">Total paid: ₹{subStatus.totalPaid.toLocaleString('en-IN')}</p>
+
+              {subPayments.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-left text-[var(--text-faint)]">
+                        <th className="p-1.5">Date</th>
+                        <th className="p-1.5 text-right">Amount</th>
+                        <th className="p-1.5">Method</th>
+                        <th className="p-1.5">Coverage</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {subPayments.map((p) => (
+                        <tr key={p.id} className="border-t border-[var(--border-card)]">
+                          <td className="p-1.5 whitespace-nowrap">{new Date(p.payment_date).toLocaleDateString('en-IN')}</td>
+                          <td className="p-1.5 text-right font-semibold">₹{p.amount.toLocaleString('en-IN')}</td>
+                          <td className="p-1.5 capitalize">{p.payment_method}</td>
+                          <td className="p-1.5 text-[var(--text-faint)]">{p.covers_from} → {p.covers_to}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Shop Profile */}
       <section className="rounded-lg bg-[var(--bg-card)] p-4">

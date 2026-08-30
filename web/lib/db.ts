@@ -182,6 +182,25 @@ async function ensureSchema() {
   `;
   await sql`CREATE INDEX IF NOT EXISTS idx_fy_balances_shop ON fy_opening_balances(shop_id, fy_start_year)`;
 
+  // ---- Subscription payments ----
+  await sql`
+    CREATE TABLE IF NOT EXISTS subscription_payments (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+      amount NUMERIC(12,2) NOT NULL,
+      payment_method TEXT NOT NULL DEFAULT 'cash',
+      payment_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      plan TEXT NOT NULL DEFAULT 'single',
+      covers_from DATE NOT NULL,
+      covers_to DATE NOT NULL,
+      notes TEXT,
+      recorded_by TEXT,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS idx_sub_payments_shop ON subscription_payments(shop_id)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_sub_payments_date ON subscription_payments(payment_date DESC)`;
+
   schemaReady = true;
 }
 
@@ -711,6 +730,251 @@ export async function setShopActive(shopId: string, active: boolean): Promise<vo
   await ensureSchema();
   const sql = getSql();
   await sql`UPDATE shops SET active = ${active} WHERE id = ${shopId}`;
+}
+
+/* ---- Subscriptions ---- */
+
+// Default pricing plans (in INR). Can be overridden via app_settings (global, shop_id = NULL).
+export const DEFAULT_PLANS = [
+  { id: 'single', label: 'Single Shop', price: 15000, durationMonths: 12, maxShops: 1 },
+  { id: 'multi', label: 'Multi-Shop (3)', price: 25000, durationMonths: 12, maxShops: 3 },
+  { id: 'market', label: 'Market Master (10)', price: 50000, durationMonths: 12, maxShops: 10 },
+] as const;
+
+export interface Plan {
+  id: string;
+  label: string;
+  price: number;
+  durationMonths: number;
+  maxShops: number;
+}
+
+// Get pricing config — stored as JSON in app_settings under key 'subscription_plans'.
+// Falls back to DEFAULT_PLANS if not configured.
+export async function getPlans(): Promise<Plan[]> {
+  if (!isDbConfigured()) return [...DEFAULT_PLANS];
+  await ensureSchema();
+  const sql = getSql();
+  const [row] = await sql`
+    SELECT value FROM app_settings WHERE key = 'subscription_plans' AND shop_id IS NULL LIMIT 1
+  `;
+  if (row) {
+    try {
+      const parsed = JSON.parse((row as any).value);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch {}
+  }
+  return [...DEFAULT_PLANS];
+}
+
+// Save pricing config (admin only, stored globally)
+export async function setPlans(plans: Plan[]): Promise<void> {
+  if (!isDbConfigured()) return;
+  await ensureSchema();
+  const sql = getSql();
+  await sql`
+    INSERT INTO app_settings (key, value, updated_at, shop_id)
+    VALUES ('subscription_plans', ${JSON.stringify(plans)}, now(), NULL)
+    ON CONFLICT (key) DO UPDATE SET value = ${JSON.stringify(plans)}, updated_at = now()
+  `;
+}
+
+export interface SubscriptionPayment {
+  id: string;
+  shop_id: string;
+  shop_name: string;
+  amount: number;
+  payment_method: string;
+  payment_date: string;
+  plan: string;
+  covers_from: string;
+  covers_to: string;
+  notes: string | null;
+  recorded_by: string | null;
+  created_at: string;
+}
+
+// Record a subscription payment for a shop
+export async function recordSubscriptionPayment(
+  shopId: string,
+  amount: number,
+  paymentMethod: string,
+  paymentDate: string,
+  plan: string,
+  coversFrom: string,
+  coversTo: string,
+  notes?: string,
+  recordedBy?: string
+): Promise<{ id: string }> {
+  await ensureSchema();
+  const sql = getSql();
+  const [row] = await sql`
+    INSERT INTO subscription_payments
+      (shop_id, amount, payment_method, payment_date, plan, covers_from, covers_to, notes, recorded_by)
+    VALUES
+      (${shopId}, ${amount}, ${paymentMethod}, ${paymentDate}, ${plan}, ${coversFrom}, ${coversTo}, ${notes || null}, ${recordedBy || null})
+    RETURNING id
+  `;
+  // Update shop billing_status to 'active'
+  await sql`UPDATE shops SET billing_status = 'active' WHERE id = ${shopId}`;
+  return { id: (row as any)?.id ?? '' };
+}
+
+// Get all subscription payments (admin view, all shops)
+export async function getAllSubscriptionPayments(): Promise<SubscriptionPayment[]> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql`
+    SELECT sp.*, s.name as shop_name
+    FROM subscription_payments sp
+    JOIN shops s ON s.id = sp.shop_id
+    ORDER BY sp.payment_date DESC, sp.created_at DESC
+  `;
+  return (rows as any[]).map((r) => ({
+    id: r.id,
+    shop_id: r.shop_id,
+    shop_name: r.shop_name,
+    amount: Number(r.amount),
+    payment_method: r.payment_method,
+    payment_date: r.payment_date ? r.payment_date.toISOString().slice(0, 10) : '',
+    plan: r.plan,
+    covers_from: r.covers_from ? r.covers_from.toISOString().slice(0, 10) : '',
+    covers_to: r.covers_to ? r.covers_to.toISOString().slice(0, 10) : '',
+    notes: r.notes,
+    recorded_by: r.recorded_by,
+    created_at: r.created_at ? r.created_at.toISOString() : '',
+  }));
+}
+
+// Get subscription payments for a specific shop
+export async function getShopSubscriptionPayments(shopId: string): Promise<SubscriptionPayment[]> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql`
+    SELECT sp.*, s.name as shop_name
+    FROM subscription_payments sp
+    JOIN shops s ON s.id = sp.shop_id
+    WHERE sp.shop_id = ${shopId}
+    ORDER BY sp.payment_date DESC, sp.created_at DESC
+  `;
+  return (rows as any[]).map((r) => ({
+    id: r.id,
+    shop_id: r.shop_id,
+    shop_name: r.shop_name,
+    amount: Number(r.amount),
+    payment_method: r.payment_method,
+    payment_date: r.payment_date ? r.payment_date.toISOString().slice(0, 10) : '',
+    plan: r.plan,
+    covers_from: r.covers_from ? r.covers_from.toISOString().slice(0, 10) : '',
+    covers_to: r.covers_to ? r.covers_to.toISOString().slice(0, 10) : '',
+    notes: r.notes,
+    recorded_by: r.recorded_by,
+    created_at: r.created_at ? r.created_at.toISOString() : '',
+  }));
+}
+
+// Get subscription status for a shop: latest payment, coverage end date, days remaining
+export async function getShopSubscriptionStatus(shopId: string): Promise<{
+  status: 'active' | 'expired' | 'none';
+  plan: string | null;
+  coversTo: string | null;
+  daysRemaining: number;
+  totalPaid: number;
+}> {
+  await ensureSchema();
+  const sql = getSql();
+  const [latest] = await sql`
+    SELECT * FROM subscription_payments
+    WHERE shop_id = ${shopId}
+    ORDER BY covers_to DESC LIMIT 1
+  `;
+  if (!latest) {
+    return { status: 'none', plan: null, coversTo: null, daysRemaining: 0, totalPaid: 0 };
+  }
+  const coversTo = (latest as any).covers_to;
+  const coversToStr = coversTo ? coversTo.toISOString().slice(0, 10) : '';
+  const today = new Date();
+  const coversToDate = new Date(coversToStr);
+  const diffMs = coversToDate.getTime() - today.getTime();
+  const daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  const [totals] = await sql`
+    SELECT COALESCE(SUM(amount), 0) as total FROM subscription_payments WHERE shop_id = ${shopId}
+  `;
+
+  return {
+    status: daysRemaining > 0 ? 'active' : 'expired',
+    plan: (latest as any).plan,
+    coversTo: coversToStr,
+    daysRemaining,
+    totalPaid: Number((totals as any)?.total ?? 0),
+  };
+}
+
+// Get subscription summary for admin dashboard
+export async function getSubscriptionSummary(): Promise<{
+  totalRevenue: number;
+  activeSubscriptions: number;
+  expiringSoon: number;
+  totalPayments: number;
+  recentPayments: SubscriptionPayment[];
+}> {
+  await ensureSchema();
+  const sql = getSql();
+
+  const [agg] = await sql`
+    SELECT
+      COALESCE(SUM(amount), 0) as total_revenue,
+      COUNT(DISTINCT shop_id) as total_paying_shops,
+      COUNT(*) as total_payments
+    FROM subscription_payments
+  `;
+
+  // Active subscriptions: shops where the latest covers_to is in the future
+  const activeRows = await sql`
+    SELECT DISTINCT shop_id FROM subscription_payments
+    WHERE covers_to >= CURRENT_DATE
+  `;
+  const activeCount = activeRows.length;
+
+  // Expiring within 30 days
+  const expiringRows = await sql`
+    SELECT shop_id, MAX(covers_to) as latest_covers
+    FROM subscription_payments
+    GROUP BY shop_id
+    HAVING MAX(covers_to) >= CURRENT_DATE AND MAX(covers_to) <= CURRENT_DATE + INTERVAL '30 days'
+  `;
+  const expiringSoon = expiringRows.length;
+
+  // Recent 10 payments
+  const recentRows = await sql`
+    SELECT sp.*, s.name as shop_name
+    FROM subscription_payments sp
+    JOIN shops s ON s.id = sp.shop_id
+    ORDER BY sp.created_at DESC LIMIT 10
+  `;
+  const recentPayments = (recentRows as any[]).map((r) => ({
+    id: r.id,
+    shop_id: r.shop_id,
+    shop_name: r.shop_name,
+    amount: Number(r.amount),
+    payment_method: r.payment_method,
+    payment_date: r.payment_date ? r.payment_date.toISOString().slice(0, 10) : '',
+    plan: r.plan,
+    covers_from: r.covers_from ? r.covers_from.toISOString().slice(0, 10) : '',
+    covers_to: r.covers_to ? r.covers_to.toISOString().slice(0, 10) : '',
+    notes: r.notes,
+    recorded_by: r.recorded_by,
+    created_at: r.created_at ? r.created_at.toISOString() : '',
+  }));
+
+  return {
+    totalRevenue: Number((agg as any)?.total_revenue ?? 0),
+    activeSubscriptions: activeCount,
+    expiringSoon,
+    totalPayments: Number((agg as any)?.total_payments ?? 0),
+    recentPayments,
+  };
 }
 
 /* ---- Customers ---- */
