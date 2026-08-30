@@ -12,11 +12,14 @@ export async function GET(request: NextRequest) {
     // Default to current FY if not specified; use 'all' for all-time
     const fyStartYear = fyParam === 'all' ? undefined : fyParam ? Number(fyParam) : currentFYStartYear();
 
-    // Auto-close previous FY if needed
+    // Auto-close previous FY if needed (must complete before reading data)
     const autoCloseResult = await autoCloseFY(auth.shopId!);
 
-    const customers = await getCustomers(auth.shopId!, fyStartYear);
-    const fySummary = fyStartYear !== undefined ? await getFYSummary(auth.shopId!, fyStartYear) : null;
+    // Run getCustomers and getFYSummary in parallel (independent queries)
+    const [customers, fySummary] = await Promise.all([
+      getCustomers(auth.shopId!, fyStartYear),
+      fyStartYear !== undefined ? getFYSummary(auth.shopId!, fyStartYear) : Promise.resolve(null),
+    ]);
 
     return NextResponse.json({
       customers,

@@ -240,6 +240,42 @@ export async function getFYOpeningBalance(
   return calcOpeningBalance(sql, shopId, customerId, fyStartYear);
 }
 
+// Batch-fetch opening balances for ALL customers in one go.
+// Returns a Map<customerId, openingBalance>. Avoids N+1 queries.
+// Uses stored values where available, calculates on-the-fly for the rest.
+// Single query using LEFT JOIN + correlated subquery.
+async function getFYOpeningBalancesBatch(
+  sql: ReturnType<typeof getSql>,
+  shopId: string,
+  customerIds: string[],
+  fyStartYear: number
+): Promise<Map<string, number>> {
+  const result = new Map<string, number>();
+  if (customerIds.length === 0) return result;
+
+  const fyStart = `${fyStartYear}-04-01`;
+
+  // Single query: LEFT JOIN stored balances, fallback to calculated from transactions
+  const rows = await sql`
+    SELECT c.id as customer_id,
+           COALESCE(fob.opening_balance,
+             COALESCE((
+               SELECT COALESCE(SUM(t.bill_amount), 0) - COALESCE(SUM(t.amount_paid), 0)
+               FROM transactions t
+               WHERE t.customer_id = c.id AND t.shop_id = ${shopId} AND t.date < ${fyStart}
+             ), 0)
+           ) as opening_balance
+    FROM UNNEST(${customerIds}::uuid[]) AS c(id)
+    LEFT JOIN fy_opening_balances fob
+      ON fob.customer_id = c.id AND fob.shop_id = ${shopId} AND fob.fy_start_year = ${fyStartYear}
+  `;
+
+  for (const r of rows as any[]) {
+    result.set(r.customer_id as string, Number(r.opening_balance));
+  }
+  return result;
+}
+
 // Close a financial year for a shop.
 // Stores opening balances for all customers for the NEXT FY.
 // Idempotent: safe to re-run, updates existing balances.
@@ -248,41 +284,58 @@ export async function closeFY(shopId: string, fyStartYear: number): Promise<{ cu
   await ensureSchema();
   const sql = getSql();
   const nextFY = fyStartYear + 1;
+  const { from, to } = fyDateRange(fyStartYear);
 
   // Get all customers for this shop (excluding CASH SALES)
   const customers = await sql`
     SELECT id FROM customers WHERE shop_id = ${shopId} AND name != 'CASH SALES'
   `;
+  const customerIds = (customers as any[]).map((c) => c.id as string);
+  if (customerIds.length === 0) return { customersClosed: 0 };
 
-  let count = 0;
-  for (const c of customers) {
-    const customerId = (c as any).id;
-    // Closing balance of this FY = opening + bills - payments for the entire FY
-    const { from, to } = fyDateRange(fyStartYear);
-    const opening = await getFYOpeningBalance(shopId, customerId, fyStartYear);
-    const [fyTotals] = await sql`
-      SELECT
-        COALESCE(SUM(bill_amount), 0) as billed,
-        COALESCE(SUM(amount_paid), 0) as paid
-      FROM transactions
-      WHERE customer_id = ${customerId}
-        AND shop_id = ${shopId}
-        AND date >= ${from} AND date <= ${to}
-    `;
-    const closingBalance = opening + Number((fyTotals as any)?.billed ?? 0) - Number((fyTotals as any)?.paid ?? 0);
+  // Batch: opening balances (2 queries)
+  const openingBalances = await getFYOpeningBalancesBatch(sql, shopId, customerIds, fyStartYear);
 
-    // Upsert opening balance for next FY
-    await sql`
-      INSERT INTO fy_opening_balances (shop_id, customer_id, fy_start_year, opening_balance, closed_at)
-      VALUES (${shopId}, ${customerId}, ${nextFY}, ${closingBalance}, now())
-      ON CONFLICT (shop_id, customer_id, fy_start_year)
-      DO UPDATE SET opening_balance = ${closingBalance}, closed_at = now()
-    `;
-    count++;
+  // Batch: FY totals per customer (1 query)
+  const fyTotalsRows = await sql`
+    SELECT customer_id,
+           COALESCE(SUM(bill_amount), 0) as billed,
+           COALESCE(SUM(amount_paid), 0) as paid
+    FROM transactions
+    WHERE shop_id = ${shopId}
+      AND date >= ${from} AND date <= ${to}
+      AND customer_id = ANY(${customerIds}::uuid[])
+    GROUP BY customer_id
+  `;
+  const fyTotalsMap = new Map<string, { billed: number; paid: number }>();
+  for (const r of fyTotalsRows as any[]) {
+    fyTotalsMap.set(r.customer_id as string, { billed: Number(r.billed), paid: Number(r.paid) });
   }
 
-  return { customersClosed: count };
+  // Batch upsert: build values array, insert in one query
+  const values = customerIds.map((id) => {
+    const opening = openingBalances.get(id) ?? 0;
+    const totals = fyTotalsMap.get(id);
+    const closing = opening + (totals?.billed ?? 0) - (totals?.paid ?? 0);
+    return { id, closing };
+  });
+
+  // Use UNNEST for batch upsert (single query instead of N)
+  const ids = values.map((v) => v.id);
+  const closings = values.map((v) => v.closing);
+  await sql`
+    INSERT INTO fy_opening_balances (shop_id, customer_id, fy_start_year, opening_balance, closed_at)
+    SELECT ${shopId}, id, ${nextFY}, closing, now()
+    FROM UNNEST(${ids}::uuid[], ${closings}::numeric[]) AS t(id, closing)
+    ON CONFLICT (shop_id, customer_id, fy_start_year)
+    DO UPDATE SET opening_balance = EXCLUDED.opening_balance, closed_at = now()
+  `;
+
+  return { customersClosed: customerIds.length };
 }
+
+// Cache: avoid re-checking autoCloseFY on every request (per shop per FY)
+const autoCloseChecked = new Set<string>(); // key: `${shopId}:${currentFY}`
 
 // Auto-close previous FY if it hasn't been closed yet.
 // Called on dashboard load. No-op if already closed or if we're still in the same FY.
@@ -294,22 +347,31 @@ export async function autoCloseFY(shopId: string): Promise<{ closed: boolean; fy
   const currentFY = currentFYStartYear();
   const previousFY = currentFY - 1;
 
-  // Check if previous FY has been closed (any opening balance exists for current FY)
-  const [existing] = await sql`
-    SELECT COUNT(*) as cnt FROM fy_opening_balances
-    WHERE shop_id = ${shopId} AND fy_start_year = ${currentFY}
-  `;
-  if (Number((existing as any)?.cnt ?? 0) > 0) {
+  // Cache: if we've already checked this shop+FY in this process, skip
+  const cacheKey = `${shopId}:${currentFY}`;
+  if (autoCloseChecked.has(cacheKey)) {
     return { closed: false, fyStartYear: null };
   }
 
-  // Check if there are any transactions in the previous FY (no point closing an empty FY)
+  // Combine both checks into a single query (avoid 2 sequential round-trips)
   const { from, to } = fyDateRange(previousFY);
-  const [txCheck] = await sql`
-    SELECT COUNT(*) as cnt FROM transactions
-    WHERE shop_id = ${shopId} AND date >= ${from} AND date <= ${to}
+  const [check] = await sql`
+    SELECT
+      (SELECT COUNT(*) FROM fy_opening_balances
+       WHERE shop_id = ${shopId} AND fy_start_year = ${currentFY}) as closed_count,
+      (SELECT COUNT(*) FROM transactions
+       WHERE shop_id = ${shopId} AND date >= ${from} AND date <= ${to}) as prev_fy_txns
   `;
-  if (Number((txCheck as any)?.cnt ?? 0) === 0) {
+  const closedCount = Number((check as any)?.closed_count ?? 0);
+  const prevFyTxns = Number((check as any)?.prev_fy_txns ?? 0);
+
+  // Mark as checked (cache for subsequent calls in this process)
+  autoCloseChecked.add(cacheKey);
+
+  if (closedCount > 0) {
+    return { closed: false, fyStartYear: null };
+  }
+  if (prevFyTxns === 0) {
     return { closed: false, fyStartYear: null };
   }
 
@@ -325,22 +387,29 @@ export async function recalcFYBalances(shopId: string, affectedFYStartYear: numb
   const sql = getSql();
   const currentFY = currentFYStartYear();
 
+  // Get all customers with transactions (once, outside the FY loop)
+  const customers = await sql`
+    SELECT DISTINCT customer_id FROM transactions
+    WHERE shop_id = ${shopId} AND customer_id IS NOT NULL
+  `;
+  const customerIds = (customers as any[]).map((c) => c.customer_id as string);
+  if (customerIds.length === 0) return;
+
   // Recalculate from the affected FY up to the current FY
   for (let fy = affectedFYStartYear; fy <= currentFY; fy++) {
-    const customers = await sql`
-      SELECT DISTINCT customer_id FROM transactions
-      WHERE shop_id = ${shopId} AND customer_id IS NOT NULL
+    // Batch: calculate opening balances for all customers at once
+    const openingBalances = await getFYOpeningBalancesBatch(sql, shopId, customerIds, fy);
+
+    // Batch upsert using UNNEST
+    const ids = customerIds;
+    const openings = customerIds.map((id) => openingBalances.get(id) ?? 0);
+    await sql`
+      INSERT INTO fy_opening_balances (shop_id, customer_id, fy_start_year, opening_balance, closed_at)
+      SELECT ${shopId}, id, ${fy}, opening, now()
+      FROM UNNEST(${ids}::uuid[], ${openings}::numeric[]) AS t(id, opening)
+      ON CONFLICT (shop_id, customer_id, fy_start_year)
+      DO UPDATE SET opening_balance = EXCLUDED.opening_balance
     `;
-    for (const c of customers) {
-      const customerId = (c as any).customer_id;
-      const opening = await calcOpeningBalance(sql, shopId, customerId, fy);
-      await sql`
-        INSERT INTO fy_opening_balances (shop_id, customer_id, fy_start_year, opening_balance, closed_at)
-        VALUES (${shopId}, ${customerId}, ${fy}, ${opening}, now())
-        ON CONFLICT (shop_id, customer_id, fy_start_year)
-        DO UPDATE SET opening_balance = ${opening}
-      `;
-    }
   }
 }
 
@@ -356,35 +425,53 @@ export async function getFYSummary(shopId: string, fyStartYear: number): Promise
   const sql = getSql();
   const { from, to } = fyDateRange(fyStartYear);
 
-  // Total sales and payments in this FY (exclude CASH SALES from outstanding calc)
-  const [totals] = await sql`
-    SELECT
-      COALESCE(SUM(CASE WHEN c.name != 'CASH SALES' THEN t.bill_amount ELSE 0 END), 0) as credit_sales,
-      COALESCE(SUM(CASE WHEN c.name = 'CASH SALES' THEN t.bill_amount ELSE 0 END), 0) as cash_sales,
-      COALESCE(SUM(t.amount_paid), 0) as payments
-    FROM transactions t
-    JOIN customers c ON c.id = t.customer_id
-    WHERE t.shop_id = ${shopId} AND t.date >= ${from} AND t.date <= ${to}
-  `;
-
-  // Total outstanding = sum of closing balances for all non-CASH SALES customers
-  const customers = await sql`
-    SELECT id FROM customers WHERE shop_id = ${shopId} AND name != 'CASH SALES'
-  `;
-  let totalOutstanding = 0;
-  for (const c of customers) {
-    const customerId = (c as any).id;
-    const opening = await getFYOpeningBalance(shopId, customerId, fyStartYear);
-    const [fyTotals] = await sql`
+  // Run totals query and customer IDs query in parallel
+  const [totalsResult, customersResult] = await Promise.all([
+    sql`
       SELECT
-        COALESCE(SUM(bill_amount), 0) as billed,
-        COALESCE(SUM(amount_paid), 0) as paid
+        COALESCE(SUM(CASE WHEN c.name != 'CASH SALES' THEN t.bill_amount ELSE 0 END), 0) as credit_sales,
+        COALESCE(SUM(CASE WHEN c.name = 'CASH SALES' THEN t.bill_amount ELSE 0 END), 0) as cash_sales,
+        COALESCE(SUM(t.amount_paid), 0) as payments
+      FROM transactions t
+      JOIN customers c ON c.id = t.customer_id
+      WHERE t.shop_id = ${shopId} AND t.date >= ${from} AND t.date <= ${to}
+    `,
+    sql`
+      SELECT id FROM customers WHERE shop_id = ${shopId} AND name != 'CASH SALES'
+    `,
+  ]);
+  const [totals] = totalsResult;
+  const customerIds = (customersResult as any[]).map((c) => c.id as string);
+
+  // Run opening balances batch + FY totals in parallel (independent queries)
+  const [openingBalances, fyTotalsRows] = await Promise.all([
+    getFYOpeningBalancesBatch(sql, shopId, customerIds, fyStartYear),
+    sql`
+      SELECT customer_id,
+             COALESCE(SUM(bill_amount), 0) as billed,
+             COALESCE(SUM(amount_paid), 0) as paid
       FROM transactions
-      WHERE customer_id = ${customerId}
-        AND shop_id = ${shopId}
+      WHERE shop_id = ${shopId}
         AND date >= ${from} AND date <= ${to}
-    `;
-    const closing = opening + Number((fyTotals as any)?.billed ?? 0) - Number((fyTotals as any)?.paid ?? 0);
+        AND customer_id = ANY(${customerIds}::uuid[])
+      GROUP BY customer_id
+    `,
+  ]);
+  const fyTotalsMap = new Map<string, { billed: number; paid: number }>();
+  for (const r of fyTotalsRows as any[]) {
+    fyTotalsMap.set(r.customer_id as string, {
+      billed: Number(r.billed),
+      paid: Number(r.paid),
+    });
+  }
+
+  let totalOutstanding = 0;
+  for (const id of customerIds) {
+    const opening = openingBalances.get(id) ?? 0;
+    const totals = fyTotalsMap.get(id);
+    const billed = totals?.billed ?? 0;
+    const paid = totals?.paid ?? 0;
+    const closing = opening + billed - paid;
     if (closing > 0) totalOutstanding += closing;
   }
 
@@ -392,7 +479,7 @@ export async function getFYSummary(shopId: string, fyStartYear: number): Promise
     totalSales: Number((totals as any)?.credit_sales ?? 0) + Number((totals as any)?.cash_sales ?? 0),
     totalPayments: Number((totals as any)?.payments ?? 0),
     totalOutstanding,
-    customerCount: customers.length,
+    customerCount: customerIds.length,
   };
 }
 
@@ -713,14 +800,15 @@ export async function getCustomers(shopId: string, fyStartYear?: number): Promis
   await ensureSchema();
   const sql = getSql();
 
-  // Auto-close previous FY if needed (only when FY-aware mode is active)
-  if (fyStartYear !== undefined) {
-    await autoCloseFY(shopId);
-  }
+  // NOTE: autoCloseFY is called by the dashboard route before getCustomers,
+  // so we don't call it here to avoid duplicate queries.
 
-  const customers = await sql`SELECT id, name, english_name, telugu_name, hindi_name, phone, credit_limit FROM customers WHERE shop_id = ${shopId} ORDER BY name`;
-  const txns = await sql`SELECT * FROM transactions WHERE shop_id = ${shopId} ORDER BY date, created_at`;
-  const items = await sql`SELECT * FROM bill_items WHERE shop_id = ${shopId}`;
+  // Run the 3 main queries in parallel (independent of each other)
+  const [customers, txns, items] = await Promise.all([
+    sql`SELECT id, name, english_name, telugu_name, hindi_name, phone, credit_limit FROM customers WHERE shop_id = ${shopId} ORDER BY name`,
+    sql`SELECT * FROM transactions WHERE shop_id = ${shopId} ORDER BY date, created_at`,
+    sql`SELECT * FROM bill_items WHERE shop_id = ${shopId}`,
+  ]);
 
   const itemsByTxn = new Map<string, BillItem[]>();
   for (const it of items) {
@@ -742,6 +830,14 @@ export async function getCustomers(shopId: string, fyStartYear?: number): Promis
   // FY date range for filtering
   const fyRange = fyStartYear !== undefined ? fyDateRange(fyStartYear) : null;
 
+  // Batch-fetch opening balances for all customers (avoids N+1 queries)
+  const nonCashCustomerIds = (customers as any[])
+    .filter((c) => (c.name as string) !== 'CASH SALES')
+    .map((c) => c.id as string);
+  const openingBalances = fyStartYear !== undefined
+    ? await getFYOpeningBalancesBatch(sql, shopId, nonCashCustomerIds, fyStartYear)
+    : new Map<string, number>();
+
   const customersOut: Customer[] = [];
   for (const c of customers) {
     const isCashSales = (c.name as string) === 'CASH SALES';
@@ -755,11 +851,10 @@ export async function getCustomers(shopId: string, fyStartYear?: number): Promis
       });
     }
 
-    // Opening balance: stored or on-the-fly (0 if no FY filter or CASH SALES)
-    let openingBalance = 0;
-    if (fyStartYear !== undefined && !isCashSales) {
-      openingBalance = await getFYOpeningBalance(shopId, c.id as string, fyStartYear);
-    }
+    // Opening balance: from batch-fetched map (0 if no FY filter or CASH SALES)
+    const openingBalance = (fyStartYear !== undefined && !isCashSales)
+      ? (openingBalances.get(c.id as string) ?? 0)
+      : 0;
 
     let balance = openingBalance;
     const txnViews: TxnView[] = customerTxns.map((t) => {
