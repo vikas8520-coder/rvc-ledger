@@ -12,6 +12,7 @@ import { fmt } from '@/lib/format';
 import { computeAging, customersCsv, downloadCsv, reminderText, statementText, waLink } from '@/lib/statement';
 import { printCreditLedger, CreditLedgerEntry, ShopProfile } from '@/lib/billPrint';
 import { OverdueCustomer } from '@/lib/types';
+import { generateOutstandingListPdf, generateCreditLedgerPdf, sharePdfViaWhatsApp } from '@/lib/pdfShare';
 
 export default function CustomersPage() {
   const { t, lang } = useI18n();
@@ -23,6 +24,8 @@ export default function CustomersPage() {
   const [overdue, setOverdue] = useState<OverdueCustomer[]>([]);
   const [showBatch, setShowBatch] = useState(false);
   const [batchLoading, setBatchLoading] = useState(false);
+  const [showShareFormats, setShowShareFormats] = useState(false);
+  const [shareStatus, setShareStatus] = useState<'idle' | 'generating' | 'sharing'>('idle');
 
   useEffect(() => {
     fetch('/api/settings')
@@ -88,6 +91,44 @@ export default function CustomersPage() {
     lines.push(`Total outstanding: ${fmt(dueCustomers.reduce((s, c) => s + c.due, 0))}`);
     const link = waLink(lines.join('\n'));
     window.open(link, '_blank');
+  };
+
+  const sharePdfFormat = async (format: 'outstanding' | 'creditLedger') => {
+    setShowShareFormats(false);
+    setShareStatus('generating');
+    try {
+      let blob: Blob;
+      let filename: string;
+      const dateStr = new Date().toLocaleDateString('en-IN').replace(/\//g, '-');
+
+      if (format === 'outstanding') {
+        blob = generateOutstandingListPdf(customers, shopSettings, uiLang);
+        filename = `outstanding-list-${dateStr}.pdf`;
+      } else {
+        const entries: CreditLedgerEntry[] = customers
+          .filter((c) => c.due > 0)
+          .sort((a, b) => formatCustomerName(a, uiLang).localeCompare(formatCustomerName(b, uiLang)))
+          .map((c, i) => ({
+            code: String(i + 1),
+            name: formatCustomerName(c, uiLang),
+            phone: c.phone || undefined,
+            amount: Math.round(c.due),
+            isCredit: false,
+          }));
+        blob = generateCreditLedgerPdf(entries, shopSettings, dateStr, 'All');
+        filename = `credit-ledger-${dateStr}.pdf`;
+      }
+
+      setShareStatus('sharing');
+      const result = await sharePdfViaWhatsApp(blob, filename, `${shopSettings.shopName || 'RVC'} — Customer Outstanding List`);
+      if (result === 'downloaded') {
+        alert('PDF downloaded. On mobile, you can share it directly to WhatsApp. On desktop, attach it manually to your WhatsApp message.');
+      }
+    } catch (err) {
+      alert('Failed to generate PDF');
+    } finally {
+      setShareStatus('idle');
+    }
   };
 
   const sendAllReminders = () => {
@@ -198,6 +239,21 @@ export default function CustomersPage() {
         <Button variant="secondary" size="sm" onClick={shareCustomerList} disabled={overdueCount === 0}>
           <span className="flex items-center gap-1.5"><MessageIcon size={14} /> {t('shareList')}</span>
         </Button>
+        <span className="relative">
+          <Button variant="secondary" size="sm" onClick={() => setShowShareFormats((v) => !v)} disabled={overdueCount === 0 || shareStatus !== 'idle'}>
+            <span className="flex items-center gap-1.5"><MessageIcon size={14} /> {shareStatus === 'generating' ? 'Generating…' : shareStatus === 'sharing' ? 'Sharing…' : t('sharePdf')} ▾</span>
+          </Button>
+          {showShareFormats && (
+            <span className="absolute left-0 top-9 z-10 flex flex-col gap-0.5 rounded-lg border border-[var(--border-light)] bg-[var(--bg-input)] p-1 shadow-lg">
+              <button onClick={() => sharePdfFormat('outstanding')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
+                Outstanding list (names + dues)
+              </button>
+              <button onClick={() => sharePdfFormat('creditLedger')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
+                Credit ledger (dot-matrix format)
+              </button>
+            </span>
+          )}
+        </span>
         <Button variant="primary" size="sm" onClick={printLedger} disabled={overdueCount === 0}>
           <span className="flex items-center gap-1.5"><PrinterIcon size={14} /> {t('printCreditLedger')}</span>
         </Button>

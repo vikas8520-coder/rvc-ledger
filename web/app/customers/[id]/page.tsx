@@ -21,6 +21,7 @@ import {
   waLink,
 } from '@/lib/statement';
 import { printBill, printBills, printCreditLedger, txnToBillData, CreditLedgerEntry } from '@/lib/billPrint';
+import { generateStatementPdf, generateOutstandingListPdf, generateCreditLedgerPdf, sharePdfViaWhatsApp } from '@/lib/pdfShare';
 
 export default function CustomerLedgerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -35,6 +36,8 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
   const [creditStatus, setCreditStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [shopSettings, setShopSettings] = useState<{ shopName?: string; shopAddress?: string; shopPhone?: string; billFormat?: string }>({});
   const [showPdfFormats, setShowPdfFormats] = useState(false);
+  const [showShareFormats, setShowShareFormats] = useState(false);
+  const [shareStatus, setShareStatus] = useState<'idle' | 'generating' | 'sharing'>('idle');
 
   // Date range filter
   type RangePreset = 'all' | 'today' | 'month' | 'fy' | 'custom';
@@ -178,6 +181,41 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
 
   const printPdf = () => {
     setShowPdfFormats((v) => !v);
+  };
+
+  const shareCustomerPdf = async (format: 'statement' | 'outstanding' | 'creditLedger') => {
+    setShowShareFormats(false);
+    setShareStatus('generating');
+    try {
+      let blob: Blob;
+      let filename: string;
+      const dateStr = new Date().toLocaleDateString('en-IN').replace(/\//g, '-');
+
+      if (format === 'statement') {
+        blob = generateStatementPdf(customer, shopSettings as any, displayName);
+        filename = `${displayName.replace(/\s+/g, '-')}-statement-${dateStr}.pdf`;
+      } else if (format === 'outstanding') {
+        blob = generateOutstandingListPdf(customers, shopSettings as any, uiLang);
+        filename = `outstanding-list-${dateStr}.pdf`;
+      } else {
+        const entries: CreditLedgerEntry[] = customers
+          .filter((c) => c.due > 0)
+          .sort((a, b) => formatCustomerName(a, uiLang).localeCompare(formatCustomerName(b, uiLang)))
+          .map((c, i) => ({ code: String(i + 1), name: formatCustomerName(c, uiLang), phone: c.phone || undefined, amount: Math.round(c.due), isCredit: false }));
+        blob = generateCreditLedgerPdf(entries, shopSettings as any, dateStr, 'All');
+        filename = `credit-ledger-${dateStr}.pdf`;
+      }
+
+      setShareStatus('sharing');
+      const result = await sharePdfViaWhatsApp(blob, filename, `${shopSettings.shopName || 'RVC'} — ${displayName}`);
+      if (result === 'downloaded') {
+        alert('PDF downloaded. On mobile, you can share directly to WhatsApp. On desktop, attach it manually.');
+      }
+    } catch {
+      alert('Failed to generate PDF');
+    } finally {
+      setShareStatus('idle');
+    }
   };
 
   const printStatement = (format: 'statement' | 'simple' | 'itemized' | 'market' | 'patti') => {
@@ -356,6 +394,24 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
           <Button variant="outline" size="sm" onClick={copyStatement}>
             <span className="flex items-center gap-1.5">{copied ? <><CheckIcon size={14} /> {t('copied')}</> : t('copyStatement')}</span>
           </Button>
+          <span className="relative">
+            <Button variant="outline" size="sm" onClick={() => setShowShareFormats((v) => !v)} disabled={shareStatus !== 'idle'}>
+              <span className="flex items-center gap-1.5"><MessageIcon size={14} /> {shareStatus === 'generating' ? 'Generating…' : shareStatus === 'sharing' ? 'Sharing…' : t('sharePdf')} ▾</span>
+            </Button>
+            {showShareFormats && (
+              <span className="absolute right-0 top-9 z-10 flex flex-col gap-0.5 rounded-lg border border-[var(--border-light)] bg-[var(--bg-input)] p-1 shadow-lg">
+                <button onClick={() => shareCustomerPdf('statement')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
+                  Customer statement (all transactions)
+                </button>
+                <button onClick={() => shareCustomerPdf('outstanding')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
+                  Outstanding list (all customers)
+                </button>
+                <button onClick={() => shareCustomerPdf('creditLedger')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
+                  Credit ledger (dot-matrix format)
+                </button>
+              </span>
+            )}
+          </span>
           <Button variant="outline" size="sm" onClick={() => downloadCsv(`${displayName.replace(/\s+/g, '-')}-ledger.csv`, customerCsv(customer))}>
             <span className="flex items-center gap-1.5"><DownloadIcon size={14} /> {t('exportCsv')}</span>
           </Button>
