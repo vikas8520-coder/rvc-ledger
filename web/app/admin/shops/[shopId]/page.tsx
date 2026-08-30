@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useI18n } from '@/app/components/I18nProvider';
-import { formatCustomerName, localizeItem, getUiLang, t as translate } from '@/lib/i18n';
+import { formatCustomerName, localizeItem, getUiLang, t as translate, translatePaymentMethod } from '@/lib/i18n';
 
 type ShopData = {
   exportedAt: string;
@@ -129,9 +129,9 @@ export default function ShopDataPage() {
       </div>
 
       {/* Tab content */}
-      {tab === 'overview' && <OverviewTab data={data} fmtINR={fmtINR} fmtDate={fmtDate} uiLang={uiLang} tr={tr} />}
+      {tab === 'overview' && <OverviewTab data={data} fmtINR={fmtINR} fmtDate={fmtDate} uiLang={uiLang} tr={tr} lang={lang} />}
       {tab === 'customers' && <CustomersTab customers={data.customers} transactions={data.transactions} fmtINR={fmtINR} uiLang={uiLang} tr={tr} />}
-      {tab === 'transactions' && <TransactionsTab transactions={data.transactions} billItems={data.billItems} customers={data.customers} fmtINR={fmtINR} fmtDate={fmtDate} uiLang={uiLang} tr={tr} />}
+      {tab === 'transactions' && <TransactionsTab transactions={data.transactions} billItems={data.billItems} customers={data.customers} fmtINR={fmtINR} fmtDate={fmtDate} uiLang={uiLang} tr={tr} lang={lang} />}
       {tab === 'purchases' && <PurchasesTab purchases={data.purchases} purchaseItems={data.purchaseItems} fmtINR={fmtINR} fmtDate={fmtDate} tr={tr} />}
       {tab === 'suppliers' && <SuppliersTab suppliers={data.suppliers} fmtDate={fmtDate} tr={tr} />}
       {tab === 'catalog' && <CatalogTab items={data.catalogItems} uiLang={uiLang} tr={tr} />}
@@ -166,12 +166,13 @@ function EmptyState({ message }: { message: string }) {
 
 /* ---- Overview Tab ---- */
 
-function OverviewTab({ data, fmtINR, fmtDate, uiLang, tr }: {
+function OverviewTab({ data, fmtINR, fmtDate, uiLang, tr, lang }: {
   data: ShopData;
   fmtINR: (n: number | string) => string;
   fmtDate: (d: string) => string;
   uiLang: string;
   tr: (k: string) => string;
+  lang: any;
 }) {
   const totalBilled = data.transactions.reduce((s, t) => s + Number(t.bill_amount || 0), 0);
   const totalPaid = data.transactions.reduce((s, t) => s + Number(t.amount_paid || 0), 0);
@@ -273,7 +274,7 @@ function OverviewTab({ data, fmtINR, fmtDate, uiLang, tr }: {
                       <td className="p-2 font-medium">{customer ? formatCustomerName(customer, uiLang) : tr('unknown')}</td>
                       <td className="p-2 text-right">{Number(t.bill_amount) > 0 ? fmtINR(t.bill_amount) : '—'}</td>
                       <td className="p-2 text-right text-[var(--bg-success)]">{Number(t.amount_paid) > 0 ? fmtINR(t.amount_paid) : '—'}</td>
-                      <td className="p-2 capitalize">{t.payment_method}</td>
+                      <td className="p-2">{translatePaymentMethod(t.payment_method, lang)}</td>
                     </tr>
                   );
                 })}
@@ -334,7 +335,7 @@ function CustomersTab({ customers, transactions, fmtINR, uiLang, tr }: {
 
 /* ---- Transactions Tab ---- */
 
-function TransactionsTab({ transactions, billItems, customers, fmtINR, fmtDate, uiLang, tr }: {
+function TransactionsTab({ transactions, billItems, customers, fmtINR, fmtDate, uiLang, tr, lang }: {
   transactions: any[];
   billItems: any[];
   customers: any[];
@@ -342,6 +343,7 @@ function TransactionsTab({ transactions, billItems, customers, fmtINR, fmtDate, 
   fmtDate: (d: string) => string;
   uiLang: string;
   tr: (k: string) => string;
+  lang: any;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -364,7 +366,7 @@ function TransactionsTab({ transactions, billItems, customers, fmtINR, fmtDate, 
               <div className="flex items-center gap-3">
                 <span className="text-xs font-medium">{fmtDate(t.date)}</span>
                 <span className="text-xs text-[var(--text-faint)]">{customer ? formatCustomerName(customer, uiLang) : tr('unknown')}</span>
-                <span className="text-xs capitalize text-[var(--text-faint)]">{t.payment_method}</span>
+                <span className="text-xs text-[var(--text-faint)]">{translatePaymentMethod(t.payment_method, lang)}</span>
               </div>
               <div className="flex items-center gap-3">
                 {Number(t.bill_amount) > 0 && <span className="text-xs font-semibold">{fmtINR(t.bill_amount)}</span>}

@@ -406,6 +406,12 @@ const dictionary: Record<Lang, Record<string, string>> = {
     noItemizedBillItems: 'No itemized bill items.',
     added: 'Added',
     unknown: 'Unknown',
+    methodCash: 'Cash',
+    methodCredit: 'Credit',
+    methodUpi: 'UPI',
+    methodBank: 'Bank transfer',
+    methodCheque: 'Cheque',
+    methodOther: 'Other',
   },
   te: {
     appTitle: 'RVC లెడ్గర్',
@@ -786,6 +792,12 @@ const dictionary: Record<Lang, Record<string, string>> = {
     noItemizedBillItems: 'అంశపరమైన బిల్లు వస్తువులు లేవు.',
     added: 'జోడించబడింది',
     unknown: 'తెలియదు',
+    methodCash: 'నగదు',
+    methodCredit: 'పరువు',
+    methodUpi: 'UPI',
+    methodBank: 'బ్యాంక్ బదిలీ',
+    methodCheque: 'చెక్',
+    methodOther: 'ఇతర',
   },
   hi: {
     appTitle: 'RVC लेजर',
@@ -1166,6 +1178,12 @@ const dictionary: Record<Lang, Record<string, string>> = {
     noItemizedBillItems: 'कोई आइटम बिल नहीं।',
     added: 'जोड़ा गया',
     unknown: 'अज्ञात',
+    methodCash: 'नकद',
+    methodCredit: 'उधार',
+    methodUpi: 'UPI',
+    methodBank: 'बैंक ट्रांसफर',
+    methodCheque: 'चेक',
+    methodOther: 'अन्य',
   },
   all: {},
 };
@@ -1195,4 +1213,17 @@ export function formatCustomerName(c: {
   if (lang === 'te' && c.teluguName) return c.teluguName;
   if (lang === 'hi' && c.hindiName) return c.hindiName;
   return c.name;
+}
+
+export function translatePaymentMethod(method: string, lang: Lang): string {
+  const m = (method || '').toLowerCase();
+  const key = m === 'cash' ? 'methodCash'
+    : m === 'credit' ? 'methodCredit'
+    : m === 'upi' ? 'methodUpi'
+    : m === 'bank' || m === 'bank transfer' ? 'methodBank'
+    : m === 'cheque' ? 'methodCheque'
+    : m === 'other' ? 'methodOther'
+    : null;
+  if (!key) return method;
+  return t(lang, key);
 }
