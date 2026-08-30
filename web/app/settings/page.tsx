@@ -22,6 +22,14 @@ export default function SettingsPage() {
   const [billFormat, setBillFormat] = useState<'simple' | 'itemized' | 'market' | 'patti'>('itemized');
   const [billFormatStatus, setBillFormatStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
+  // Commission %
+  const [commissionPct, setCommissionPct] = useState('');
+  const [commissionStatus, setCommissionStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+
+  // FY close
+  const [fyStatus, setFyStatus] = useState<'idle' | 'closing' | 'done' | 'error'>('idle');
+  const [fyMsg, setFyMsg] = useState('');
+
   // Restore
   const [restoreStatus, setRestoreStatus] = useState<'idle' | 'restoring' | 'done' | 'error'>('idle');
   const [restoreMsg, setRestoreMsg] = useState('');
@@ -45,6 +53,7 @@ export default function SettingsPage() {
         setShopPhone(s.shopPhone || '');
         setLowStock(s.lowStockThreshold || '');
         setBillFormat((s.billFormat as any) || 'itemized');
+        setCommissionPct(s.commissionPct || '');
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -84,6 +93,32 @@ export default function SettingsPage() {
       setTimeout(() => setBillFormatStatus('idle'), 1500);
     } catch {
       setBillFormatStatus('idle');
+    }
+  };
+
+  const saveCommission = async () => {
+    setCommissionStatus('saving');
+    try {
+      await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'commissionPct', value: commissionPct }) });
+      setCommissionStatus('saved');
+      setTimeout(() => setCommissionStatus('idle'), 1500);
+    } catch {
+      setCommissionStatus('idle');
+    }
+  };
+
+  const closeFY = async () => {
+    setFyStatus('closing');
+    setFyMsg('');
+    try {
+      const res = await fetch('/api/fy/close', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Close failed');
+      setFyStatus('done');
+      setFyMsg(`FY ${result.fyStartYear}-${String((result.fyStartYear + 1) % 100).padStart(2, '0')} closed. ${result.customersClosed} customers processed.`);
+    } catch (err: any) {
+      setFyStatus('error');
+      setFyMsg(err.message || 'Close failed');
     }
   };
 
@@ -231,6 +266,50 @@ export default function SettingsPage() {
           >
             {billFormatStatus === 'saved' ? t('saved') : t('save')}
           </button>
+        </div>
+      </section>
+
+      {/* Commission % */}
+      <section className="rounded-lg bg-[var(--bg-card)] p-4">
+        <h2 className="text-sm font-semibold">{t('commissionPct')}</h2>
+        <p className="mt-1 text-xs text-[var(--text-faint)]">{t('commissionHelp')}</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            value={commissionPct}
+            onChange={(e) => setCommissionPct(e.target.value)}
+            placeholder="10"
+            inputMode="decimal"
+            className="w-24 rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
+          />
+          <span className="text-xs text-[var(--text-muted)]">%</span>
+          <button
+            onClick={saveCommission}
+            disabled={commissionStatus === 'saving'}
+            className="rounded-md bg-[var(--bg-success)] px-4 py-2 text-sm font-semibold text-[var(--text-on-primary)] disabled:opacity-50"
+          >
+            {commissionStatus === 'saved' ? t('saved') : t('save')}
+          </button>
+        </div>
+      </section>
+
+      {/* Financial Year Close */}
+      <section className="rounded-lg bg-[var(--bg-card)] p-4">
+        <h2 className="text-sm font-semibold">{t('fyClose')}</h2>
+        <p className="mt-1 text-xs text-[var(--text-faint)]">{t('fyCloseHelp')}</p>
+        <div className="mt-3">
+          <button
+            onClick={closeFY}
+            disabled={fyStatus === 'closing'}
+            className="rounded-md bg-[var(--bg-secondary)] px-4 py-2 text-sm font-semibold text-[var(--text-on-primary)] disabled:opacity-50"
+          >
+            {fyStatus === 'closing' ? t('closing') + '…' : t('closePrevFY')}
+          </button>
+          {fyStatus === 'done' && (
+            <p className="mt-2 text-xs text-[var(--bg-success)]">✓ {fyMsg}</p>
+          )}
+          {fyStatus === 'error' && (
+            <p className="mt-2 text-xs text-[var(--bg-primary)]">✗ {fyMsg}</p>
+          )}
         </div>
       </section>
 

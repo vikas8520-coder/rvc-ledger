@@ -167,7 +167,233 @@ async function ensureSchema() {
   await sql`ALTER TABLE expenses ADD COLUMN IF NOT EXISTS shop_id UUID`;
   await sql`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS shop_id UUID`;
 
+  // ---- Financial year opening balances ----
+  await sql`
+    CREATE TABLE IF NOT EXISTS fy_opening_balances (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      shop_id UUID NOT NULL,
+      customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+      fy_start_year INT NOT NULL,
+      opening_balance NUMERIC(14,2) DEFAULT 0,
+      closed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE (shop_id, customer_id, fy_start_year)
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS idx_fy_balances_shop ON fy_opening_balances(shop_id, fy_start_year)`;
+
   schemaReady = true;
+}
+
+// ---- Financial year helpers ----
+
+// Indian FY: April 1 to March 31. Month index 0-based: April = 3.
+// If current month is Jan-Mar (0-2), we're in FY that started last year.
+export function currentFYStartYear(d: Date = new Date()): number {
+  return d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1;
+}
+
+export function fyDateRange(fyStartYear: number): { from: string; to: string } {
+  return {
+    from: `${fyStartYear}-04-01`,
+    to: `${fyStartYear + 1}-03-31`,
+  };
+}
+
+// Calculate opening balance for a customer at the start of a FY.
+// opening = SUM(bills before April 1) - SUM(payments before April 1)
+// Excludes CASH SALES (cash sales are settled immediately, no credit balance).
+async function calcOpeningBalance(
+  sql: ReturnType<typeof getSql>,
+  shopId: string,
+  customerId: string,
+  fyStartYear: number
+): Promise<number> {
+  const fyStart = `${fyStartYear}-04-01`;
+  const [row] = await sql`
+    SELECT
+      COALESCE(SUM(t.bill_amount), 0) - COALESCE(SUM(t.amount_paid), 0) as balance
+    FROM transactions t
+    WHERE t.customer_id = ${customerId}
+      AND t.shop_id = ${shopId}
+      AND t.date < ${fyStart}
+  `;
+  return Number((row as any)?.balance ?? 0);
+}
+
+// Get the opening balance for a customer in a FY.
+// Uses stored value if available (fast), otherwise calculates on the fly (fallback).
+export async function getFYOpeningBalance(
+  shopId: string,
+  customerId: string,
+  fyStartYear: number
+): Promise<number> {
+  if (!isDbConfigured()) return 0;
+  await ensureSchema();
+  const sql = getSql();
+  const [stored] = await sql`
+    SELECT opening_balance FROM fy_opening_balances
+    WHERE shop_id = ${shopId} AND customer_id = ${customerId} AND fy_start_year = ${fyStartYear}
+  `;
+  if (stored) return Number((stored as any).opening_balance);
+  // Fallback: calculate on the fly
+  return calcOpeningBalance(sql, shopId, customerId, fyStartYear);
+}
+
+// Close a financial year for a shop.
+// Stores opening balances for all customers for the NEXT FY.
+// Idempotent: safe to re-run, updates existing balances.
+export async function closeFY(shopId: string, fyStartYear: number): Promise<{ customersClosed: number }> {
+  if (!isDbConfigured()) return { customersClosed: 0 };
+  await ensureSchema();
+  const sql = getSql();
+  const nextFY = fyStartYear + 1;
+
+  // Get all customers for this shop (excluding CASH SALES)
+  const customers = await sql`
+    SELECT id FROM customers WHERE shop_id = ${shopId} AND name != 'CASH SALES'
+  `;
+
+  let count = 0;
+  for (const c of customers) {
+    const customerId = (c as any).id;
+    // Closing balance of this FY = opening + bills - payments for the entire FY
+    const { from, to } = fyDateRange(fyStartYear);
+    const opening = await getFYOpeningBalance(shopId, customerId, fyStartYear);
+    const [fyTotals] = await sql`
+      SELECT
+        COALESCE(SUM(bill_amount), 0) as billed,
+        COALESCE(SUM(amount_paid), 0) as paid
+      FROM transactions
+      WHERE customer_id = ${customerId}
+        AND shop_id = ${shopId}
+        AND date >= ${from} AND date <= ${to}
+    `;
+    const closingBalance = opening + Number((fyTotals as any)?.billed ?? 0) - Number((fyTotals as any)?.paid ?? 0);
+
+    // Upsert opening balance for next FY
+    await sql`
+      INSERT INTO fy_opening_balances (shop_id, customer_id, fy_start_year, opening_balance, closed_at)
+      VALUES (${shopId}, ${customerId}, ${nextFY}, ${closingBalance}, now())
+      ON CONFLICT (shop_id, customer_id, fy_start_year)
+      DO UPDATE SET opening_balance = ${closingBalance}, closed_at = now()
+    `;
+    count++;
+  }
+
+  return { customersClosed: count };
+}
+
+// Auto-close previous FY if it hasn't been closed yet.
+// Called on dashboard load. No-op if already closed or if we're still in the same FY.
+export async function autoCloseFY(shopId: string): Promise<{ closed: boolean; fyStartYear: number | null }> {
+  if (!isDbConfigured()) return { closed: false, fyStartYear: null };
+  await ensureSchema();
+  const sql = getSql();
+
+  const currentFY = currentFYStartYear();
+  const previousFY = currentFY - 1;
+
+  // Check if previous FY has been closed (any opening balance exists for current FY)
+  const [existing] = await sql`
+    SELECT COUNT(*) as cnt FROM fy_opening_balances
+    WHERE shop_id = ${shopId} AND fy_start_year = ${currentFY}
+  `;
+  if (Number((existing as any)?.cnt ?? 0) > 0) {
+    return { closed: false, fyStartYear: null };
+  }
+
+  // Check if there are any transactions in the previous FY (no point closing an empty FY)
+  const { from, to } = fyDateRange(previousFY);
+  const [txCheck] = await sql`
+    SELECT COUNT(*) as cnt FROM transactions
+    WHERE shop_id = ${shopId} AND date >= ${from} AND date <= ${to}
+  `;
+  if (Number((txCheck as any)?.cnt ?? 0) === 0) {
+    return { closed: false, fyStartYear: null };
+  }
+
+  await closeFY(shopId, previousFY);
+  return { closed: true, fyStartYear: previousFY };
+}
+
+// Recalculate opening balances for a FY and all subsequent FYs.
+// Called when a backdated transaction is entered that affects a closed FY.
+export async function recalcFYBalances(shopId: string, affectedFYStartYear: number): Promise<void> {
+  if (!isDbConfigured()) return;
+  await ensureSchema();
+  const sql = getSql();
+  const currentFY = currentFYStartYear();
+
+  // Recalculate from the affected FY up to the current FY
+  for (let fy = affectedFYStartYear; fy <= currentFY; fy++) {
+    const customers = await sql`
+      SELECT DISTINCT customer_id FROM transactions
+      WHERE shop_id = ${shopId} AND customer_id IS NOT NULL
+    `;
+    for (const c of customers) {
+      const customerId = (c as any).customer_id;
+      const opening = await calcOpeningBalance(sql, shopId, customerId, fy);
+      await sql`
+        INSERT INTO fy_opening_balances (shop_id, customer_id, fy_start_year, opening_balance, closed_at)
+        VALUES (${shopId}, ${customerId}, ${fy}, ${opening}, now())
+        ON CONFLICT (shop_id, customer_id, fy_start_year)
+        DO UPDATE SET opening_balance = ${opening}
+      `;
+    }
+  }
+}
+
+// Get FY summary for a shop: total sales, payments, outstanding, commission.
+export async function getFYSummary(shopId: string, fyStartYear: number): Promise<{
+  totalSales: number;
+  totalPayments: number;
+  totalOutstanding: number;
+  customerCount: number;
+}> {
+  if (!isDbConfigured()) return { totalSales: 0, totalPayments: 0, totalOutstanding: 0, customerCount: 0 };
+  await ensureSchema();
+  const sql = getSql();
+  const { from, to } = fyDateRange(fyStartYear);
+
+  // Total sales and payments in this FY (exclude CASH SALES from outstanding calc)
+  const [totals] = await sql`
+    SELECT
+      COALESCE(SUM(CASE WHEN c.name != 'CASH SALES' THEN t.bill_amount ELSE 0 END), 0) as credit_sales,
+      COALESCE(SUM(CASE WHEN c.name = 'CASH SALES' THEN t.bill_amount ELSE 0 END), 0) as cash_sales,
+      COALESCE(SUM(t.amount_paid), 0) as payments
+    FROM transactions t
+    JOIN customers c ON c.id = t.customer_id
+    WHERE t.shop_id = ${shopId} AND t.date >= ${from} AND t.date <= ${to}
+  `;
+
+  // Total outstanding = sum of closing balances for all non-CASH SALES customers
+  const customers = await sql`
+    SELECT id FROM customers WHERE shop_id = ${shopId} AND name != 'CASH SALES'
+  `;
+  let totalOutstanding = 0;
+  for (const c of customers) {
+    const customerId = (c as any).id;
+    const opening = await getFYOpeningBalance(shopId, customerId, fyStartYear);
+    const [fyTotals] = await sql`
+      SELECT
+        COALESCE(SUM(bill_amount), 0) as billed,
+        COALESCE(SUM(amount_paid), 0) as paid
+      FROM transactions
+      WHERE customer_id = ${customerId}
+        AND shop_id = ${shopId}
+        AND date >= ${from} AND date <= ${to}
+    `;
+    const closing = opening + Number((fyTotals as any)?.billed ?? 0) - Number((fyTotals as any)?.paid ?? 0);
+    if (closing > 0) totalOutstanding += closing;
+  }
+
+  return {
+    totalSales: Number((totals as any)?.credit_sales ?? 0) + Number((totals as any)?.cash_sales ?? 0),
+    totalPayments: Number((totals as any)?.payments ?? 0),
+    totalOutstanding,
+    customerCount: customers.length,
+  };
 }
 
 function toDateOnly(value: unknown): string {
@@ -413,7 +639,7 @@ export async function addCustomer(
   return { id: (row as any).id, name: (row as any).name };
 }
 
-export async function getCustomers(shopId: string): Promise<Customer[]> {
+export async function getCustomers(shopId: string, fyStartYear?: number): Promise<Customer[]> {
   if (!isDbConfigured()) {
     return (seed as unknown as Customer[]).map((c) => ({
       ...c,
@@ -427,6 +653,11 @@ export async function getCustomers(shopId: string): Promise<Customer[]> {
 
   await ensureSchema();
   const sql = getSql();
+
+  // Auto-close previous FY if needed (only when FY-aware mode is active)
+  if (fyStartYear !== undefined) {
+    await autoCloseFY(shopId);
+  }
 
   const customers = await sql`SELECT id, name, english_name, telugu_name, hindi_name, phone, credit_limit FROM customers WHERE shop_id = ${shopId} ORDER BY name`;
   const txns = await sql`SELECT * FROM transactions WHERE shop_id = ${shopId} ORDER BY date, created_at`;
@@ -449,10 +680,29 @@ export async function getCustomers(shopId: string): Promise<Customer[]> {
     return `${y}-${m}-${day}`;
   }
 
+  // FY date range for filtering
+  const fyRange = fyStartYear !== undefined ? fyDateRange(fyStartYear) : null;
+
   const customersOut: Customer[] = [];
   for (const c of customers) {
-    const customerTxns = (txns as any[]).filter((t) => t.customer_id === c.id);
-    let balance = 0;
+    const isCashSales = (c.name as string) === 'CASH SALES';
+
+    // Filter transactions by FY range if specified
+    let customerTxns = (txns as any[]).filter((t) => t.customer_id === c.id);
+    if (fyRange) {
+      customerTxns = customerTxns.filter((t) => {
+        const txDate = toDateStr(t.date);
+        return txDate >= fyRange.from && txDate <= fyRange.to;
+      });
+    }
+
+    // Opening balance: stored or on-the-fly (0 if no FY filter or CASH SALES)
+    let openingBalance = 0;
+    if (fyStartYear !== undefined && !isCashSales) {
+      openingBalance = await getFYOpeningBalance(shopId, c.id as string, fyStartYear);
+    }
+
+    let balance = openingBalance;
     const txnViews: TxnView[] = customerTxns.map((t) => {
       const amount = Number(t.amount_paid > 0 ? t.amount_paid : t.bill_amount);
       const type: 'bill' | 'payment' = Number(t.amount_paid) > 0 ? 'payment' : 'bill';
@@ -500,8 +750,11 @@ export async function getCustomers(shopId: string): Promise<Customer[]> {
       };
     });
 
+    // FY-scoped totals (or all-time if no FY filter)
     const billed = customerTxns.reduce((s: number, t: any) => s + Number(t.bill_amount), 0);
     const paid = customerTxns.reduce((s: number, t: any) => s + Number(t.amount_paid), 0);
+    // due = opening + FY bills - FY payments (or all-time if no FY filter)
+    const due = fyStartYear !== undefined ? openingBalance + billed - paid : billed - paid;
 
     customersOut.push({
       id: c.id as string,
@@ -513,7 +766,7 @@ export async function getCustomers(shopId: string): Promise<Customer[]> {
       creditLimit: c.credit_limit !== null && c.credit_limit !== undefined ? Number(c.credit_limit) : null,
       billed,
       paid,
-      due: billed - paid,
+      due: isCashSales ? 0 : due,  // CASH SALES always shows 0 due
       txns: txnViews,
     });
   }
