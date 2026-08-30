@@ -9,7 +9,7 @@ import AgingBadge from '../components/AgingBadge';
 import { Card, SectionHeader, Button, EmptyState, ListSkeleton, PageHeader, Badge } from '../components/ui';
 import { UsersIcon, SearchIcon, DownloadIcon, MessageIcon, PrinterIcon, XIcon, DollarIcon } from '../components/Icons';
 import { fmt } from '@/lib/format';
-import { computeAging, customersCsv, downloadCsv, reminderText, waLink } from '@/lib/statement';
+import { computeAging, customersCsv, downloadCsv, reminderText, statementText, waLink } from '@/lib/statement';
 import { printCreditLedger, CreditLedgerEntry, ShopProfile } from '@/lib/billPrint';
 import { OverdueCustomer } from '@/lib/types';
 
@@ -62,6 +62,13 @@ export default function CustomersPage() {
   const sendReminder = (c: OverdueCustomer) => {
     const dn = formatCustomerName(c, uiLang);
     const msg = `Namaste ${dn},\n\nPending amount at ${shopSettings.shopName || 'RVC'}: ${fmt(c.due)}.\nOldest unpaid bill: ${c.oldestDate} (${c.oldestDays} days).\n\nPlease arrange the payment. Thank you.`;
+    const link = waLink(msg, c.phone);
+    window.open(link, '_blank');
+  };
+
+  const shareStatement = (c: typeof customers[number]) => {
+    const dn = formatCustomerName(c, uiLang);
+    const msg = statementText(c, shopSettings.shopName || 'RVC', dn);
     const link = waLink(msg, c.phone);
     window.open(link, '_blank');
   };
@@ -238,9 +245,9 @@ export default function CustomersPage() {
         <Card padding="p-0">
           <ul className="divide-y divide-[var(--border-light)]">
             {list.map(({ c, aging }) => (
-              <li key={c.id}>
-                <Link href={`/customers/${c.id}`} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-[var(--bg-card-hover)] transition-colors">
-                  <div className="min-w-0">
+              <li key={c.id} className="group">
+                <div className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-[var(--bg-card-hover)] transition-colors">
+                  <Link href={`/customers/${c.id}`} className="min-w-0 flex-1">
                     <p className="flex items-center gap-2 truncate font-medium">
                       {formatCustomerName(c, uiLang)}
                       <AgingBadge aging={aging} />
@@ -248,14 +255,22 @@ export default function CustomersPage() {
                     <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
                       {t('billed')} {fmt(c.billed)} · {t('paid')} {fmt(c.paid)}
                     </p>
-                  </div>
+                  </Link>
                   <div className="shrink-0 text-right">
                     <p className={`text-sm font-semibold ${c.due > 0 ? 'text-[var(--bg-primary)]' : 'text-[var(--text-faint)]'}`}>
                       {fmt(c.due)}
                     </p>
                     {c.due > 0 && <p className="text-[10px] text-[var(--text-faint)]">{t('due')}</p>}
                   </div>
-                </Link>
+                  <button
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); shareStatement(c); }}
+                    title={t('shareStatement')}
+                    className="shrink-0 rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-primary)] hover:text-[var(--text-on-primary)] transition-colors"
+                    aria-label={t('shareStatement')}
+                  >
+                    <MessageIcon size={16} />
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
