@@ -34,20 +34,20 @@ const COMMIT = process.argv.includes('--commit');
 // ---- Gemini call ----
 async function geminiTransliterate(names) {
   const prompt = `You are a transliteration expert for Indian proper names (person names, shop names).
-Given a list of names, transliterate each one into Telugu script AND Hindi (Devanagari) script.
+Given a list of names, transliterate each one into English (Latin/romanized), Telugu script, AND Hindi (Devanagari) script.
 Rules:
 - This is TRANSLITERATION (script conversion), NOT translation. Keep the pronunciation the same, only change the script.
-- The name might already be in Telugu, English, or mixed. Detect the script and convert.
-- If the name is already in Telugu script, the telugu_output should be the same (cleaned up).
-- If the name is already in Telugu script, the hindi_output should be the Devanagari equivalent.
-- If the name is in English/Latin script, convert to the phonetically correct Telugu/Hindi spelling.
+- The name might already be in Telugu, English, or mixed. Detect the script and convert to all three.
+- english_output: romanized Latin script (e.g. "తిరుపతి" → "Tirupathi", "ఉలవల నారాయణ" → "Ulavala Narayana"). If already in English, keep as-is.
+- telugu_output: Telugu script. If already in Telugu, keep as-is.
+- hindi_output: Devanagari script.
 - Preserve numbers, parentheses, and punctuation as-is. Only convert the letter/script portion.
-- For names like "TIRUPATHI (C 15)", output "తిరుపతి (C 15)" and "तिरुपति (C 15)".
-- For names like "MKB భగవాన్", keep the Telugu part as-is for telugu_output, convert to Devanagari for hindi_output.
-- For English names like "SRS Hostels", transliterate phonetically: "ఎస్‌ఆర్‌ఎస్ హోస్టల్స్" and "एसआरएस होस्टल्स".
+- For names like "TIRUPATHI (C 15)", english_output stays "TIRUPATHI (C 15)", telugu_output is "తిరుపతి (C 15)", hindi_output is "तिरुपति (C 15)".
+- For names like "MKB భగవాన్", english_output is "MKB Bhagawan", telugu_output keeps Telugu parts, hindi_output is Devanagari.
+- For names like "SRS Hostels", english_output stays "SRS Hostels", telugu_output is "ఎస్‌ఆర్‌ఎస్ హోస్టల్స్", hindi_output is "एसआरएस होस्टल्स".
 
 Return a JSON array with this exact shape:
-[{"original": "...", "telugu": "...", "hindi": "..."}]
+[{"original": "...", "english": "...", "telugu": "...", "hindi": "..."}]
 
 Names to transliterate:
 ${JSON.stringify(names)}`;
@@ -99,23 +99,26 @@ ${JSON.stringify(names)}`;
 async function main() {
   console.log('Fetching customers from DB...');
   const customers = await sql`
-    SELECT id, name, telugu_name, hindi_name
+    SELECT id, name, english_name, telugu_name, hindi_name
     FROM customers
     ORDER BY name
   `;
   console.log(`Found ${customers.length} customers.\n`);
 
   // Find names that need transliteration:
+  // - english_name is NULL, identical to name, or contains Telugu script
   // - telugu_name is NULL or identical to name
   // - hindi_name is NULL or identical to name
+  const hasTelugu = (s) => /[\u0C00-\u0C7F]/.test(s || '');
   const needsUpdate = customers.filter((c) => {
+    const enBad = !c.english_name || c.english_name === c.name || hasTelugu(c.english_name);
     const teBad = !c.telugu_name || c.telugu_name === c.name;
     const hiBad = !c.hindi_name || c.hindi_name === c.name;
-    return teBad || hiBad;
+    return enBad || teBad || hiBad;
   });
 
   if (needsUpdate.length === 0) {
-    console.log('All customers already have proper Telugu and Hindi names. Nothing to do.');
+    console.log('All customers already have proper English, Telugu, and Hindi names. Nothing to do.');
     return;
   }
 
@@ -138,10 +141,12 @@ async function main() {
         results.push({
           id: c.id,
           name: c.name,
+          english: match.english || c.english_name || c.name,
           telugu: match.telugu || c.telugu_name || c.name,
           hindi: match.hindi || c.hindi_name || c.name,
         });
         console.log(`  ${c.name}`);
+        console.log(`    EN: ${match.english || '(unchanged)'}`);
         console.log(`    TE: ${match.telugu || '(unchanged)'}`);
         console.log(`    HI: ${match.hindi || '(unchanged)'}`);
       } else {
@@ -149,6 +154,7 @@ async function main() {
         results.push({
           id: c.id,
           name: c.name,
+          english: c.english_name || c.name,
           telugu: c.telugu_name || c.name,
           hindi: c.hindi_name || c.name,
         });
@@ -174,7 +180,7 @@ async function main() {
   for (const r of results) {
     await sql`
       UPDATE customers
-      SET telugu_name = ${r.telugu}, hindi_name = ${r.hindi}
+      SET english_name = ${r.english}, telugu_name = ${r.telugu}, hindi_name = ${r.hindi}
       WHERE id = ${r.id}
     `;
     updated++;
