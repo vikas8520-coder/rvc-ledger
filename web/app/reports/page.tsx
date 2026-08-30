@@ -32,24 +32,37 @@ function downloadCsv(filename: string, rows: (string | number)[][]) {
 
 export default function ReportsPage() {
   const { t, lang } = useI18n();
+  const [fyParam, setFyParam] = useState<number | 'all' | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [fySummary, setFySummary] = useState<{ totalSales: number; totalPayments: number; totalOutstanding: number; customerCount: number } | null>(null);
+  const [commissionPct, setCommissionPct] = useState<number | null>(null);
   const [purchases, setPurchases] = useState<PurchaseView[]>([]);
   const [wastage, setWastage] = useState<WastageEntry[]>([]);
   const [expenses, setExpenses] = useState<ExpenseEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // FY label
+  const now = new Date();
+  const currentFY = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  const fyLabel = fyParam === 'all' ? t('allTime') : fyParam === null ? `FY ${currentFY}-${String((currentFY + 1) % 100).padStart(2, '0')}` : `FY ${fyParam}-${String((fyParam + 1) % 100).padStart(2, '0')}`;
+
   useEffect(() => {
+    const fyQuery = fyParam === 'all' ? '?fy=all' : fyParam === null ? '' : `?fy=${fyParam}`;
     Promise.all([
-      fetch('/api/dashboard').then((r) => r.json()),
+      fetch(`/api/dashboard${fyQuery}`).then((r) => r.json()),
       fetch('/api/purchases').then((r) => r.json()),
       fetch('/api/wastage').then((r) => r.json()),
       fetch('/api/expenses').then((r) => r.json()),
+      fetch('/api/settings').then((r) => r.json()),
     ])
-      .then(([dash, pur, wast, exp]) => {
+      .then(([dash, pur, wast, exp, settings]) => {
         setCustomers(dash.customers || []);
+        setFySummary(dash.fySummary || null);
         setPurchases(pur.purchases || []);
         setWastage(wast.entries || []);
         setExpenses(exp.entries || []);
+        const pct = settings.settings?.commissionPct;
+        if (pct) setCommissionPct(Number(pct));
       })
       .catch(() => {
         setCustomers([]);
@@ -58,7 +71,7 @@ export default function ReportsPage() {
         setExpenses([]);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [fyParam]);
 
   const months = useMemo(() => monthlySummary(customers, purchases), [customers, purchases]);
   const items = useMemo(() => itemStats(customers, purchases), [customers, purchases]);
@@ -68,6 +81,12 @@ export default function ReportsPage() {
   const totalWastage = wastage.reduce((s, w) => s + w.estCost, 0);
   const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
   const netEstProfit = totalEstProfit - totalWastage - totalExpenses;
+
+  // FY summary from backend (or fallback to customer totals)
+  const fySales = fySummary?.totalSales ?? customers.reduce((s, c) => s + c.billed, 0);
+  const fyPayments = fySummary?.totalPayments ?? customers.reduce((s, c) => s + c.paid, 0);
+  const fyOutstanding = fySummary?.totalOutstanding ?? customers.reduce((s, c) => s + c.due, 0);
+  const commissionEarned = commissionPct ? (fySales * commissionPct / 100) : 0;
 
   const exportMonths = () => {
     const rows: (string | number)[][] = [[t('month'), t('billedSales'), t('collected'), t('purchased')]];
@@ -106,6 +125,41 @@ export default function ReportsPage() {
   return (
     <div className="space-y-5">
       <PageHeader title={t('navReports')} subtitle={t('reportsHelp')} />
+
+      {/* FY selector */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-[var(--text-muted)]">{t('financialYear')}:</span>
+        {[
+          { key: null, label: `FY ${currentFY}-${String((currentFY + 1) % 100).padStart(2, '0')}` },
+          { key: currentFY - 1, label: `FY ${currentFY - 1}-${String(currentFY % 100).padStart(2, '0')}` },
+          { key: 'all' as const, label: t('allTime') },
+        ].map((opt) => (
+          <button
+            key={String(opt.key)}
+            onClick={() => setFyParam(opt.key)}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
+              fyParam === opt.key
+                ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'
+                : 'border border-[var(--border-input)] text-[var(--text-secondary)] hover:bg-[var(--bg-base)]'
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {/* FY Summary */}
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold text-[var(--text-secondary)]">{fyLabel}</h2>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <StatCard label={t('fySales')} value={fmt(fySales)} icon={<TrendingIcon size={14} />} />
+          <StatCard label={t('fyPayments')} value={fmt(fyPayments)} accent="success" icon={<DollarIcon size={14} />} />
+          <StatCard label={t('fyOutstanding')} value={fmt(fyOutstanding)} accent="primary" icon={<DollarIcon size={14} />} />
+          {commissionPct && (
+            <StatCard label={`${t('commissionEarned')} (${commissionPct}%)`} value={fmt(commissionEarned)} accent="success" icon={<TrendingIcon size={14} />} />
+          )}
+        </div>
+      </section>
 
       {/* Summary stats */}
       <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
