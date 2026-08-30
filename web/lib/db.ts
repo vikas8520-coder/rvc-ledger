@@ -1871,7 +1871,7 @@ export async function exportAllData(shopId: string) {
   await ensureSchema();
   const sql = getSql();
   const [customers, transactions, billItems, purchases, purchaseItems, suppliers, supplierPayments, wastage, catalogItems, catalogAliases, expenses] = await Promise.all([
-    sql`SELECT id, name, phone, credit_limit FROM customers WHERE shop_id = ${shopId} ORDER BY name`,
+    sql`SELECT id, name, english_name, telugu_name, hindi_name, phone, credit_limit FROM customers WHERE shop_id = ${shopId} ORDER BY name`,
     sql`SELECT * FROM transactions WHERE shop_id = ${shopId} ORDER BY date, created_at`,
     sql`SELECT * FROM bill_items WHERE shop_id = ${shopId} ORDER BY transaction_id, id`,
     sql`SELECT * FROM purchases WHERE shop_id = ${shopId} ORDER BY date, created_at`,

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useI18n } from '@/app/components/I18nProvider';
+import { formatCustomerName, localizeItem, getUiLang } from '@/lib/i18n';
 
 type ShopData = {
   exportedAt: string;
@@ -23,6 +25,8 @@ type Tab = 'overview' | 'customers' | 'transactions' | 'purchases' | 'suppliers'
 export default function ShopDataPage() {
   const params = useParams();
   const router = useRouter();
+  const { lang } = useI18n();
+  const uiLang = getUiLang(lang);
   const shopId = params.shopId as string;
   const [data, setData] = useState<ShopData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -112,12 +116,12 @@ export default function ShopDataPage() {
       </div>
 
       {/* Tab content */}
-      {tab === 'overview' && <OverviewTab data={data} fmtINR={fmtINR} fmtDate={fmtDate} />}
-      {tab === 'customers' && <CustomersTab customers={data.customers} transactions={data.transactions} fmtINR={fmtINR} />}
-      {tab === 'transactions' && <TransactionsTab transactions={data.transactions} billItems={data.billItems} fmtINR={fmtINR} fmtDate={fmtDate} />}
+      {tab === 'overview' && <OverviewTab data={data} fmtINR={fmtINR} fmtDate={fmtDate} uiLang={uiLang} />}
+      {tab === 'customers' && <CustomersTab customers={data.customers} transactions={data.transactions} fmtINR={fmtINR} uiLang={uiLang} />}
+      {tab === 'transactions' && <TransactionsTab transactions={data.transactions} billItems={data.billItems} customers={data.customers} fmtINR={fmtINR} fmtDate={fmtDate} uiLang={uiLang} />}
       {tab === 'purchases' && <PurchasesTab purchases={data.purchases} purchaseItems={data.purchaseItems} fmtINR={fmtINR} fmtDate={fmtDate} />}
       {tab === 'suppliers' && <SuppliersTab suppliers={data.suppliers} fmtDate={fmtDate} />}
-      {tab === 'catalog' && <CatalogTab items={data.catalogItems} />}
+      {tab === 'catalog' && <CatalogTab items={data.catalogItems} uiLang={uiLang} />}
     </div>
   );
 }
@@ -149,7 +153,7 @@ function EmptyState({ message }: { message: string }) {
 
 /* ---- Overview Tab ---- */
 
-function OverviewTab({ data, fmtINR, fmtDate }: { data: ShopData; fmtINR: (n: number | string) => string; fmtDate: (d: string) => string }) {
+function OverviewTab({ data, fmtINR, fmtDate, uiLang }: { data: ShopData; fmtINR: (n: number | string) => string; fmtDate: (d: string) => string; uiLang: string }) {
   const totalBilled = data.transactions.reduce((s, t) => s + Number(t.bill_amount || 0), 0);
   const totalPaid = data.transactions.reduce((s, t) => s + Number(t.amount_paid || 0), 0);
   const totalOutstanding = totalBilled - totalPaid;
@@ -160,7 +164,7 @@ function OverviewTab({ data, fmtINR, fmtDate }: { data: ShopData; fmtINR: (n: nu
     const txns = data.transactions.filter((t) => t.customer_id === c.id);
     const billed = txns.reduce((s, t) => s + Number(t.bill_amount || 0), 0);
     const paid = txns.reduce((s, t) => s + Number(t.amount_paid || 0), 0);
-    return { name: c.name, phone: c.phone, outstanding: billed - paid, txnCount: txns.length };
+    return { ...c, displayName: formatCustomerName(c, uiLang), outstanding: billed - paid, txnCount: txns.length };
   }).sort((a, b) => b.outstanding - a.outstanding).slice(0, 10);
 
   // Recent transactions
@@ -209,8 +213,8 @@ function OverviewTab({ data, fmtINR, fmtDate }: { data: ShopData; fmtINR: (n: nu
               </thead>
               <tbody>
                 {customerBalances.map((c) => (
-                  <tr key={c.name} className="border-t border-[var(--border-card)]">
-                    <td className="p-2 font-medium">{c.name}</td>
+                  <tr key={c.id} className="border-t border-[var(--border-card)]">
+                    <td className="p-2 font-medium">{c.displayName}</td>
                     <td className="p-2 text-[var(--text-faint)]">{c.phone || '—'}</td>
                     <td className="p-2 text-right">{c.txnCount}</td>
                     <td className={`p-2 text-right font-semibold ${c.outstanding > 0 ? 'text-[var(--bg-warning)]' : 'text-[var(--bg-success)]'}`}>
@@ -247,7 +251,7 @@ function OverviewTab({ data, fmtINR, fmtDate }: { data: ShopData; fmtINR: (n: nu
                   return (
                     <tr key={t.id} className="border-t border-[var(--border-card)]">
                       <td className="p-2 whitespace-nowrap">{fmtDate(t.date)}</td>
-                      <td className="p-2 font-medium">{customer?.name || 'Unknown'}</td>
+                      <td className="p-2 font-medium">{customer ? formatCustomerName(customer, uiLang) : 'Unknown'}</td>
                       <td className="p-2 text-right">{Number(t.bill_amount) > 0 ? fmtINR(t.bill_amount) : '—'}</td>
                       <td className="p-2 text-right text-[var(--bg-success)]">{Number(t.amount_paid) > 0 ? fmtINR(t.amount_paid) : '—'}</td>
                       <td className="p-2 capitalize">{t.payment_method}</td>
@@ -265,15 +269,15 @@ function OverviewTab({ data, fmtINR, fmtDate }: { data: ShopData; fmtINR: (n: nu
 
 /* ---- Customers Tab ---- */
 
-function CustomersTab({ customers, transactions, fmtINR }: { customers: any[]; transactions: any[]; fmtINR: (n: number | string) => string }) {
+function CustomersTab({ customers, transactions, fmtINR, uiLang }: { customers: any[]; transactions: any[]; fmtINR: (n: number | string) => string; uiLang: string }) {
   if (customers.length === 0) return <EmptyState message="No customers in this shop." />;
 
   const balances = customers.map((c) => {
     const txns = transactions.filter((t) => t.customer_id === c.id);
     const billed = txns.reduce((s, t) => s + Number(t.bill_amount || 0), 0);
     const paid = txns.reduce((s, t) => s + Number(t.amount_paid || 0), 0);
-    return { ...c, outstanding: billed - paid, txnCount: txns.length };
-  }).sort((a, b) => a.name.localeCompare(b.name));
+    return { ...c, displayName: formatCustomerName(c, uiLang), outstanding: billed - paid, txnCount: txns.length };
+  }).sort((a, b) => a.displayName.localeCompare(b.displayName));
 
   return (
     <div className="overflow-x-auto rounded-lg border border-[var(--border-light)]">
@@ -289,7 +293,7 @@ function CustomersTab({ customers, transactions, fmtINR }: { customers: any[]; t
         <tbody>
           {balances.map((c) => (
             <tr key={c.id} className="border-t border-[var(--border-card)]">
-              <td className="p-2 font-medium">{c.name}</td>
+              <td className="p-2 font-medium">{c.displayName}</td>
               <td className="p-2 text-[var(--text-faint)]">{c.phone || '—'}</td>
               <td className="p-2 text-right">{c.txnCount}</td>
               <td className={`p-2 text-right font-semibold ${c.outstanding > 0 ? 'text-[var(--bg-warning)]' : 'text-[var(--bg-success)]'}`}>
@@ -305,11 +309,13 @@ function CustomersTab({ customers, transactions, fmtINR }: { customers: any[]; t
 
 /* ---- Transactions Tab ---- */
 
-function TransactionsTab({ transactions, billItems, fmtINR, fmtDate }: {
+function TransactionsTab({ transactions, billItems, customers, fmtINR, fmtDate, uiLang }: {
   transactions: any[];
   billItems: any[];
+  customers: any[];
   fmtINR: (n: number | string) => string;
   fmtDate: (d: string) => string;
+  uiLang: string;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -355,7 +361,7 @@ function TransactionsTab({ transactions, billItems, fmtINR, fmtDate }: {
                     <tbody>
                       {items.map((b) => (
                         <tr key={b.id} className="border-t border-[var(--border-card)]">
-                          <td className="p-1">{b.confirmed_name || b.raw_text}{b.kind === 'charge' ? ' (charge)' : ''}</td>
+                          <td className="p-1">{localizeItem({ name: b.confirmed_name || b.raw_text, teluguName: b.telugu_name, hindiName: b.hindi_name }, uiLang as any)}{b.kind === 'charge' ? ' (charge)' : ''}</td>
                           <td className="p-1">{b.qty || '—'}</td>
                           <td className="p-1">{b.rate || '—'}</td>
                           <td className="p-1 text-right">{Number(b.amount) > 0 ? fmtINR(b.amount) : '—'}</td>
@@ -451,14 +457,14 @@ function SuppliersTab({ suppliers, fmtDate }: { suppliers: any[]; fmtDate: (d: s
 
 /* ---- Catalog Tab ---- */
 
-function CatalogTab({ items }: { items: any[] }) {
+function CatalogTab({ items, uiLang }: { items: any[]; uiLang: string }) {
   if (items.length === 0) return <EmptyState message="No catalog items in this shop." />;
 
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
       {items.map((i) => (
         <div key={i.id} className="rounded-lg border border-[var(--border-light)] bg-[var(--bg-card)] p-3">
-          <p className="text-sm font-medium">{i.name}</p>
+          <p className="text-sm font-medium">{localizeItem({ name: i.name, teluguName: i.telugu_name, hindiName: i.hindi_name }, uiLang as any)}</p>
           {i.default_sell_price && <p className="text-xs text-[var(--text-faint)] mt-0.5">Default price: ₹{i.default_sell_price}</p>}
           <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] ${i.active ? 'bg-[var(--bg-success)] text-[var(--text-on-primary)]' : 'bg-[var(--bg-card-hover)] text-[var(--text-faint)]'}`}>
             {i.active ? 'Active' : 'Inactive'}
