@@ -2405,3 +2405,123 @@ export async function getOverdueCustomers(shopId: string, minDays = 1): Promise<
 
   return out.sort((a, b) => b.oldestDays - a.oldestDays);
 }
+
+// =====================
+// Admin CRUD functions
+// =====================
+
+// ---- Shop management ----
+
+export async function updateShop(shopId: string, data: { name?: string; address?: string; phone?: string; active?: boolean; billing_status?: string }): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  if (data.name !== undefined) await sql`UPDATE shops SET name = ${data.name} WHERE id = ${shopId}`;
+  if (data.address !== undefined) await sql`UPDATE shops SET address = ${data.address || null} WHERE id = ${shopId}`;
+  if (data.phone !== undefined) await sql`UPDATE shops SET phone = ${data.phone || null} WHERE id = ${shopId}`;
+  if (data.active !== undefined) await sql`UPDATE shops SET active = ${data.active} WHERE id = ${shopId}`;
+  if (data.billing_status !== undefined) await sql`UPDATE shops SET billing_status = ${data.billing_status} WHERE id = ${shopId}`;
+}
+
+export async function deleteShop(shopId: string): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  // Delete all related data in order (child tables first)
+  await sql`DELETE FROM bill_items WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM purchase_items WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM transactions WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM purchases WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM supplier_payments WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM suppliers WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM wastage WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM catalog_aliases WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM catalog_items WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM expenses WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM customers WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM shop_users WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM subscription_payments WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM shops WHERE id = ${shopId}`;
+}
+
+// ---- Customer management ----
+
+export async function adminUpdateCustomer(customerId: string, shopId: string, data: { name?: string; phone?: string; englishName?: string; teluguName?: string; hindiName?: string; creditLimit?: number | null }): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  if (data.name !== undefined) await sql`UPDATE customers SET name = ${data.name} WHERE id = ${customerId} AND shop_id = ${shopId}`;
+  if (data.phone !== undefined) await sql`UPDATE customers SET phone = ${data.phone || null} WHERE id = ${customerId} AND shop_id = ${shopId}`;
+  if (data.englishName !== undefined) await sql`UPDATE customers SET english_name = ${data.englishName || null} WHERE id = ${customerId} AND shop_id = ${shopId}`;
+  if (data.teluguName !== undefined) await sql`UPDATE customers SET telugu_name = ${data.teluguName || null} WHERE id = ${customerId} AND shop_id = ${shopId}`;
+  if (data.hindiName !== undefined) await sql`UPDATE customers SET hindi_name = ${data.hindiName || null} WHERE id = ${customerId} AND shop_id = ${shopId}`;
+  if (data.creditLimit !== undefined) await sql`UPDATE customers SET credit_limit = ${data.creditLimit} WHERE id = ${customerId} AND shop_id = ${shopId}`;
+}
+
+export async function adminDeleteCustomer(customerId: string, shopId: string): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  // Delete bill_items for this customer's transactions
+  const txns = await sql`SELECT id FROM transactions WHERE customer_id = ${customerId} AND shop_id = ${shopId}`;
+  for (const t of txns) {
+    await sql`DELETE FROM bill_items WHERE transaction_id = ${t.id}`;
+  }
+  await sql`DELETE FROM transactions WHERE customer_id = ${customerId} AND shop_id = ${shopId}`;
+  await sql`DELETE FROM customers WHERE id = ${customerId} AND shop_id = ${shopId}`;
+}
+
+// ---- Transaction management ----
+
+export async function adminUpdateTransaction(txnId: string, shopId: string, data: { date?: string; bill_no?: string | null; bill_amount?: number; amount_paid?: number; notes?: string | null; payment_method?: string }): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  if (data.date !== undefined) await sql`UPDATE transactions SET date = ${data.date} WHERE id = ${txnId} AND shop_id = ${shopId}`;
+  if (data.bill_no !== undefined) await sql`UPDATE transactions SET bill_no = ${data.bill_no || null} WHERE id = ${txnId} AND shop_id = ${shopId}`;
+  if (data.bill_amount !== undefined) await sql`UPDATE transactions SET bill_amount = ${data.bill_amount} WHERE id = ${txnId} AND shop_id = ${shopId}`;
+  if (data.amount_paid !== undefined) await sql`UPDATE transactions SET amount_paid = ${data.amount_paid} WHERE id = ${txnId} AND shop_id = ${shopId}`;
+  if (data.notes !== undefined) await sql`UPDATE transactions SET notes = ${data.notes || null} WHERE id = ${txnId} AND shop_id = ${shopId}`;
+  if (data.payment_method !== undefined) await sql`UPDATE transactions SET payment_method = ${data.payment_method} WHERE id = ${txnId} AND shop_id = ${shopId}`;
+}
+
+export async function adminDeleteTransaction(txnId: string, shopId: string): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`DELETE FROM bill_items WHERE transaction_id = ${txnId} AND shop_id = ${shopId}`;
+  await sql`DELETE FROM transactions WHERE id = ${txnId} AND shop_id = ${shopId}`;
+}
+
+// ---- Purchase management ----
+
+export async function adminDeletePurchase(purchaseId: string, shopId: string): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`DELETE FROM purchase_items WHERE purchase_id = ${purchaseId} AND shop_id = ${shopId}`;
+  await sql`DELETE FROM purchases WHERE id = ${purchaseId} AND shop_id = ${shopId}`;
+}
+
+// ---- Supplier management ----
+
+export async function adminDeleteSupplier(supplierId: string, shopId: string): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`DELETE FROM supplier_payments WHERE supplier_id = ${supplierId} AND shop_id = ${shopId}`;
+  // Null out supplier_id on purchases (keep purchase records)
+  await sql`UPDATE purchases SET supplier_id = null, supplier = null WHERE supplier_id = ${supplierId} AND shop_id = ${shopId}`;
+  await sql`DELETE FROM suppliers WHERE id = ${supplierId} AND shop_id = ${shopId}`;
+}
+
+// ---- Catalog item management ----
+
+export async function adminDeleteCatalogItem(itemId: string, shopId: string): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`DELETE FROM catalog_aliases WHERE item_id = ${itemId} AND shop_id = ${shopId}`;
+  await sql`DELETE FROM catalog_items WHERE id = ${itemId} AND shop_id = ${shopId}`;
+}
+
+export async function adminUpdateCatalogItem(itemId: string, shopId: string, data: { name?: string; default_sell_price?: number | null; telugu_name?: string | null; hindi_name?: string | null; active?: boolean }): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  if (data.name !== undefined) await sql`UPDATE catalog_items SET name = ${data.name} WHERE id = ${itemId} AND shop_id = ${shopId}`;
+  if (data.default_sell_price !== undefined) await sql`UPDATE catalog_items SET default_sell_price = ${data.default_sell_price || null} WHERE id = ${itemId} AND shop_id = ${shopId}`;
+  if (data.telugu_name !== undefined) await sql`UPDATE catalog_items SET telugu_name = ${data.telugu_name || null} WHERE id = ${itemId} AND shop_id = ${shopId}`;
+  if (data.hindi_name !== undefined) await sql`UPDATE catalog_items SET hindi_name = ${data.hindi_name || null} WHERE id = ${itemId} AND shop_id = ${shopId}`;
+  if (data.active !== undefined) await sql`UPDATE catalog_items SET active = ${data.active} WHERE id = ${itemId} AND shop_id = ${shopId}`;
+}

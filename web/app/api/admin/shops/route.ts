@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAuth } from '@/lib/auth';
-import { getAllShops, setShopBillingStatus, setShopActive, isDbConfigured } from '@/lib/db';
+import { getAllShops, setShopBillingStatus, setShopActive, deleteShop, updateShop, isDbConfigured } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,6 +40,17 @@ export async function POST(request: NextRequest) {
     if (action === 'setBilling') {
       if (!status) return NextResponse.json({ error: 'Missing status' }, { status: 400 });
       await setShopBillingStatus(shopId, status);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === 'deleteShop') {
+      await deleteShop(shopId);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === 'updateShop') {
+      const { name, address, phone } = body;
+      await updateShop(shopId, { name, address, phone });
       return NextResponse.json({ ok: true });
     }
 
