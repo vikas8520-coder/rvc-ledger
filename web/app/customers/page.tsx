@@ -12,7 +12,8 @@ import { fmt } from '@/lib/format';
 import { computeAging, customersCsv, downloadCsv, reminderText, statementText, waLink } from '@/lib/statement';
 import { printCreditLedger, CreditLedgerEntry, ShopProfile } from '@/lib/billPrint';
 import { OverdueCustomer } from '@/lib/types';
-import { generateOutstandingListPdf, generateCreditLedgerPdf, sharePdfViaWhatsApp } from '@/lib/pdfShare';
+import { generateOutstandingListPdf, generateCreditLedgerPdf, generateBillsPdf, sharePdfViaWhatsApp } from '@/lib/pdfShare';
+import { txnToBillData } from '@/lib/billPrint';
 
 export default function CustomersPage() {
   const { t, lang } = useI18n();
@@ -93,7 +94,7 @@ export default function CustomersPage() {
     window.open(link, '_blank');
   };
 
-  const sharePdfFormat = async (format: 'outstanding' | 'creditLedger') => {
+  const sharePdfFormat = async (format: 'outstanding' | 'creditLedger' | 'patti') => {
     setShowShareFormats(false);
     setShareStatus('generating');
     try {
@@ -104,7 +105,7 @@ export default function CustomersPage() {
       if (format === 'outstanding') {
         blob = generateOutstandingListPdf(customers, shopSettings, uiLang);
         filename = `outstanding-list-${dateStr}.pdf`;
-      } else {
+      } else if (format === 'creditLedger') {
         const entries: CreditLedgerEntry[] = customers
           .filter((c) => c.due > 0)
           .sort((a, b) => formatCustomerName(a, uiLang).localeCompare(formatCustomerName(b, uiLang)))
@@ -117,6 +118,18 @@ export default function CustomersPage() {
           }));
         blob = generateCreditLedgerPdf(entries, shopSettings, dateStr, 'All');
         filename = `credit-ledger-${dateStr}.pdf`;
+      } else {
+        // Patti: all bills from all customers with dues
+        const allBills = customers.flatMap((c) =>
+          c.txns.filter((tx) => tx.type === 'bill').map((tx) => txnToBillData(tx, formatCustomerName(c, uiLang)))
+        );
+        if (allBills.length === 0) {
+          alert('No bills found');
+          setShareStatus('idle');
+          return;
+        }
+        blob = generateBillsPdf(allBills, shopSettings, 'patti');
+        filename = `all-bills-patti-${dateStr}.pdf`;
       }
 
       setShareStatus('sharing');
@@ -249,7 +262,10 @@ export default function CustomersPage() {
                 Outstanding list (names + dues)
               </button>
               <button onClick={() => sharePdfFormat('creditLedger')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
-                Credit ledger (dot-matrix format)
+                {t('printCreditLedger')} (dot-matrix)
+              </button>
+              <button onClick={() => sharePdfFormat('patti')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
+                {t('billFormatPatti')} (6 per page)
               </button>
             </span>
           )}

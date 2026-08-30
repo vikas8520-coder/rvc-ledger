@@ -21,7 +21,7 @@ import {
   waLink,
 } from '@/lib/statement';
 import { printBill, printBills, printCreditLedger, txnToBillData, CreditLedgerEntry } from '@/lib/billPrint';
-import { generateStatementPdf, generateOutstandingListPdf, generateCreditLedgerPdf, sharePdfViaWhatsApp } from '@/lib/pdfShare';
+import { generateStatementPdf, generateOutstandingListPdf, generateCreditLedgerPdf, generateBillsPdf, sharePdfViaWhatsApp } from '@/lib/pdfShare';
 
 export default function CustomerLedgerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -183,7 +183,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
     setShowPdfFormats((v) => !v);
   };
 
-  const shareCustomerPdf = async (format: 'statement' | 'outstanding' | 'creditLedger') => {
+  const shareCustomerPdf = async (format: 'statement' | 'simple' | 'itemized' | 'creditLedger' | 'patti') => {
     setShowShareFormats(false);
     setShareStatus('generating');
     try {
@@ -194,16 +194,24 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
       if (format === 'statement') {
         blob = generateStatementPdf(customer, shopSettings as any, displayName);
         filename = `${displayName.replace(/\s+/g, '-')}-statement-${dateStr}.pdf`;
-      } else if (format === 'outstanding') {
-        blob = generateOutstandingListPdf(customers, shopSettings as any, uiLang);
-        filename = `outstanding-list-${dateStr}.pdf`;
-      } else {
+      } else if (format === 'creditLedger') {
         const entries: CreditLedgerEntry[] = customers
           .filter((c) => c.due > 0)
           .sort((a, b) => formatCustomerName(a, uiLang).localeCompare(formatCustomerName(b, uiLang)))
           .map((c, i) => ({ code: String(i + 1), name: formatCustomerName(c, uiLang), phone: c.phone || undefined, amount: Math.round(c.due), isCredit: false }));
         blob = generateCreditLedgerPdf(entries, shopSettings as any, dateStr, 'All');
         filename = `credit-ledger-${dateStr}.pdf`;
+      } else {
+        // Bill formats: simple, itemized, patti
+        const bills = customer.txns.filter((tx) => tx.type === 'bill');
+        if (bills.length === 0) {
+          alert('No bills found for this customer');
+          setShareStatus('idle');
+          return;
+        }
+        const billData = bills.map((b) => txnToBillData(b, displayName));
+        blob = generateBillsPdf(billData, shopSettings as any, format);
+        filename = `${displayName.replace(/\s+/g, '-')}-${format}-${dateStr}.pdf`;
       }
 
       setShareStatus('sharing');
@@ -403,11 +411,17 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
                 <button onClick={() => shareCustomerPdf('statement')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
                   Customer statement (all transactions)
                 </button>
-                <button onClick={() => shareCustomerPdf('outstanding')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
-                  Outstanding list (all customers)
+                <button onClick={() => shareCustomerPdf('simple')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
+                  {t('billFormatSimple')}
+                </button>
+                <button onClick={() => shareCustomerPdf('itemized')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
+                  {t('billFormatItemized')}
                 </button>
                 <button onClick={() => shareCustomerPdf('creditLedger')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
-                  Credit ledger (dot-matrix format)
+                  {t('printCreditLedger')} (all customers)
+                </button>
+                <button onClick={() => shareCustomerPdf('patti')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
+                  {t('billFormatPatti')} (6 per page)
                 </button>
               </span>
             )}
