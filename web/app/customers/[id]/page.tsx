@@ -37,10 +37,21 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
   const [showPdfFormats, setShowPdfFormats] = useState(false);
 
   // Date range filter
-  type RangePreset = 'all' | 'today' | 'month' | 'year' | 'custom';
+  type RangePreset = 'all' | 'today' | 'month' | 'fy' | 'custom';
   const [rangePreset, setRangePreset] = useState<RangePreset>('all');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+
+  // Financial year: April 1 to March 31. If current month is Jan-Mar, we're in FY that started last year.
+  // e.g. Feb 2026 → FY 2025-26 (April 2025 to March 2026)
+  //      June 2026 → FY 2026-27 (April 2026 to March 2027)
+  const now = new Date();
+  const currentFYStartYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  const [fyOffset, setFyOffset] = useState(0); // 0 = current FY, -1 = previous, -2 = two years ago
+  const fyStartYear = currentFYStartYear + fyOffset;
+  const fyLabel = `FY ${fyStartYear}-${String((fyStartYear + 1) % 100).padStart(2, '0')}`;
+  const fyFrom = `${fyStartYear}-04-01`;
+  const fyTo = `${fyStartYear + 1}-03-31`;
 
   const todayStr = () => {
     const d = new Date();
@@ -50,14 +61,13 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
   };
-  const yearStart = () => `${new Date().getFullYear()}-01-01`;
 
   const effectiveFrom = rangePreset === 'today' ? todayStr()
     : rangePreset === 'month' ? monthStart()
-    : rangePreset === 'year' ? yearStart()
+    : rangePreset === 'fy' ? fyFrom
     : rangePreset === 'custom' ? fromDate
     : '';
-  const effectiveTo = rangePreset === 'custom' ? toDate : '';
+  const effectiveTo = rangePreset === 'fy' ? fyTo : rangePreset === 'custom' ? toDate : '';
 
   // Filter txns by date range
   const filteredTxns: TxnView[] = useMemo(() => {
@@ -269,7 +279,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
               { key: 'all', label: t('allTime') },
               { key: 'today', label: t('today') },
               { key: 'month', label: t('thisMonth') },
-              { key: 'year', label: t('thisYear') },
+              { key: 'fy', label: fyLabel },
               { key: 'custom', label: t('custom') },
             ] as { key: RangePreset; label: string }[]).map((opt) => (
               <button
@@ -284,6 +294,17 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
                 {opt.label}
               </button>
             ))}
+            {rangePreset === 'fy' && (
+              <select
+                value={fyOffset}
+                onChange={(e) => setFyOffset(Number(e.target.value))}
+                className="rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-1.5 text-xs"
+              >
+                <option value={0}>FY {currentFYStartYear}-{String((currentFYStartYear + 1) % 100).padStart(2, '0')} (current)</option>
+                <option value={-1}>FY {currentFYStartYear - 1}-{String(currentFYStartYear % 100).padStart(2, '0')}</option>
+                <option value={-2}>FY {currentFYStartYear - 2}-{String((currentFYStartYear - 1) % 100).padStart(2, '0')}</option>
+              </select>
+            )}
           </div>
           {rangePreset === 'custom' && (
             <div className="flex items-center gap-1.5">
