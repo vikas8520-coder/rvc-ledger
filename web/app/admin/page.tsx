@@ -71,7 +71,9 @@ export default function AdminPage() {
       fetch('/api/admin/subscriptions').then((r) => r.json()),
     ])
       .then(([shopData, subData]) => {
-        if (shopData.error === 'Admin access required' || subData.error === 'Admin access required') {
+        // Any auth error (401 Unauthorized or 403 Admin access required) means not logged in
+        const authError = shopData.error || subData.error;
+        if (authError === 'Admin access required' || authError === 'Unauthorized') {
           setIsAdmin(false);
           setLoading(false);
           return;
@@ -103,13 +105,16 @@ export default function AdminPage() {
   if (!isAdmin) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
-        <p className="text-sm text-[var(--text-faint)]">Admin access required.</p>
-        <button
-          onClick={() => router.push('/admin/login')}
-          className="rounded-lg bg-[var(--bg-primary)] px-4 py-2 text-sm font-semibold text-[var(--text-on-primary)] hover:bg-[var(--bg-primary-hover)]"
-        >
-          Go to Admin Login
-        </button>
+        <div className="rounded-xl bg-[var(--bg-card)] p-6 text-center shadow-sm">
+          <h2 className="text-base font-semibold text-[var(--text-primary)]">Admin Access Required</h2>
+          <p className="mt-2 text-sm text-[var(--text-faint)]">You need to log in as an administrator to view this page.</p>
+          <button
+            onClick={() => router.push('/admin/login')}
+            className="mt-4 rounded-lg bg-[var(--bg-primary)] px-6 py-2.5 text-sm font-semibold text-[var(--text-on-primary)] hover:bg-[var(--bg-primary-hover)]"
+          >
+            Login as Admin
+          </button>
+        </div>
       </div>
     );
   }
