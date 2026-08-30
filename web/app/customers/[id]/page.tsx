@@ -441,6 +441,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
           defaultFormat={(shopSettings.billFormat as any) || 'itemized'}
           filteredTxns={rangePreset === 'all' ? undefined : filteredTxns}
           openingBalance={rangePreset === 'all' ? 0 : openingBalance}
+          readOnly={rangePreset === 'fy' && fyOffset < 0}
         />
       </section>
     </div>

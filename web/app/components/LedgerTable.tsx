@@ -16,12 +16,14 @@ export default function LedgerTable({
   defaultFormat = 'itemized',
   filteredTxns,
   openingBalance = 0,
+  readOnly = false,
 }: {
   customer: Customer;
   shop?: ShopProfile;
   defaultFormat?: BillFormat;
   filteredTxns?: TxnView[];
   openingBalance?: number;
+  readOnly?: boolean;
 }) {
   const { lang, t } = useI18n();
   const uiLang = getUiLang(lang);
@@ -237,7 +239,7 @@ export default function LedgerTable({
                         )}
                       </span>
                     )}
-                    {isLastOfTxn && !r.isOpening && <DeleteButton id={r.txnId} />}
+                    {isLastOfTxn && !r.isOpening && !readOnly && <DeleteButton id={r.txnId} />}
                   </td>
                 </tr>
               );
