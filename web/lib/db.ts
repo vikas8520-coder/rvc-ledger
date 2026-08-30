@@ -709,7 +709,24 @@ export async function createShop(
 export async function getAllShops(): Promise<any[]> {
   await ensureSchema();
   const sql = getSql();
-  const rows = await sql`SELECT * FROM shops ORDER BY created_at DESC`;
+  // Join with shop_users for owner info and count customers/transactions per shop
+  const rows = await sql`
+    SELECT
+      s.id, s.name, s.address, s.phone, s.active, s.billing_status,
+      s.trial_ends, s.created_at,
+      COALESCE(ou.owner_name, '') as owner_name,
+      COALESCE(ou.owner_email, '') as owner_email,
+      COALESCE(c.cnt, 0) as customer_count,
+      COALESCE(t.cnt, 0) as txn_count
+    FROM shops s
+    LEFT JOIN LATERAL (
+      SELECT name as owner_name, email as owner_email
+      FROM shop_users WHERE shop_id = s.id AND role = 'owner' LIMIT 1
+    ) ou ON true
+    LEFT JOIN LATERAL (SELECT COUNT(*) as cnt FROM customers WHERE shop_id = s.id) c ON true
+    LEFT JOIN LATERAL (SELECT COUNT(*) as cnt FROM transactions WHERE shop_id = s.id) t ON true
+    ORDER BY s.created_at DESC
+  `;
   return rows as any[];
 }
 
