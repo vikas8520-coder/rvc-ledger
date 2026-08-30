@@ -1551,6 +1551,9 @@ export async function getOverdueCustomers(shopId: string, minDays = 1): Promise<
     out.push({
       id: c.id,
       name: c.name,
+      englishName: c.englishName ?? null,
+      teluguName: c.teluguName ?? null,
+      hindiName: c.hindiName ?? null,
       phone: c.phone ?? null,
       due: c.due,
       oldestDays: days,

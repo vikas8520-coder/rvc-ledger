@@ -5,7 +5,7 @@ import { Customer } from '@/lib/types';
 import { localizeName } from '@/lib/catalog';
 import { yardById } from '@/lib/market';
 import { fmt, fmtDate } from '@/lib/format';
-import { getUiLang } from '@/lib/i18n';
+import { getUiLang, formatCustomerName } from '@/lib/i18n';
 import { useI18n } from './I18nProvider';
 import DeleteButton from './DeleteButton';
 import { printBill, txnToBillData, BillFormat, ShopProfile } from '@/lib/billPrint';
@@ -173,7 +173,7 @@ export default function LedgerTable({
                                 key={f}
                                 onClick={() => {
                                   const txn = customer.txns.find((tx) => tx.id === r.txnId);
-                                  if (txn) printBill(txnToBillData(txn, customer.name), shop, f);
+                                  if (txn) printBill(txnToBillData(txn, formatCustomerName(customer, uiLang)), shop, f);
                                   setPrintMenuTxn(null);
                                 }}
                                 className="whitespace-nowrap rounded px-2 py-1 text-left text-[10px] hover:bg-[var(--bg-card)]"

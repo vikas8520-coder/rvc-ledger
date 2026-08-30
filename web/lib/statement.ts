@@ -65,9 +65,9 @@ export function agingColor(info: AgingInfo): string {
 }
 
 /** Plain-text statement, safe to paste into WhatsApp or SMS. */
-export function statementText(customer: Customer, shopName = 'RVC'): string {
+export function statementText(customer: Customer, shopName = 'RVC', displayName?: string): string {
   const lines: string[] = [];
-  lines.push(`${shopName} — ${customer.name}`);
+  lines.push(`${shopName} — ${displayName || customer.name}`);
   lines.push('');
 
   for (const txn of customer.txns) {
@@ -89,10 +89,10 @@ export function statementText(customer: Customer, shopName = 'RVC'): string {
 }
 
 /** Short reminder message focused on the outstanding amount. */
-export function reminderText(customer: Customer, shopName = 'RVC'): string {
+export function reminderText(customer: Customer, shopName = 'RVC', displayName?: string): string {
   const aging = computeAging(customer.txns);
   const parts = [
-    `Namaste ${customer.name},`,
+    `Namaste ${displayName || customer.name},`,
     '',
     `Pending amount at ${shopName}: ${fmt(customer.due)}.`,
   ];

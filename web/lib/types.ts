@@ -206,6 +206,9 @@ export interface ItemRateHistory {
 export interface OverdueCustomer {
   id: string;
   name: string;
+  englishName?: string | null;
+  teluguName?: string | null;
+  hindiName?: string | null;
   phone: string | null;
   due: number;
   oldestDays: number;

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useI18n } from './components/I18nProvider';
-import AutoTranslateName from './components/AutoTranslateName';
+import { formatCustomerName, getUiLang } from '@/lib/i18n';
 import { useDashboard } from './components/useDashboard';
 import TxnCard from './components/TxnCard';
 import AgingBadge from './components/AgingBadge';
@@ -51,7 +51,7 @@ export default function Home() {
 
   const topDues = [...customers].sort((a, b) => b.due - a.due).slice(0, 6);
   const recent = customers
-    .flatMap((c) => c.txns.map((txn) => ({ ...txn, customerName: c.name, customerId: c.id })))
+    .flatMap((c) => c.txns.map((txn) => ({ ...txn, customerName: c.name, customerId: c.id, englishName: c.englishName, teluguName: c.teluguName, hindiName: c.hindiName })))
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
     .slice(0, 8);
 
@@ -162,7 +162,7 @@ export default function Home() {
               <li key={c.id}>
                 <Link href={`/customers/${c.id}`} className="flex items-center justify-between gap-2 py-2.5 hover:opacity-80">
                   <span className="flex min-w-0 items-center gap-2">
-                    <span className="truncate font-medium"><AutoTranslateName name={c.name} /></span>
+                    <span className="truncate font-medium">{formatCustomerName(c, getUiLang(lang))}</span>
                     <AgingBadge aging={computeAging(c.txns)} />
                   </span>
                   <span className="shrink-0 text-sm font-semibold text-[var(--bg-primary)]">{fmt(c.due)}</span>
@@ -182,7 +182,7 @@ export default function Home() {
               {recent.map((txn) => (
                 <div key={txn.id}>
                   <Link href={`/customers/${txn.customerId}`} className="mb-1 block text-[11px] text-[var(--bg-primary)] hover:underline">
-                    <AutoTranslateName name={txn.customerName} />
+                    {formatCustomerName({ name: txn.customerName, englishName: txn.englishName, teluguName: txn.teluguName, hindiName: txn.hindiName }, getUiLang(lang))}
                   </Link>
                   <TxnCard txn={txn} compact />
                 </div>

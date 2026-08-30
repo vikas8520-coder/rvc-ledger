@@ -491,6 +491,26 @@ export default function SellPage() {
                   placeholder={t('customerName')}
                   className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
               </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-xs text-[var(--text-muted)]">English</label>
+                  <input type="text" value={newCustomerEnglishName} onChange={(e) => setNewCustomerEnglishName(e.target.value)}
+                    placeholder="English"
+                    className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
+                </div>
+                <div>
+                  <label className="text-xs text-[var(--text-muted)]">తెలుగు</label>
+                  <input type="text" value={newCustomerTeluguName} onChange={(e) => setNewCustomerTeluguName(e.target.value)}
+                    placeholder="తెలుగు"
+                    className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
+                </div>
+                <div>
+                  <label className="text-xs text-[var(--text-muted)]">हिंदी</label>
+                  <input type="text" value={newCustomerHindiName} onChange={(e) => setNewCustomerHindiName(e.target.value)}
+                    placeholder="हिंदी"
+                    className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
+                </div>
+              </div>
               <div>
                 <label className="text-xs text-[var(--text-muted)]">{t('phone')}</label>
                 <input type="tel" value={newCustomerPhone} onChange={(e) => setNewCustomerPhone(e.target.value)}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useI18n } from '../components/I18nProvider';
+import { formatCustomerName, getUiLang } from '@/lib/i18n';
 import { Card, SectionHeader, StatCard, EmptyState, StatSkeleton, PageHeader } from '../components/ui';
 import { CalendarIcon, DollarIcon, TrendingIcon, PackageIcon, BoxIcon, AlertIcon } from '../components/Icons';
 import { fmt } from '@/lib/format';
@@ -14,7 +15,7 @@ function today() {
 }
 
 export default function DailyOpsPage() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [date, setDate] = useState(today());
   const [summary, setSummary] = useState<DailySummary | null>(null);
   const [stock, setStock] = useState<StockLevel[]>([]);
@@ -49,11 +50,12 @@ export default function DailyOpsPage() {
   }
 
   const totalDue = customers.reduce((s, c) => s + c.due, 0);
+  const uiLang = getUiLang(lang);
   const todayBills = customers.flatMap((c) =>
-    c.txns.filter((tx) => tx.type === 'bill' && tx.date === date).map((tx) => ({ ...tx, customerName: c.name, customerId: c.id }))
+    c.txns.filter((tx) => tx.type === 'bill' && tx.date === date).map((tx) => ({ ...tx, customerName: formatCustomerName(c, uiLang), customerId: c.id }))
   );
   const todayPayments = customers.flatMap((c) =>
-    c.txns.filter((tx) => tx.type === 'payment' && tx.date === date).map((tx) => ({ ...tx, customerName: c.name, customerId: c.id }))
+    c.txns.filter((tx) => tx.type === 'payment' && tx.date === date).map((tx) => ({ ...tx, customerName: formatCustomerName(c, uiLang), customerId: c.id }))
   );
 
   const lowStock = stock.filter((s) => s.qty > 0 && s.qty < 5);

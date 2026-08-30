@@ -3,6 +3,7 @@
 import { use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useI18n } from '../../components/I18nProvider';
+import { formatCustomerName, getUiLang } from '@/lib/i18n';
 import { useDashboard } from '../../components/useDashboard';
 import TxnCard from '../../components/TxnCard';
 import LedgerTable from '../../components/LedgerTable';
@@ -22,7 +23,7 @@ import { printBill, printBills, printCreditLedger, txnToBillData, CreditLedgerEn
 
 export default function CustomerLedgerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { customers, loading } = useDashboard();
   const customer = useMemo(() => customers.find((c) => c.id === id), [customers, id]);
 
@@ -73,6 +74,8 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
   const bills = customer.txns.filter((x) => x.type === 'bill').length;
   const payments = customer.txns.filter((x) => x.type === 'payment').length;
   const aging = computeAging(customer.txns);
+  const uiLang = getUiLang(lang);
+  const displayName = formatCustomerName(customer, uiLang);
 
   const savePhone = async () => {
     setPhoneStatus('saving');
@@ -92,7 +95,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
 
   const copyStatement = async () => {
     try {
-      await navigator.clipboard.writeText(statementText(customer));
+      await navigator.clipboard.writeText(statementText(customer, shopSettings.shopName || 'RVC', displayName));
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -129,7 +132,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
       const shopName = shopSettings.shopName || 'RVC Vegetable Shop';
       const shopAddr = shopSettings.shopAddress || 'Bowenpally, Hyderabad';
       const shopPh = shopSettings.shopPhone || '';
-      const html = `<!DOCTYPE html><html><head><title>${customer.name} - Statement</title>
+      const html = `<!DOCTYPE html><html><head><title>${displayName} - Statement</title>
       <style>
         body{font-family:Georgia,serif;max-width:700px;margin:40px auto;padding:20px;color:#333}
         h1{color:#8b2e2e;border-bottom:2px solid #8b2e2e;padding-bottom:8px}
@@ -143,7 +146,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
       </style></head><body>
       <div class="shop">${shopName}<br>${shopAddr}${shopPh ? '<br>' + shopPh : ''}</div>
       <h1>Customer Statement</h1>
-      <p><strong>${customer.name}</strong><br>
+      <p><strong>${displayName}</strong><br>
       Date: ${new Date().toLocaleDateString('en-IN')}</p>
       <h2>Summary</h2>
       <table><tr><th>Total Billed</th><th>Total Paid</th><th>Outstanding</th></tr>
@@ -162,10 +165,10 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
       // Two-column: account code + name + amount, grand total (NO bill items)
       const entries: CreditLedgerEntry[] = customers
         .filter((c) => c.due > 0)
-        .sort((a, b) => a.name.localeCompare(b.name))
+        .sort((a, b) => formatCustomerName(a, uiLang).localeCompare(formatCustomerName(b, uiLang)))
         .map((c, i) => ({
           code: String(i + 1),
-          name: c.name,
+          name: formatCustomerName(c, uiLang),
           phone: c.phone || undefined,
           amount: Math.round(c.due),
           isCredit: false,
@@ -182,7 +185,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
         alert('No bills found for this customer');
         return;
       }
-      const billData = bills.map((b) => txnToBillData(b, customer.name));
+      const billData = bills.map((b) => txnToBillData(b, displayName));
       printBills(billData, shopSettings, format);
     }
   };
@@ -194,7 +197,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
           <ArrowLeftIcon size={14} /> {t('allCustomers')}
         </Link>
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <h1 className="text-xl font-bold">{customer.name}</h1>
+          <h1 className="text-xl font-bold">{displayName}</h1>
           <AgingBadge aging={aging} />
         </div>
         <p className="text-xs text-[var(--text-muted)] mt-1">
@@ -215,7 +218,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
         <SectionHeader title={t('actions')} icon={<DollarIcon size={16} />} />
         <div className="flex flex-wrap gap-2">
           <a
-            href={waLink(reminderText(customer), customer.phone)}
+            href={waLink(reminderText(customer, shopSettings.shopName || 'RVC', displayName), customer.phone)}
             target="_blank"
             rel="noopener noreferrer"
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-[var(--text-on-primary)] ${customer.due > 0 ? 'bg-[var(--bg-success)] hover:bg-[var(--bg-success-hover)]' : 'bg-[#a8a095] pointer-events-none'}`}
@@ -223,7 +226,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
             <MessageIcon size={14} /> {t('sendReminder')}
           </a>
           <a
-            href={waLink(statementText(customer), customer.phone)}
+            href={waLink(statementText(customer, shopSettings.shopName || 'RVC', displayName), customer.phone)}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1.5 rounded-lg bg-[var(--bg-primary)] px-3 py-1.5 text-sm font-medium text-[var(--text-on-primary)] hover:bg-[var(--bg-primary-hover)]"
@@ -233,7 +236,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
           <Button variant="outline" size="sm" onClick={copyStatement}>
             <span className="flex items-center gap-1.5">{copied ? <><CheckIcon size={14} /> {t('copied')}</> : t('copyStatement')}</span>
           </Button>
-          <Button variant="outline" size="sm" onClick={() => downloadCsv(`${customer.name.replace(/\s+/g, '-')}-ledger.csv`, customerCsv(customer))}>
+          <Button variant="outline" size="sm" onClick={() => downloadCsv(`${displayName.replace(/\s+/g, '-')}-ledger.csv`, customerCsv(customer))}>
             <span className="flex items-center gap-1.5"><DownloadIcon size={14} /> {t('exportCsv')}</span>
           </Button>
           <span className="relative">

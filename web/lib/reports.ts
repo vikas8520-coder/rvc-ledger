@@ -189,7 +189,7 @@ export function latestBuyRates(purchases: PurchaseView[]): Map<string, { rate: n
 
 export function topCustomers(customers: Customer[], limit = 5) {
   return [...customers]
-    .map((c) => ({ name: c.name, id: c.id, billed: c.billed, due: c.due }))
+    .map((c) => ({ name: c.name, id: c.id, billed: c.billed, due: c.due, englishName: c.englishName, teluguName: c.teluguName, hindiName: c.hindiName }))
     .sort((a, b) => b.billed - a.billed)
     .slice(0, limit);
 }

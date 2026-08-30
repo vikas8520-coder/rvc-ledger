@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../components/I18nProvider';
+import { formatCustomerName, getUiLang } from '@/lib/i18n';
 import { Card, SectionHeader, Button, EmptyState, PageHeader, StatCard, StatSkeleton } from '../components/ui';
 import { ChartIcon, DownloadIcon, TrendingIcon, DollarIcon, PackageIcon } from '../components/Icons';
 import { fmt } from '@/lib/format';
@@ -30,7 +31,7 @@ function downloadCsv(filename: string, rows: (string | number)[][]) {
 }
 
 export default function ReportsPage() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [purchases, setPurchases] = useState<PurchaseView[]>([]);
   const [wastage, setWastage] = useState<WastageEntry[]>([]);
@@ -234,7 +235,7 @@ export default function ReportsPage() {
             <tbody>
               {top.map((c) => (
                 <tr key={c.id} className="border-t border-[var(--border-light)]">
-                  <td className="py-1.5">{c.name}</td>
+                  <td className="py-1.5">{formatCustomerName(c, getUiLang(lang))}</td>
                   <td className="py-1.5 text-right">{fmt(c.billed)}</td>
                   <td className="py-1.5 text-right text-[var(--bg-primary)]">{c.due > 0 ? fmt(c.due) : '—'}</td>
                 </tr>

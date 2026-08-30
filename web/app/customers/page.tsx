@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useI18n } from '../components/I18nProvider';
+import { formatCustomerName, getUiLang } from '@/lib/i18n';
 import { useDashboard } from '../components/useDashboard';
 import AgingBadge from '../components/AgingBadge';
 import { Card, SectionHeader, Button, EmptyState, ListSkeleton, PageHeader, Badge } from '../components/ui';
@@ -13,7 +14,7 @@ import { printCreditLedger, CreditLedgerEntry, ShopProfile } from '@/lib/billPri
 import { OverdueCustomer } from '@/lib/types';
 
 export default function CustomersPage() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { customers, loading } = useDashboard();
   const [q, setQ] = useState('');
   const [sort, setSort] = useState<'due' | 'name' | 'oldest'>('due');
@@ -41,10 +42,10 @@ export default function CustomersPage() {
   const printLedger = () => {
     const entries: CreditLedgerEntry[] = customers
       .filter((c) => c.due > 0)
-      .sort((a, b) => a.name.localeCompare(b.name))
+      .sort((a, b) => formatCustomerName(a, uiLang).localeCompare(formatCustomerName(b, uiLang)))
       .map((c, i) => ({
         code: String(i + 1),
-        name: c.name,
+        name: formatCustomerName(c, uiLang),
         phone: c.phone || undefined,
         amount: Math.round(c.due),
         isCredit: false,
@@ -58,7 +59,8 @@ export default function CustomersPage() {
   };
 
   const sendReminder = (c: OverdueCustomer) => {
-    const msg = `Namaste ${c.name},\n\nPending amount at ${shopSettings.shopName || 'RVC'}: ${fmt(c.due)}.\nOldest unpaid bill: ${c.oldestDate} (${c.oldestDays} days).\n\nPlease arrange the payment. Thank you.`;
+    const dn = formatCustomerName(c, uiLang);
+    const msg = `Namaste ${dn},\n\nPending amount at ${shopSettings.shopName || 'RVC'}: ${fmt(c.due)}.\nOldest unpaid bill: ${c.oldestDate} (${c.oldestDays} days).\n\nPlease arrange the payment. Thank you.`;
     const link = waLink(msg, c.phone);
     window.open(link, '_blank');
   };
@@ -76,18 +78,23 @@ export default function CustomersPage() {
     }
   };
 
+  const uiLang = getUiLang(lang);
+
   const list = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const filtered = needle
-      ? customers.filter((c) => c.name.toLowerCase().includes(needle))
+      ? customers.filter((c) => {
+          const ln = formatCustomerName(c, uiLang).toLowerCase();
+          return ln.includes(needle) || c.name.toLowerCase().includes(needle);
+        })
       : customers;
     const withAging = filtered.map((c) => ({ c, aging: computeAging(c.txns) }));
     return withAging.sort((a, b) => {
-      if (sort === 'name') return a.c.name.localeCompare(b.c.name);
+      if (sort === 'name') return formatCustomerName(a.c, uiLang).localeCompare(formatCustomerName(b.c, uiLang));
       if (sort === 'oldest') return b.aging.oldestDays - a.aging.oldestDays;
       return b.c.due - a.c.due;
     });
-  }, [customers, q, sort]);
+  }, [customers, q, sort, uiLang]);
 
   if (loading) {
     return (
@@ -169,7 +176,7 @@ export default function CustomersPage() {
                 {overdue.map((c) => (
                   <li key={c.id} className="flex items-center justify-between gap-2 py-2.5">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{c.name}</p>
+                      <p className="truncate text-sm font-medium">{formatCustomerName(c, uiLang)}</p>
                       <p className="text-[11px] text-[var(--text-muted)]">
                         {fmt(c.due)} · {c.oldestDays}d · {c.phone || t('noPhone')}
                       </p>
@@ -208,7 +215,7 @@ export default function CustomersPage() {
                 <Link href={`/customers/${c.id}`} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-[var(--bg-card-hover)] transition-colors">
                   <div className="min-w-0">
                     <p className="flex items-center gap-2 truncate font-medium">
-                      {c.name}
+                      {formatCustomerName(c, uiLang)}
                       <AgingBadge aging={aging} />
                     </p>
                     <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
