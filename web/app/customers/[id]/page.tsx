@@ -195,12 +195,20 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
         blob = generateStatementPdf(customer, shopSettings as any, displayName);
         filename = `${displayName.replace(/\s+/g, '-')}-statement-${dateStr}.pdf`;
       } else if (format === 'creditLedger') {
-        const entries: CreditLedgerEntry[] = customers
-          .filter((c) => c.due > 0)
-          .sort((a, b) => formatCustomerName(a, uiLang).localeCompare(formatCustomerName(b, uiLang)))
-          .map((c, i) => ({ code: String(i + 1), name: formatCustomerName(c, uiLang), phone: c.phone || undefined, amount: Math.round(c.due), isCredit: false }));
-        blob = generateCreditLedgerPdf(entries, shopSettings as any, dateStr, 'All');
-        filename = `credit-ledger-${dateStr}.pdf`;
+        if (customer.due <= 0) {
+          alert('This customer has no outstanding balance');
+          setShareStatus('idle');
+          return;
+        }
+        const entries: CreditLedgerEntry[] = [{
+          code: '1',
+          name: displayName,
+          phone: customer.phone || undefined,
+          amount: Math.round(customer.due),
+          isCredit: false,
+        }];
+        blob = generateCreditLedgerPdf(entries, shopSettings as any, dateStr, displayName);
+        filename = `${displayName.replace(/\s+/g, '-')}-credit-ledger-${dateStr}.pdf`;
       } else {
         // Bill formats: simple, itemized, patti
         const bills = customer.txns.filter((tx) => tx.type === 'bill');
@@ -264,23 +272,19 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
       win.document.write(html);
       win.document.close();
     } else if (format === 'market') {
-      // Credit ledger format — all customers with outstanding balances
-      // Two-column: account code + name + amount, grand total (NO bill items)
-      const entries: CreditLedgerEntry[] = customers
-        .filter((c) => c.due > 0)
-        .sort((a, b) => formatCustomerName(a, uiLang).localeCompare(formatCustomerName(b, uiLang)))
-        .map((c, i) => ({
-          code: String(i + 1),
-          name: formatCustomerName(c, uiLang),
-          phone: c.phone || undefined,
-          amount: Math.round(c.due),
-          isCredit: false,
-        }));
-      if (entries.length === 0) {
-        alert('No customers with outstanding balances');
+      // Credit ledger format — THIS customer only
+      if (customer.due <= 0) {
+        alert('This customer has no outstanding balance');
         return;
       }
-      printCreditLedger(entries, shopSettings, undefined, 'All');
+      const entries: CreditLedgerEntry[] = [{
+        code: '1',
+        name: displayName,
+        phone: customer.phone || undefined,
+        amount: Math.round(customer.due),
+        isCredit: false,
+      }];
+      printCreditLedger(entries, shopSettings, undefined, displayName);
     } else {
       // Print ALL bills in selected format — each bill on its own page
       const bills = customer.txns.filter((tx) => tx.type === 'bill');
@@ -418,7 +422,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
                   {t('billFormatItemized')}
                 </button>
                 <button onClick={() => shareCustomerPdf('creditLedger')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
-                  {t('printCreditLedger')} (all customers)
+                  {t('printCreditLedger')} (this customer)
                 </button>
                 <button onClick={() => shareCustomerPdf('patti')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
                   {t('billFormatPatti')} (6 per page)
@@ -445,7 +449,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
                   {t('billFormatItemized')}
                 </button>
                 <button onClick={() => printStatement('market')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
-                  {t('printCreditLedger')} (all customers)
+                  {t('printCreditLedger')} (this customer)
                 </button>
                 <button onClick={() => printStatement('patti')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
                   {t('billFormatPatti')} (6 per page)
