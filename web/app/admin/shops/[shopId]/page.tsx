@@ -37,8 +37,20 @@ export default function ShopDataPage() {
     fetch(`/api/admin/shops/${shopId}/data`)
       .then((r) => r.json())
       .then((d) => {
-        if (d.error) setError(d.error);
-        else setData(d);
+        if (d.error) { setError(d.error); return; }
+        // Map snake_case DB columns to camelCase expected by formatCustomerName/localizeItem
+        d.customers = (d.customers || []).map((c: any) => ({
+          ...c,
+          englishName: c.english_name ?? c.englishName ?? null,
+          teluguName: c.telugu_name ?? c.teluguName ?? null,
+          hindiName: c.hindi_name ?? c.hindiName ?? null,
+        }));
+        d.catalogItems = (d.catalogItems || []).map((i: any) => ({
+          ...i,
+          teluguName: i.telugu_name ?? i.teluguName ?? null,
+          hindiName: i.hindi_name ?? i.hindiName ?? null,
+        }));
+        setData(d);
       })
       .catch(() => setError('Failed to load'))
       .finally(() => setLoading(false));
