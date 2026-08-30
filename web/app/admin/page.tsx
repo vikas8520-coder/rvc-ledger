@@ -402,7 +402,7 @@ function ShopsTab({ shops, plans, onReload, fmtINR }: {
                   Manage
                 </button>
                 <a
-                  href={`/api/admin/shops/${shop.id}/data`}
+                  href={`/admin/shops/${shop.id}`}
                   className="rounded-md bg-[var(--bg-secondary)] px-3 py-1 text-xs font-medium text-[var(--text-on-primary)] hover:bg-[var(--bg-secondary-hover)]"
                 >
                   View data
