@@ -225,7 +225,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
       setShareStatus('sharing');
       const result = await sharePdfViaWhatsApp(blob, filename, `${shopSettings.shopName || 'RVC'} — ${displayName}`);
       if (result === 'downloaded') {
-        alert('PDF downloaded. On mobile, you can share directly to WhatsApp. On desktop, attach it manually.');
+        alert('PDF downloaded. WhatsApp Web is opening — please attach the downloaded PDF to your message.');
       }
     } catch {
       alert('Failed to generate PDF');

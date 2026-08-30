@@ -759,7 +759,8 @@ export function generateBillsPdf(
 
 /**
  * Share a PDF blob via WhatsApp using the Web Share API (mobile).
- * Falls back to download on desktop.
+ * On desktop: downloads the PDF AND opens WhatsApp Web so the user
+ * can attach the file manually.
  */
 export async function sharePdfViaWhatsApp(
   blob: Blob,
@@ -768,6 +769,8 @@ export async function sharePdfViaWhatsApp(
 ): Promise<'shared' | 'downloaded' | 'text'> {
   const file = new File([blob], filename, { type: 'application/pdf' });
 
+  // Mobile: use Web Share API which opens the native share sheet
+  // (WhatsApp appears as an option on mobile)
   if (typeof navigator !== 'undefined' && navigator.share && navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({
@@ -781,7 +784,8 @@ export async function sharePdfViaWhatsApp(
     }
   }
 
-  // Fallback: download the PDF
+  // Desktop fallback: download the PDF, then open WhatsApp Web
+  // with a pre-filled message so the user can attach the file
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -790,5 +794,10 @@ export async function sharePdfViaWhatsApp(
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+  // Open WhatsApp Web with the message text (user attaches PDF manually)
+  const text = encodeURIComponent(fallbackText || filename);
+  window.open(`https://web.whatsapp.com/send?text=${text}`, '_blank');
+
   return 'downloaded';
 }

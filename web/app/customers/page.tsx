@@ -77,23 +77,6 @@ export default function CustomersPage() {
     window.open(link, '_blank');
   };
 
-  const shareCustomerList = () => {
-    const shopName = shopSettings.shopName || 'RVC';
-    const dueCustomers = customers.filter((c) => c.due > 0).sort((a, b) => b.due - a.due);
-    const lines: string[] = [];
-    lines.push(`${shopName} — Customer Outstanding List`);
-    lines.push(`Date: ${new Date().toLocaleDateString('en-IN')}`);
-    lines.push('');
-    dueCustomers.forEach((c, i) => {
-      lines.push(`${i + 1}. ${formatCustomerName(c, uiLang)} — ${fmt(c.due)}`);
-    });
-    lines.push('');
-    lines.push(`Total customers: ${dueCustomers.length}`);
-    lines.push(`Total outstanding: ${fmt(dueCustomers.reduce((s, c) => s + c.due, 0))}`);
-    const link = waLink(lines.join('\n'));
-    window.open(link, '_blank');
-  };
-
   const sharePdfFormat = async (format: 'outstanding' | 'creditLedger' | 'patti') => {
     setShowShareFormats(false);
     setShareStatus('generating');
@@ -135,7 +118,7 @@ export default function CustomersPage() {
       setShareStatus('sharing');
       const result = await sharePdfViaWhatsApp(blob, filename, `${shopSettings.shopName || 'RVC'} — Customer Outstanding List`);
       if (result === 'downloaded') {
-        alert('PDF downloaded. On mobile, you can share it directly to WhatsApp. On desktop, attach it manually to your WhatsApp message.');
+        alert('PDF downloaded. WhatsApp Web is opening — please attach the downloaded PDF to your message.');
       }
     } catch (err) {
       alert('Failed to generate PDF');
@@ -248,9 +231,6 @@ export default function CustomersPage() {
         </Button>
         <Button variant="secondary" size="sm" onClick={sendBatchReminders}>
           <span className="flex items-center gap-1.5"><MessageIcon size={14} /> {t('batchReminders')}</span>
-        </Button>
-        <Button variant="secondary" size="sm" onClick={shareCustomerList} disabled={overdueCount === 0}>
-          <span className="flex items-center gap-1.5"><MessageIcon size={14} /> {t('shareList')}</span>
         </Button>
         <span className="relative">
           <Button variant="secondary" size="sm" onClick={() => setShowShareFormats((v) => !v)} disabled={overdueCount === 0 || shareStatus !== 'idle'}>
