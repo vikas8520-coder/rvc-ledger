@@ -573,29 +573,29 @@ export interface CreditLedgerEntry {
 
 const LEDGER_STYLES = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Courier New', 'Courier', monospace; color: #000; line-height: 1.4; padding: 15px; font-size: 11px; }
+  body { font-family: 'Courier New', 'Courier', monospace; color: #000; line-height: 1.15; padding: 10px; font-size: 11px; }
   .ledger { max-width: 800px; margin: 0 auto; }
-  .ledger-header { text-align: center; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 6px; }
+  .ledger-header { text-align: center; margin-bottom: 6px; border-bottom: 2px solid #000; padding-bottom: 4px; }
   .ledger-title { font-size: 16px; font-weight: bold; letter-spacing: 2px; }
-  .ledger-sub { font-size: 11px; margin-top: 2px; }
+  .ledger-sub { font-size: 11px; margin-top: 1px; }
   .ledger-date { font-size: 11px; }
-  .columns { display: flex; gap: 20px; margin-top: 8px; }
+  .columns { display: flex; gap: 20px; margin-top: 4px; }
   .column { flex: 1; }
-  .entry { white-space: pre; font-size: 11px; line-height: 1.5; }
+  .entry { white-space: pre; font-size: 11px; line-height: 1.2; margin-bottom: 0; }
   .entry-code { display: inline-block; width: 45px; }
   .entry-name { display: inline-block; }
   .entry-dots { color: #999; }
   .entry-amt { float: right; font-weight: bold; }
-  .entry-phone { padding-left: 50px; color: #444; font-size: 10px; }
+  .entry-phone { padding-left: 50px; color: #444; font-size: 10px; line-height: 1.1; margin-top: 0; }
   .entry-cr { color: #000; font-style: italic; }
-  .total-section { margin-top: 12px; text-align: right; }
-  .total-line { border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 6px 0; font-size: 14px; font-weight: bold; }
+  .total-section { margin-top: 6px; text-align: right; }
+  .total-line { border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 4px 0; font-size: 14px; font-weight: bold; }
   .total-label { display: inline-block; min-width: 200px; text-align: right; }
-  .page-footer { text-align: center; font-size: 10px; color: #888; margin-top: 15px; padding-top: 8px; border-top: 1px dashed #ccc; }
-  .print-btn { display: block; margin: 15px auto 0; padding: 6px 20px; background: #8b2e2e; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; }
+  .page-footer { text-align: center; font-size: 10px; color: #888; margin-top: 8px; padding-top: 4px; border-top: 1px dashed #ccc; }
+  .print-btn { display: block; margin: 10px auto 0; padding: 6px 20px; background: #8b2e2e; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; }
   .print-btn:hover { background: #6b2222; }
   @media print {
-    body { padding: 0; font-size: 10px; }
+    body { padding: 5px; font-size: 10px; }
     .ledger { max-width: 100%; }
     .no-print { display: none; }
     .columns { gap: 15px; }
