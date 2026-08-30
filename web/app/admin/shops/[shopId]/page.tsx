@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useI18n } from '@/app/components/I18nProvider';
-import { formatCustomerName, localizeItem, getUiLang } from '@/lib/i18n';
+import { formatCustomerName, localizeItem, getUiLang, t as translate } from '@/lib/i18n';
 
 type ShopData = {
   exportedAt: string;
@@ -27,6 +27,7 @@ export default function ShopDataPage() {
   const router = useRouter();
   const { lang } = useI18n();
   const uiLang = getUiLang(lang);
+  const tr = (key: string) => translate(lang, key);
   const shopId = params.shopId as string;
   const [data, setData] = useState<ShopData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -59,8 +60,8 @@ export default function ShopDataPage() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <BackButton onClick={() => router.push('/admin')} />
-        <p className="py-10 text-center text-sm text-[var(--text-faint)]">Loading shop data…</p>
+        <BackButton onClick={() => router.push('/admin')} label={tr('backToAdmin')} />
+        <p className="py-10 text-center text-sm text-[var(--text-faint)]">{tr('loadingShopData')}</p>
       </div>
     );
   }
@@ -68,7 +69,7 @@ export default function ShopDataPage() {
   if (error) {
     return (
       <div className="space-y-4">
-        <BackButton onClick={() => router.push('/admin')} />
+        <BackButton onClick={() => router.push('/admin')} label={tr('backToAdmin')} />
         <p className="py-10 text-center text-sm text-red-500">{error}</p>
       </div>
     );
@@ -86,28 +87,28 @@ export default function ShopDataPage() {
   const totalPurchases = data.purchases.reduce((s, p) => s + Number(p.total || 0), 0);
 
   const tabs: { id: Tab; label: string; count: number }[] = [
-    { id: 'overview', label: 'Overview', count: 0 },
-    { id: 'customers', label: 'Customers', count: data.customers.length },
-    { id: 'transactions', label: 'Transactions', count: data.transactions.length },
-    { id: 'purchases', label: 'Purchases', count: data.purchases.length },
-    { id: 'suppliers', label: 'Suppliers', count: data.suppliers.length },
-    { id: 'catalog', label: 'Catalog', count: data.catalogItems.length },
+    { id: 'overview', label: tr('overview'), count: 0 },
+    { id: 'customers', label: tr('customers'), count: data.customers.length },
+    { id: 'transactions', label: tr('transactions'), count: data.transactions.length },
+    { id: 'purchases', label: tr('purchases'), count: data.purchases.length },
+    { id: 'suppliers', label: tr('suppliers'), count: data.suppliers.length },
+    { id: 'catalog', label: tr('catalog'), count: data.catalogItems.length },
   ];
 
   return (
     <div className="space-y-4">
-      <BackButton onClick={() => router.push('/admin')} />
+      <BackButton onClick={() => router.push('/admin')} label={tr('backToAdmin')} />
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Card label="Customers" value={String(data.customers.length)} />
-        <Card label="Transactions" value={String(data.transactions.length)} />
-        <Card label="Total Billed" value={fmtINR(totalBilled)} />
-        <Card label="Outstanding" value={fmtINR(totalOutstanding)} accent={totalOutstanding > 0 ? 'warn' : 'ok'} />
-        <Card label="Total Received" value={fmtINR(totalPaid)} accent="ok" />
-        <Card label="Suppliers" value={String(data.suppliers.length)} />
-        <Card label="Total Purchases" value={fmtINR(totalPurchases)} />
-        <Card label="Catalog Items" value={String(data.catalogItems.length)} />
+        <Card label={tr('customers')} value={String(data.customers.length)} />
+        <Card label={tr('transactions')} value={String(data.transactions.length)} />
+        <Card label={tr('totalBilled')} value={fmtINR(totalBilled)} />
+        <Card label={tr('outstanding')} value={fmtINR(totalOutstanding)} accent={totalOutstanding > 0 ? 'warn' : 'ok'} />
+        <Card label={tr('totalReceived')} value={fmtINR(totalPaid)} accent="ok" />
+        <Card label={tr('suppliers')} value={String(data.suppliers.length)} />
+        <Card label={tr('totalPurchases')} value={fmtINR(totalPurchases)} />
+        <Card label={tr('catalogItems')} value={String(data.catalogItems.length)} />
       </div>
 
       {/* Tabs */}
@@ -128,23 +129,23 @@ export default function ShopDataPage() {
       </div>
 
       {/* Tab content */}
-      {tab === 'overview' && <OverviewTab data={data} fmtINR={fmtINR} fmtDate={fmtDate} uiLang={uiLang} />}
-      {tab === 'customers' && <CustomersTab customers={data.customers} transactions={data.transactions} fmtINR={fmtINR} uiLang={uiLang} />}
-      {tab === 'transactions' && <TransactionsTab transactions={data.transactions} billItems={data.billItems} customers={data.customers} fmtINR={fmtINR} fmtDate={fmtDate} uiLang={uiLang} />}
-      {tab === 'purchases' && <PurchasesTab purchases={data.purchases} purchaseItems={data.purchaseItems} fmtINR={fmtINR} fmtDate={fmtDate} />}
-      {tab === 'suppliers' && <SuppliersTab suppliers={data.suppliers} fmtDate={fmtDate} />}
-      {tab === 'catalog' && <CatalogTab items={data.catalogItems} uiLang={uiLang} />}
+      {tab === 'overview' && <OverviewTab data={data} fmtINR={fmtINR} fmtDate={fmtDate} uiLang={uiLang} tr={tr} />}
+      {tab === 'customers' && <CustomersTab customers={data.customers} transactions={data.transactions} fmtINR={fmtINR} uiLang={uiLang} tr={tr} />}
+      {tab === 'transactions' && <TransactionsTab transactions={data.transactions} billItems={data.billItems} customers={data.customers} fmtINR={fmtINR} fmtDate={fmtDate} uiLang={uiLang} tr={tr} />}
+      {tab === 'purchases' && <PurchasesTab purchases={data.purchases} purchaseItems={data.purchaseItems} fmtINR={fmtINR} fmtDate={fmtDate} tr={tr} />}
+      {tab === 'suppliers' && <SuppliersTab suppliers={data.suppliers} fmtDate={fmtDate} tr={tr} />}
+      {tab === 'catalog' && <CatalogTab items={data.catalogItems} uiLang={uiLang} tr={tr} />}
     </div>
   );
 }
 
-function BackButton({ onClick }: { onClick: () => void }) {
+function BackButton({ onClick, label }: { onClick: () => void; label: string }) {
   return (
     <button
       onClick={onClick}
       className="flex items-center gap-1.5 text-sm text-[var(--text-faint)] hover:text-[var(--text-secondary)]"
     >
-      ← Back to Admin
+      {label}
     </button>
   );
 }
@@ -165,13 +166,19 @@ function EmptyState({ message }: { message: string }) {
 
 /* ---- Overview Tab ---- */
 
-function OverviewTab({ data, fmtINR, fmtDate, uiLang }: { data: ShopData; fmtINR: (n: number | string) => string; fmtDate: (d: string) => string; uiLang: string }) {
+function OverviewTab({ data, fmtINR, fmtDate, uiLang, tr }: {
+  data: ShopData;
+  fmtINR: (n: number | string) => string;
+  fmtDate: (d: string) => string;
+  uiLang: string;
+  tr: (k: string) => string;
+}) {
   const totalBilled = data.transactions.reduce((s, t) => s + Number(t.bill_amount || 0), 0);
   const totalPaid = data.transactions.reduce((s, t) => s + Number(t.amount_paid || 0), 0);
   const totalOutstanding = totalBilled - totalPaid;
   const totalPurchases = data.purchases.reduce((s, p) => s + Number(p.total || 0), 0);
 
-  // Top 5 customers by outstanding
+  // Top 10 customers by outstanding
   const customerBalances = data.customers.map((c) => {
     const txns = data.transactions.filter((t) => t.customer_id === c.id);
     const billed = txns.reduce((s, t) => s + Number(t.bill_amount || 0), 0);
@@ -186,22 +193,22 @@ function OverviewTab({ data, fmtINR, fmtDate, uiLang }: { data: ShopData; fmtINR
     <div className="space-y-4">
       {/* Financial summary */}
       <section className="rounded-lg bg-[var(--bg-card)] p-4">
-        <h2 className="text-sm font-semibold">Financial Summary</h2>
+        <h2 className="text-sm font-semibold">{tr('financialSummary')}</h2>
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div>
-            <p className="text-[11px] text-[var(--text-faint)]">Total Billed</p>
+            <p className="text-[11px] text-[var(--text-faint)]">{tr('totalBilled')}</p>
             <p className="text-base font-bold text-[var(--text-primary)]">{fmtINR(totalBilled)}</p>
           </div>
           <div>
-            <p className="text-[11px] text-[var(--text-faint)]">Total Received</p>
+            <p className="text-[11px] text-[var(--text-faint)]">{tr('totalReceived')}</p>
             <p className="text-base font-bold text-[var(--bg-success)]">{fmtINR(totalPaid)}</p>
           </div>
           <div>
-            <p className="text-[11px] text-[var(--text-faint)]">Outstanding</p>
+            <p className="text-[11px] text-[var(--text-faint)]">{tr('outstanding')}</p>
             <p className="text-base font-bold text-[var(--bg-warning)]">{fmtINR(totalOutstanding)}</p>
           </div>
           <div>
-            <p className="text-[11px] text-[var(--text-faint)]">Total Purchases</p>
+            <p className="text-[11px] text-[var(--text-faint)]">{tr('totalPurchases')}</p>
             <p className="text-base font-bold text-[var(--text-primary)]">{fmtINR(totalPurchases)}</p>
           </div>
         </div>
@@ -209,18 +216,18 @@ function OverviewTab({ data, fmtINR, fmtDate, uiLang }: { data: ShopData; fmtINR
 
       {/* Top customers by outstanding */}
       <section className="rounded-lg bg-[var(--bg-card)] p-4">
-        <h2 className="text-sm font-semibold">Top Customers by Outstanding</h2>
+        <h2 className="text-sm font-semibold">{tr('topCustomersByOutstanding')}</h2>
         {customerBalances.length === 0 ? (
-          <p className="mt-2 text-xs text-[var(--text-faint)]">No customers.</p>
+          <p className="mt-2 text-xs text-[var(--text-faint)]">{tr('noCustomersInShop')}</p>
         ) : (
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-left text-[var(--text-faint)]">
-                  <th className="p-2">Name</th>
-                  <th className="p-2">Phone</th>
-                  <th className="p-2 text-right">Txns</th>
-                  <th className="p-2 text-right">Outstanding</th>
+                  <th className="p-2">{tr('customer')}</th>
+                  <th className="p-2">{tr('phone')}</th>
+                  <th className="p-2 text-right">{tr('txns')}</th>
+                  <th className="p-2 text-right">{tr('outstanding')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -242,19 +249,19 @@ function OverviewTab({ data, fmtINR, fmtDate, uiLang }: { data: ShopData; fmtINR
 
       {/* Recent transactions */}
       <section className="rounded-lg bg-[var(--bg-card)] p-4">
-        <h2 className="text-sm font-semibold">Recent Transactions</h2>
+        <h2 className="text-sm font-semibold">{tr('recentTransactions')}</h2>
         {recentTxns.length === 0 ? (
-          <p className="mt-2 text-xs text-[var(--text-faint)]">No transactions.</p>
+          <p className="mt-2 text-xs text-[var(--text-faint)]">{tr('noTransactionsInShop')}</p>
         ) : (
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-left text-[var(--text-faint)]">
-                  <th className="p-2">Date</th>
-                  <th className="p-2">Customer</th>
-                  <th className="p-2 text-right">Billed</th>
-                  <th className="p-2 text-right">Paid</th>
-                  <th className="p-2">Method</th>
+                  <th className="p-2">{tr('date')}</th>
+                  <th className="p-2">{tr('customer')}</th>
+                  <th className="p-2 text-right">{tr('billed')}</th>
+                  <th className="p-2 text-right">{tr('paid')}</th>
+                  <th className="p-2">{tr('method')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -263,7 +270,7 @@ function OverviewTab({ data, fmtINR, fmtDate, uiLang }: { data: ShopData; fmtINR
                   return (
                     <tr key={t.id} className="border-t border-[var(--border-card)]">
                       <td className="p-2 whitespace-nowrap">{fmtDate(t.date)}</td>
-                      <td className="p-2 font-medium">{customer ? formatCustomerName(customer, uiLang) : 'Unknown'}</td>
+                      <td className="p-2 font-medium">{customer ? formatCustomerName(customer, uiLang) : tr('unknown')}</td>
                       <td className="p-2 text-right">{Number(t.bill_amount) > 0 ? fmtINR(t.bill_amount) : '—'}</td>
                       <td className="p-2 text-right text-[var(--bg-success)]">{Number(t.amount_paid) > 0 ? fmtINR(t.amount_paid) : '—'}</td>
                       <td className="p-2 capitalize">{t.payment_method}</td>
@@ -281,8 +288,14 @@ function OverviewTab({ data, fmtINR, fmtDate, uiLang }: { data: ShopData; fmtINR
 
 /* ---- Customers Tab ---- */
 
-function CustomersTab({ customers, transactions, fmtINR, uiLang }: { customers: any[]; transactions: any[]; fmtINR: (n: number | string) => string; uiLang: string }) {
-  if (customers.length === 0) return <EmptyState message="No customers in this shop." />;
+function CustomersTab({ customers, transactions, fmtINR, uiLang, tr }: {
+  customers: any[];
+  transactions: any[];
+  fmtINR: (n: number | string) => string;
+  uiLang: string;
+  tr: (k: string) => string;
+}) {
+  if (customers.length === 0) return <EmptyState message={tr('noCustomersInShop')} />;
 
   const balances = customers.map((c) => {
     const txns = transactions.filter((t) => t.customer_id === c.id);
@@ -296,10 +309,10 @@ function CustomersTab({ customers, transactions, fmtINR, uiLang }: { customers: 
       <table className="w-full text-xs">
         <thead className="bg-[var(--bg-card)]">
           <tr className="text-left text-[var(--text-faint)]">
-            <th className="p-2">Name</th>
-            <th className="p-2">Phone</th>
-            <th className="p-2 text-right">Txns</th>
-            <th className="p-2 text-right">Outstanding</th>
+            <th className="p-2">{tr('customer')}</th>
+            <th className="p-2">{tr('phone')}</th>
+            <th className="p-2 text-right">{tr('txns')}</th>
+            <th className="p-2 text-right">{tr('outstanding')}</th>
           </tr>
         </thead>
         <tbody>
@@ -321,17 +334,18 @@ function CustomersTab({ customers, transactions, fmtINR, uiLang }: { customers: 
 
 /* ---- Transactions Tab ---- */
 
-function TransactionsTab({ transactions, billItems, customers, fmtINR, fmtDate, uiLang }: {
+function TransactionsTab({ transactions, billItems, customers, fmtINR, fmtDate, uiLang, tr }: {
   transactions: any[];
   billItems: any[];
   customers: any[];
   fmtINR: (n: number | string) => string;
   fmtDate: (d: string) => string;
   uiLang: string;
+  tr: (k: string) => string;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  if (transactions.length === 0) return <EmptyState message="No transactions in this shop." />;
+  if (transactions.length === 0) return <EmptyState message={tr('noTransactionsInShop')} />;
 
   const sorted = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -340,6 +354,7 @@ function TransactionsTab({ transactions, billItems, customers, fmtINR, fmtDate, 
       {sorted.map((t) => {
         const items = billItems.filter((b) => b.transaction_id === t.id);
         const isExpanded = expanded === t.id;
+        const customer = customers.find((c) => c.id === t.customer_id);
         return (
           <div key={t.id} className="rounded-lg border border-[var(--border-light)] bg-[var(--bg-card)]">
             <button
@@ -348,7 +363,7 @@ function TransactionsTab({ transactions, billItems, customers, fmtINR, fmtDate, 
             >
               <div className="flex items-center gap-3">
                 <span className="text-xs font-medium">{fmtDate(t.date)}</span>
-                <span className="text-xs text-[var(--text-faint)]">Bill: {t.bill_no || '—'}</span>
+                <span className="text-xs text-[var(--text-faint)]">{customer ? formatCustomerName(customer, uiLang) : tr('unknown')}</span>
                 <span className="text-xs capitalize text-[var(--text-faint)]">{t.payment_method}</span>
               </div>
               <div className="flex items-center gap-3">
@@ -364,16 +379,16 @@ function TransactionsTab({ transactions, billItems, customers, fmtINR, fmtDate, 
                   <table className="w-full text-[11px]">
                     <thead>
                       <tr className="text-left text-[var(--text-faint)]">
-                        <th className="p-1">Item</th>
-                        <th className="p-1">Qty</th>
-                        <th className="p-1">Rate</th>
-                        <th className="p-1 text-right">Amount</th>
+                        <th className="p-1">{tr('item')}</th>
+                        <th className="p-1">{tr('qty')}</th>
+                        <th className="p-1">{tr('rate')}</th>
+                        <th className="p-1 text-right">{tr('totalAmount')}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {items.map((b) => (
                         <tr key={b.id} className="border-t border-[var(--border-card)]">
-                          <td className="p-1">{localizeItem({ name: b.confirmed_name || b.raw_text, teluguName: b.telugu_name, hindiName: b.hindi_name }, uiLang as any)}{b.kind === 'charge' ? ' (charge)' : ''}</td>
+                          <td className="p-1">{localizeItem({ name: b.confirmed_name || b.raw_text, teluguName: b.telugu_name, hindiName: b.hindi_name }, uiLang as any)}{b.kind === 'charge' ? ` (${tr('item')})` : ''}</td>
                           <td className="p-1">{b.qty || '—'}</td>
                           <td className="p-1">{b.rate || '—'}</td>
                           <td className="p-1 text-right">{Number(b.amount) > 0 ? fmtINR(b.amount) : '—'}</td>
@@ -382,7 +397,7 @@ function TransactionsTab({ transactions, billItems, customers, fmtINR, fmtDate, 
                     </tbody>
                   </table>
                 ) : (
-                  <p className="text-[11px] text-[var(--text-faint)]">No itemized bill items.</p>
+                  <p className="text-[11px] text-[var(--text-faint)]">{tr('noItemizedBillItems')}</p>
                 )}
               </div>
             )}
@@ -395,13 +410,14 @@ function TransactionsTab({ transactions, billItems, customers, fmtINR, fmtDate, 
 
 /* ---- Purchases Tab ---- */
 
-function PurchasesTab({ purchases, purchaseItems, fmtINR, fmtDate }: {
+function PurchasesTab({ purchases, purchaseItems, fmtINR, fmtDate, tr }: {
   purchases: any[];
   purchaseItems: any[];
   fmtINR: (n: number | string) => string;
   fmtDate: (d: string) => string;
+  tr: (k: string) => string;
 }) {
-  if (purchases.length === 0) return <EmptyState message="No purchases in this shop." />;
+  if (purchases.length === 0) return <EmptyState message={tr('noPurchasesInShop')} />;
 
   return (
     <div className="space-y-2">
@@ -440,17 +456,17 @@ function PurchasesTab({ purchases, purchaseItems, fmtINR, fmtDate }: {
 
 /* ---- Suppliers Tab ---- */
 
-function SuppliersTab({ suppliers, fmtDate }: { suppliers: any[]; fmtDate: (d: string) => string }) {
-  if (suppliers.length === 0) return <EmptyState message="No suppliers in this shop." />;
+function SuppliersTab({ suppliers, fmtDate, tr }: { suppliers: any[]; fmtDate: (d: string) => string; tr: (k: string) => string }) {
+  if (suppliers.length === 0) return <EmptyState message={tr('noSuppliersInShop')} />;
 
   return (
     <div className="overflow-x-auto rounded-lg border border-[var(--border-light)]">
       <table className="w-full text-xs">
         <thead className="bg-[var(--bg-card)]">
           <tr className="text-left text-[var(--text-faint)]">
-            <th className="p-2">Name</th>
-            <th className="p-2">Phone</th>
-            <th className="p-2">Added</th>
+            <th className="p-2">{tr('customer')}</th>
+            <th className="p-2">{tr('phone')}</th>
+            <th className="p-2">{tr('added')}</th>
           </tr>
         </thead>
         <tbody>
@@ -469,17 +485,17 @@ function SuppliersTab({ suppliers, fmtDate }: { suppliers: any[]; fmtDate: (d: s
 
 /* ---- Catalog Tab ---- */
 
-function CatalogTab({ items, uiLang }: { items: any[]; uiLang: string }) {
-  if (items.length === 0) return <EmptyState message="No catalog items in this shop." />;
+function CatalogTab({ items, uiLang, tr }: { items: any[]; uiLang: string; tr: (k: string) => string }) {
+  if (items.length === 0) return <EmptyState message={tr('noCatalogItemsInShop')} />;
 
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
       {items.map((i) => (
         <div key={i.id} className="rounded-lg border border-[var(--border-light)] bg-[var(--bg-card)] p-3">
-          <p className="text-sm font-medium">{localizeItem({ name: i.name, teluguName: i.telugu_name, hindiName: i.hindi_name }, uiLang as any)}</p>
-          {i.default_sell_price && <p className="text-xs text-[var(--text-faint)] mt-0.5">Default price: ₹{i.default_sell_price}</p>}
+          <p className="text-sm font-medium">{localizeItem({ name: i.name, teluguName: i.teluguName, hindiName: i.hindiName }, uiLang as any)}</p>
+          {i.default_sell_price && <p className="text-xs text-[var(--text-faint)] mt-0.5">{tr('defaultPrice')}: ₹{i.default_sell_price}</p>}
           <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] ${i.active ? 'bg-[var(--bg-success)] text-[var(--text-on-primary)]' : 'bg-[var(--bg-card-hover)] text-[var(--text-faint)]'}`}>
-            {i.active ? 'Active' : 'Inactive'}
+            {i.active ? tr('active') : tr('inactive')}
           </span>
         </div>
       ))}
