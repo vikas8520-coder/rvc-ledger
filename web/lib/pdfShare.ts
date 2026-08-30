@@ -79,13 +79,15 @@ export function generateCreditLedgerPdf(
   if (y > pageH - 20) { doc.addPage(); y = margin; }
   doc.setLineWidth(0.5);
   doc.line(margin, y, pageW - margin, y);
-  y += 6;
+  y += 7;
   const total = entries.reduce((s, e) => s + (e.isCredit ? -e.amount : e.amount), 0);
+  const totalStr = total.toLocaleString('en-IN');
   doc.setFont('courier', 'bold');
   doc.setFontSize(14);
-  doc.text('Total :', pageW - margin - 35, y);
-  doc.text(total.toLocaleString('en-IN'), pageW - margin, y, { align: 'right' });
-  y += 3;
+  // Right-align "Total :" with enough gap before the amount
+  doc.text('Total :', pageW - margin - 50, y, { align: 'right' });
+  doc.text(totalStr, pageW - margin, y, { align: 'right' });
+  y += 4;
   doc.setLineWidth(0.5);
   doc.line(margin, y, pageW - margin, y);
 
