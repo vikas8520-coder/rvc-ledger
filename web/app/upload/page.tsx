@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { recognizeBill, OcrProgress, smartRecognizeBill, SmartOcrProgress, OcrSource, GeminiBill, DailySummary } from '@/lib/ocr';
 import { parseBillText, buildDisplay } from '@/lib/parser';
 import { BillItem } from '@/lib/types';
@@ -19,8 +19,8 @@ import {
   type ChargeKind,
   type MarketMeta,
 } from '@/lib/market';
-import { distance } from 'fastest-levenshtein';
 import { useI18n } from '../components/I18nProvider';
+import CustomerPicker, { CustomerOption } from '../components/CustomerPicker';
 
 function fmt(n: number): string {
   return '₹' + n.toLocaleString('en-IN');
@@ -47,11 +47,9 @@ export default function UploadPage() {
   const [selectedBillIdx, setSelectedBillIdx] = useState(0);
   const [dailySummary, setDailySummary] = useState<DailySummary | null>(null);
 
-  const [customerList, setCustomerList] = useState<string[]>([]);
-  const [customerSelect, setCustomerSelect] = useState('__new__');
-  const [customerInput, setCustomerInput] = useState('');
+  const [customerList, setCustomerList] = useState<CustomerOption[]>([]);
+  const [customerId, setCustomerId] = useState<string | null>(null);
   const [customer, setCustomer] = useState('');
-  const [newCustomerConfirmed, setNewCustomerConfirmed] = useState(false);
 
   const [date, setDate] = useState('');
   const [billNo, setBillNo] = useState('');
@@ -71,21 +69,18 @@ export default function UploadPage() {
     fetch('/api/customers')
       .then((res) => res.json())
       .then((data) => {
-        const list = data.names || [];
+        const list: CustomerOption[] = data.customers || [];
         setCustomerList(list);
-        if (list.includes('SRS Hostels')) {
-          setCustomerSelect('SRS Hostels');
-          setCustomer('SRS Hostels');
+        const srs = list.find((c) => c.name === 'SRS Hostels');
+        if (srs) {
+          setCustomerId(srs.id);
+          setCustomer(srs.name);
         } else if (list.length > 0) {
-          setCustomerSelect(list[0]);
-          setCustomer(list[0]);
-        } else {
-          setCustomerSelect('__new__');
+          setCustomerId(list[0].id);
+          setCustomer(list[0].name);
         }
       })
-      .catch(() => {
-        setCustomerSelect('__new__');
-      });
+      .catch(() => {});
     fetch('/api/settings')
       .then((r) => r.json())
       .then((d) => setShopSettings(d.settings || {}))
@@ -102,61 +97,22 @@ export default function UploadPage() {
       .catch(() => {});
   }, []);
 
-  const fuzzy = useMemo(() => {
-    const name = customer.trim().toLowerCase();
-    if (!name || customerList.some((c) => c.toLowerCase() === name)) return null;
-    let best: { name: string; dist: number } | null = null;
-    for (const c of customerList) {
-      const d = distance(name, c.toLowerCase());
-      if (!best || d < best.dist) best = { name: c, dist: d };
-    }
-    if (!best) return null;
-    const threshold = name.length <= 4 ? 1 : Math.max(1, Math.floor(name.length * 0.3));
-    if (best.dist <= threshold) return best;
-    return null;
-  }, [customer, customerList]);
-
-  const isExistingCustomer = customerList.some(
-    (c) => c.toLowerCase() === customer.trim().toLowerCase()
-  );
-
-  const canSave =
-    !!customer.trim() &&
-    !!date &&
-    (isExistingCustomer || newCustomerConfirmed);
-
-  const handleCustomerSelect = (value: string) => {
-    setCustomerSelect(value);
-    setNewCustomerConfirmed(false);
-    if (value === '__new__') {
-      setCustomer(customerInput.trim());
-    } else {
-      setCustomer(value);
-      setCustomerInput(value);
-    }
-  };
-
-  const handleCustomerInput = (value: string) => {
-    setCustomerInput(value);
-    setCustomer(value.trim());
-    setNewCustomerConfirmed(false);
-  };
+  const canSave = (!!customerId || !!customer.trim()) && !!date;
 
   // Load a Gemini-extracted structured bill into the form fields
   const loadGeminiBill = (bill: GeminiBill) => {
-    // Set customer
+    // Set customer — try to match from existing list
     if (bill.customer_name) {
       const existing = customerList.find(
-        (c) => c.toLowerCase() === bill.customer_name.toLowerCase()
+        (c) => c.name.toLowerCase() === bill.customer_name!.toLowerCase()
       );
       if (existing) {
-        setCustomerSelect(existing);
-        setCustomer(existing);
+        setCustomerId(existing.id);
+        setCustomer(existing.name);
       } else {
-        setCustomerSelect('__new__');
-        setCustomerInput(bill.customer_name);
+        // New customer from OCR — clear selection, keep name for auto-create
+        setCustomerId(null);
         setCustomer(bill.customer_name);
-        setNewCustomerConfirmed(true);
       }
     }
 
@@ -199,10 +155,8 @@ export default function UploadPage() {
     setGeminiBills([]);
     setSelectedBillIdx(0);
     setDailySummary(null);
-    setCustomerSelect('__new__');
-    setCustomerInput('');
+    setCustomerId(null);
     setCustomer('');
-    setNewCustomerConfirmed(false);
     setDate('');
     setBillNo('');
     setTotal(0);
@@ -339,6 +293,7 @@ export default function UploadPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerName: customer,
+          customerId,
           date,
           billNo,
           total,
@@ -501,65 +456,19 @@ export default function UploadPage() {
             <div className="grid gap-3 sm:grid-cols-3">
               <div>
                 <label className="text-sm text-[var(--text-muted)]">{t('customer')}</label>
-                <select
-                  value={customerSelect}
-                  onChange={(e) => handleCustomerSelect(e.target.value)}
-                  className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2"
-                >
-                  {customerList.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                  <option value="__new__">+ {t('newCustomer')}</option>
-                </select>
-                {customerSelect === '__new__' && (
-                  <input
-                    value={customerInput}
-                    onChange={(e) => handleCustomerInput(e.target.value)}
-                    placeholder={t('typeCustomerName')}
-                    className="mt-2 w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2"
-                  />
-                )}
-
-                {isExistingCustomer && (
-                  <p className="mt-1 text-xs text-[var(--bg-success)]">{t('existingCustomer')}</p>
-                )}
-
-                {!isExistingCustomer && customer.trim() && fuzzy && (
-                  <div className="mt-2 rounded-lg bg-[#fff9e6] p-2 text-sm">
-                    <p className="text-[var(--text-faint)]">
-                      {t('didYouMean')} <strong>{fuzzy.name}</strong>?
-                    </p>
-                    <div className="mt-1 flex gap-2">
-                      <button
-                        onClick={() => handleCustomerSelect(fuzzy.name)}
-                        className="rounded bg-[var(--bg-success)] px-2 py-1 text-xs text-[var(--text-on-primary)]"
-                      >
-                        {t('yesUse')} {fuzzy.name}
-                      </button>
-                      <button
-                        onClick={() => setNewCustomerConfirmed(true)}
-                        className="rounded bg-[var(--bg-primary)] px-2 py-1 text-xs text-[var(--text-on-primary)]"
-                      >
-                        {t('noCreateNew')}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {!isExistingCustomer && customer.trim() && !fuzzy && (
-                  <div className="mt-2 flex items-center gap-2 rounded-lg bg-[#fff9e6] p-2 text-sm">
-                    <input
-                      id="newCustomer"
-                      type="checkbox"
-                      checked={newCustomerConfirmed}
-                      onChange={(e) => setNewCustomerConfirmed(e.target.checked)}
-                    />
-                    <label htmlFor="newCustomer" className="text-[var(--text-faint)]">
-                      {t('saveAsNewCustomer')} <strong>{customer}</strong>.
-                    </label>
-                  </div>
+                <CustomerPicker
+                  customers={customerList}
+                  value={customerId}
+                  onChange={(cid, cname) => {
+                    setCustomerId(cid);
+                    setCustomer(cname);
+                  }}
+                  placeholder={t('selectCustomer')}
+                />
+                {!customerId && customer.trim() && (
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">
+                    {t('saveAsNewCustomer')} <strong>{customer}</strong>
+                  </p>
                 )}
               </div>
               <div>

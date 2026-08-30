@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCustomerNames, addCustomer } from '@/lib/db';
+import { getCustomerNames, getCustomerList, addCustomer } from '@/lib/db';
 import { requireShopAuth, AuthError } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
@@ -7,8 +7,11 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     const auth = await requireShopAuth();
-    const names = await getCustomerNames(auth.shopId!);
-    return NextResponse.json({ names });
+    const [names, customers] = await Promise.all([
+      getCustomerNames(auth.shopId!),
+      getCustomerList(auth.shopId!),
+    ]);
+    return NextResponse.json({ names, customers });
   } catch (err: any) {
     if (err instanceof AuthError) return NextResponse.json({ error: err.message }, { status: err.status });
     console.error('Get customers error:', err);

@@ -20,6 +20,7 @@ export interface BillItem {
 
 export interface BillData {
   customerName: string;
+  customerId?: string | null;
   date: string;
   billNo: string | null;
   total: number;

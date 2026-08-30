@@ -7,6 +7,7 @@ import { CameraIcon, CheckIcon, AlertIcon } from '../components/Icons';
 import { recognizeBill, OcrProgress } from '@/lib/ocr';
 import { parseDate } from '@/lib/parser';
 import { distance } from 'fastest-levenshtein';
+import CustomerPicker, { CustomerOption } from '../components/CustomerPicker';
 
 function today() {
   const d = new Date();
@@ -88,8 +89,9 @@ function isOcrGarbage(text: string): boolean {
 
 export default function PaymentPage() {
   const { t, ocrLangs } = useI18n();
-  const [customers, setCustomers] = useState<string[]>([]);
-  const [customer, setCustomer] = useState('');
+  const [customers, setCustomers] = useState<CustomerOption[]>([]);
+  const [customerId, setCustomerId] = useState<string | null>(null);
+  const [customerName, setCustomerName] = useState('');
   const [date, setDate] = useState(today());
   const [amount, setAmount] = useState('');
   const [notes, setNotes] = useState('');
@@ -109,9 +111,12 @@ export default function PaymentPage() {
     fetch('/api/customers')
       .then((res) => res.json())
       .then((data) => {
-        const list = data.names || [];
+        const list: CustomerOption[] = data.customers || [];
         setCustomers(list);
-        if (list.length > 0) setCustomer(list[0]);
+        if (list.length > 0) {
+          setCustomerId(list[0].id);
+          setCustomerName(list[0].name);
+        }
       });
   }, []);
 
@@ -150,13 +155,14 @@ export default function PaymentPage() {
       // Try to match customer hint
       if (customerHint && customers.length > 0) {
         const lower = customerHint.toLowerCase();
-        let best: { name: string; dist: number } | null = null;
+        let best: { id: string; name: string; dist: number } | null = null;
         for (const c of customers) {
-          const d = distance(lower, c.toLowerCase());
-          if (!best || d < best.dist) best = { name: c, dist: d };
+          const d = distance(lower, c.name.toLowerCase());
+          if (!best || d < best.dist) best = { id: c.id, name: c.name, dist: d };
         }
         if (best && best.dist <= Math.max(2, Math.floor(customerHint.length * 0.3))) {
-          setCustomer(best.name);
+          setCustomerId(best.id);
+          setCustomerName(best.name);
           foundParts.push(best.name);
         }
       }
@@ -184,7 +190,7 @@ export default function PaymentPage() {
       const res = await fetch('/api/payments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerName: customer, date, amount: Number(amount), notes, paymentMethod }),
+        body: JSON.stringify({ customerName: customerName, customerId, date, amount: Number(amount), notes, paymentMethod }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Save failed');
@@ -197,7 +203,7 @@ export default function PaymentPage() {
       // Auto-learn: if OCR produced any text (even garbage), save the most
       // promising lines as aliases for the customer name. Next time the same
       // handwriting appears, the system will recognize the customer.
-      if (ocrRawText.trim() && customer) {
+      if (ocrRawText.trim() && customerName) {
         const lines = ocrRawText.split('\n').map((l) => l.trim()).filter(Boolean);
         for (const line of lines) {
           // Skip lines that are pure numbers or too short
@@ -211,7 +217,7 @@ export default function PaymentPage() {
             await fetch('/api/catalog/aliases', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ alias: line, itemName: customer }),
+              body: JSON.stringify({ alias: line, itemName: customerName }),
             });
           } catch {}
         }
@@ -343,16 +349,15 @@ export default function PaymentPage() {
         <form id="payment-form" onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="text-sm text-[var(--text-muted)]">{t('customer')}</label>
-            <select
-              value={customer}
-              onChange={(e) => setCustomer(e.target.value)}
-              className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] p-2.5 text-sm"
-            >
-              {customers.length === 0 && <option value="">{t('noCustomers')}</option>}
-              {customers.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
+            <CustomerPicker
+              customers={customers}
+              value={customerId}
+              onChange={(cid, cname) => {
+                setCustomerId(cid);
+                setCustomerName(cname);
+              }}
+              placeholder={t('selectCustomer')}
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -411,7 +416,7 @@ export default function PaymentPage() {
           <Button
             type="submit"
             variant="success"
-            disabled={!customer || !date || !amount || status === 'saving'}
+            disabled={(!customerId && !customerName) || !date || !amount || status === 'saving'}
             className="w-full"
           >
             {status === 'saving' ? t('saving') : t('recordPayment')}

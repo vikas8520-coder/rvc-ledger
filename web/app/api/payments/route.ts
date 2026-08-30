@@ -8,10 +8,10 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await requireShopAuth();
     const body = await request.json();
-    if (!body.customerName || !body.date || !body.amount || Number(body.amount) <= 0) {
+    if ((!body.customerName && !body.customerId) || !body.date || !body.amount || Number(body.amount) <= 0) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
-    await recordPayment(auth.shopId!, body.customerName, body.date, Number(body.amount), body.notes || '', body.paymentMethod || 'credit');
+    await recordPayment(auth.shopId!, body.customerName || '', body.date, Number(body.amount), body.notes || '', body.paymentMethod || 'credit', body.customerId || null);
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     if (err instanceof AuthError) return NextResponse.json({ error: err.message }, { status: err.status });

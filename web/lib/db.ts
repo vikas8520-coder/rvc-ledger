@@ -350,6 +350,16 @@ export async function getCustomerNames(shopId: string): Promise<string[]> {
   return rows.map((r) => r.name as string);
 }
 
+export async function getCustomerList(shopId: string): Promise<{ id: string; name: string; englishName: string | null; teluguName: string | null; hindiName: string | null; phone: string | null }[]> {
+  if (!isDbConfigured()) {
+    return (seed as unknown as Customer[]).map((c) => ({ id: c.id || `seed-${c.name}`, name: c.name, englishName: c.englishName || null, teluguName: c.teluguName || null, hindiName: c.hindiName || null, phone: c.phone || null }));
+  }
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql`SELECT id, name, english_name, telugu_name, hindi_name, phone FROM customers WHERE shop_id = ${shopId} ORDER BY name`;
+  return rows.map((r) => ({ id: r.id as string, name: r.name as string, englishName: r.english_name as string | null, teluguName: r.telugu_name as string | null, hindiName: r.hindi_name as string | null, phone: r.phone as string | null }));
+}
+
 export async function addCustomer(
   shopId: string,
   data: { 
@@ -508,7 +518,14 @@ export async function saveBill(shopId: string, bill: BillData): Promise<void> {
   const sql = getSql();
 
   // Find or create customer scoped to this shop
-  let [customer] = await sql`SELECT id FROM customers WHERE name = ${bill.customerName} AND shop_id = ${shopId} LIMIT 1`;
+  // Prefer customerId when provided (ID-based selection); fall back to name for backward compat
+  let customer: any;
+  if (bill.customerId) {
+    [customer] = await sql`SELECT id FROM customers WHERE id = ${bill.customerId} AND shop_id = ${shopId} LIMIT 1`;
+  }
+  if (!customer) {
+    [customer] = await sql`SELECT id FROM customers WHERE name = ${bill.customerName} AND shop_id = ${shopId} LIMIT 1`;
+  }
   if (!customer) {
     [customer] = await sql`
       INSERT INTO customers (name, shop_id) VALUES (${bill.customerName}, ${shopId}) RETURNING id
@@ -536,11 +553,18 @@ export async function saveBill(shopId: string, bill: BillData): Promise<void> {
   }
 }
 
-export async function recordPayment(shopId: string, customerName: string, date: string, amount: number, notes: string, paymentMethod: string = 'credit'): Promise<void> {
+export async function recordPayment(shopId: string, customerName: string, date: string, amount: number, notes: string, paymentMethod: string = 'credit', customerId?: string | null): Promise<void> {
   await ensureSchema();
   const sql = getSql();
 
-  let [customer] = await sql`SELECT id FROM customers WHERE name = ${customerName} AND shop_id = ${shopId} LIMIT 1`;
+  // Prefer customerId when provided; fall back to name for backward compat
+  let customer: any;
+  if (customerId) {
+    [customer] = await sql`SELECT id FROM customers WHERE id = ${customerId} AND shop_id = ${shopId} LIMIT 1`;
+  }
+  if (!customer) {
+    [customer] = await sql`SELECT id FROM customers WHERE name = ${customerName} AND shop_id = ${shopId} LIMIT 1`;
+  }
   if (!customer) {
     [customer] = await sql`
       INSERT INTO customers (name, shop_id) VALUES (${customerName}, ${shopId}) RETURNING id

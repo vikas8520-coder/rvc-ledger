@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await requireShopAuth();
     const body: BillData = await request.json();
-    if (!body.customerName || !body.date || !body.items?.length) {
+    if ((!body.customerName && !body.customerId) || !body.date || !body.items?.length) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
     await saveBill(auth.shopId!, body);

@@ -5,6 +5,7 @@ import { useI18n } from '../components/I18nProvider';
 import { fmt } from '@/lib/format';
 import { smartRecognizeBill, SmartOcrProgress, OcrSource, GeminiBill, DailySummary } from '@/lib/ocr';
 import { Charge, CHARGE_TYPES } from '@/lib/charges';
+import CustomerPicker, { CustomerOption } from '../components/CustomerPicker';
 
 function today() {
   const d = new Date();
@@ -17,6 +18,7 @@ function num(s: string): number { const n = parseFloat(s); return Number.isFinit
 
 interface SaleEntry {
   id: string;
+  customerId: string | null;
   customerName: string;
   bags: string;
   weightKg: string;
@@ -28,7 +30,7 @@ export default function SellPage() {
   const { t } = useI18n();
   const [date, setDate] = useState(today());
   const [sales, setSales] = useState<SaleEntry[]>([
-    { id: newId(), customerName: '', bags: '', weightKg: '', pricePerKg: '', amount: '' },
+    { id: newId(), customerId: null, customerName: '', bags: '', weightKg: '', pricePerKg: '', amount: '' },
   ]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -43,7 +45,7 @@ export default function SellPage() {
   const [geminiBills, setGeminiBills] = useState<GeminiBill[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
+  const [customers, setCustomers] = useState<CustomerOption[]>([]);
 
   const [charges, setCharges] = useState<Charge[]>([]);
   const [showCharges, setShowCharges] = useState(false);
@@ -58,7 +60,7 @@ export default function SellPage() {
   const [newCustomerCreditLimit, setNewCustomerCreditLimit] = useState('');
 
   useEffect(() => {
-    fetch('/api/dashboard')
+    fetch('/api/customers')
       .then((r) => r.json())
       .then((d) => setCustomers(d.customers || []))
       .catch(() => {});
@@ -81,7 +83,7 @@ export default function SellPage() {
   const addSale = () => {
     const defaultPrice = sales[0]?.pricePerKg || '';
     setSales([...sales, {
-      id: newId(), customerName: '', bags: '', weightKg: '', pricePerKg: defaultPrice, amount: '',
+      id: newId(), customerId: null, customerName: '', bags: '', weightKg: '', pricePerKg: defaultPrice, amount: '',
     }]);
   };
 
@@ -119,8 +121,11 @@ export default function SellPage() {
 
   // Load a Gemini bill into the sales rows
   const loadGeminiBill = (bill: GeminiBill) => {
+    // Try to match customer from existing list
+    const matched = bill.customer_name ? customers.find((c) => c.name.toLowerCase() === bill.customer_name!.toLowerCase()) : null;
     const rows = (bill.entries || []).map((entry) => ({
       id: newId(),
+      customerId: matched?.id || null,
       customerName: bill.customer_name || '',
       bags: entry.bags ? String(entry.bags) : '',
       weightKg: entry.weight_kg ? String(entry.weight_kg) : '',
@@ -156,13 +161,13 @@ export default function SellPage() {
     }
   };
 
-  const canSave = sales.some((s) => s.customerName.trim() && num(s.amount) > 0);
+  const canSave = sales.some((s) => (s.customerId || s.customerName.trim()) && num(s.amount) > 0);
 
   const handleSave = async () => {
     setSaving(true);
     setSaveError('');
     try {
-      const validSales = sales.filter((s) => s.customerName.trim() && num(s.amount) > 0);
+      const validSales = sales.filter((s) => (s.customerId || s.customerName.trim()) && num(s.amount) > 0);
       for (const sale of validSales) {
         const items: Array<{
           raw_text?: string;
@@ -204,6 +209,7 @@ export default function SellPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             customerName: sale.customerName.trim(),
+            customerId: sale.customerId,
             date,
             billNo: null,
             total,
@@ -224,7 +230,7 @@ export default function SellPage() {
   };
 
   const reset = () => {
-    setSales([{ id: newId(), customerName: '', bags: '', weightKg: '', pricePerKg: '', amount: '' }]);
+    setSales([{ id: newId(), customerId: null, customerName: '', bags: '', weightKg: '', pricePerKg: '', amount: '' }]);
     setSaved(false); setSaveError('');
     setGeminiBills([]); setDailySummary(null); setOcrSource(null);
   };
@@ -432,14 +438,17 @@ export default function SellPage() {
 
             <div className="flex items-end gap-2">
               <div className="flex-1">
-                <label className="text-xs text-[var(--text-muted)]">Customer name</label>
-                <input type="text" value={s.customerName} onChange={(e) => updateSale(s.id, 'customerName', e.target.value)}
-                  list="customer-list" placeholder="e.g. Mangal Singh"
-                  className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
+                <label className="text-xs text-[var(--text-muted)]">{t('customer')}</label>
+                <CustomerPicker
+                  customers={customers}
+                  value={s.customerId}
+                  onChange={(cid, cname) => {
+                    setSales(sales.map((x) => x.id === s.id ? { ...x, customerId: cid, customerName: cname } : x));
+                  }}
+                  onAddNew={() => setShowAddCustomer(true)}
+                  placeholder={t('selectCustomer')}
+                />
               </div>
-              <button onClick={() => setShowAddCustomer(true)} className="h-10 rounded-lg bg-[var(--bg-primary)] px-3 text-xs font-medium text-[var(--text-on-primary)]">
-                + {t('addCustomer')}
-              </button>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
@@ -473,8 +482,6 @@ export default function SellPage() {
             </div>
           </div>
         ))}
-
-        <datalist id="customer-list">{customers.map((c) => <option key={c.id} value={c.name} />)}</datalist>
 
       {/* Add Customer Modal */}
       {showAddCustomer && (
@@ -548,9 +555,19 @@ export default function SellPage() {
                   });
                   if (res.ok) {
                     const data = await res.json();
-                    setCustomers(prev => [...prev, { id: data.id, name: newCustomerName.trim() }]);
-                                                        setShowAddCustomer(false);
-                  setNewCustomerName(''); setNewCustomerEnglishName(''); setNewCustomerTeluguName(''); setNewCustomerHindiName(''); setNewCustomerPhone(''); setNewCustomerCreditLimit('');
+                    const newC: CustomerOption = {
+                      id: data.id,
+                      name: newCustomerName.trim(),
+                      englishName: newCustomerEnglishName.trim() || null,
+                      teluguName: newCustomerTeluguName.trim() || null,
+                      hindiName: newCustomerHindiName.trim() || null,
+                      phone: newCustomerPhone.trim() || null,
+                    };
+                    setCustomers(prev => [...prev, newC]);
+                    // Auto-select the newly added customer in the first empty sale row
+                    setSales(prev => prev.map((s, i) => i === 0 && !s.customerId ? { ...s, customerId: newC.id, customerName: newC.name } : s));
+                    setShowAddCustomer(false);
+                    setNewCustomerName(''); setNewCustomerEnglishName(''); setNewCustomerTeluguName(''); setNewCustomerHindiName(''); setNewCustomerPhone(''); setNewCustomerCreditLimit('');
                   }
                 } catch (e) {
                   console.error('Failed to add customer:', e);
