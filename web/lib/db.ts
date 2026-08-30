@@ -396,6 +396,64 @@ export async function getFYSummary(shopId: string, fyStartYear: number): Promise
   };
 }
 
+// Get farmer-wise summary for a FY: how much produce sold per farmer, commission, net payable.
+export async function getFarmerSummary(shopId: string, fyStartYear: number): Promise<{
+  farmer: string;
+  totalSales: number;
+  totalBags: number;
+  totalKgs: number;
+  totalHamali: number;
+  commission: number;
+  netPayable: number;
+  lineCount: number;
+}[]> {
+  if (!isDbConfigured()) return [];
+  await ensureSchema();
+  const sql = getSql();
+  const { from, to } = fyDateRange(fyStartYear);
+
+  // Get commission % from settings
+  const commissionPctStr = await getSetting(shopId, 'commissionPct');
+  const commissionPct = commissionPctStr ? Number(commissionPctStr) : 0;
+
+  // Group bill_items by farmer within the FY date range
+  const rows = await sql`
+    SELECT
+      bi.farmer,
+      COALESCE(SUM(bi.amount), 0) as total_sales,
+      COALESCE(SUM(bi.bags), 0) as total_bags,
+      COALESCE(SUM(bi.qty), 0) as total_kgs,
+      COALESCE(SUM(bi.hamali), 0) as total_hamali,
+      COUNT(*) as line_count
+    FROM bill_items bi
+    JOIN transactions t ON t.id = bi.transaction_id
+    WHERE bi.shop_id = ${shopId}
+      AND bi.farmer IS NOT NULL AND bi.farmer != ''
+      AND t.date >= ${from} AND t.date <= ${to}
+      AND (bi.kind = 'item' OR bi.kind IS NULL)
+    GROUP BY bi.farmer
+    ORDER BY total_sales DESC
+  `;
+
+  return (rows as any[]).map((r) => {
+    const totalSales = Number(r.total_sales);
+    const commission = (totalSales * commissionPct) / 100;
+    const totalHamali = Number(r.total_hamali);
+    // Net payable to farmer = sales - commission - hamali (hamali is labor cost deducted from farmer's share)
+    const netPayable = totalSales - commission - totalHamali;
+    return {
+      farmer: r.farmer,
+      totalSales,
+      totalBags: Number(r.total_bags),
+      totalKgs: Number(r.total_kgs),
+      totalHamali,
+      commission,
+      netPayable,
+      lineCount: Number(r.line_count),
+    };
+  });
+}
+
 function toDateOnly(value: unknown): string {
   if (!value) return '';
   if (typeof value === 'string') return value.slice(0, 10);
@@ -812,6 +870,16 @@ export async function saveBill(shopId: string, bill: BillData): Promise<void> {
       VALUES (${transaction.id}, ${it.raw_text}, ${it.confirmed_name}, ${it.qty}, ${it.rate}, ${it.amount}, ${it.display}, ${inferred.kind}, ${inferred.chargeCode}, ${shopId}, ${it.farmer || null}, ${it.hamali || null}, ${it.bags || null})
     `;
   }
+
+  // If this bill is backdated to a previous FY that's already closed, recalc opening balances
+  const billFY = currentFYStartYear(new Date(bill.date + 'T00:00:00'));
+  const currentFY = currentFYStartYear();
+  if (billFY < currentFY) {
+    const [closed] = await sql`SELECT 1 FROM fy_opening_balances WHERE shop_id = ${shopId} AND fy_start_year > ${billFY} LIMIT 1`;
+    if (closed) {
+      await recalcFYBalances(shopId, billFY);
+    }
+  }
 }
 
 export async function recordPayment(shopId: string, customerName: string, date: string, amount: number, notes: string, paymentMethod: string = 'credit', customerId?: string | null): Promise<void> {
@@ -838,6 +906,16 @@ export async function recordPayment(shopId: string, customerName: string, date: 
     INSERT INTO transactions (customer_id, date, bill_no, bill_amount, amount_paid, notes, image_path, shop_id, payment_method)
     VALUES (${customer.id}, ${date}, NULL, 0, ${amount}, ${notes || 'Payment received'}, NULL, ${shopId}, ${paymentMethod})
   `;
+
+  // If this payment is backdated to a previous FY that's already closed, recalc opening balances
+  const paymentFY = currentFYStartYear(new Date(date + 'T00:00:00'));
+  const currentFY = currentFYStartYear();
+  if (paymentFY < currentFY) {
+    const [closed] = await sql`SELECT 1 FROM fy_opening_balances WHERE shop_id = ${shopId} AND fy_start_year > ${paymentFY} LIMIT 1`;
+    if (closed) {
+      await recalcFYBalances(shopId, paymentFY);
+    }
+  }
 }
 
 export async function getDaySales(shopId: string, date: string): Promise<any[]> {

@@ -15,7 +15,8 @@ import { OverdueCustomer } from '@/lib/types';
 
 export default function CustomersPage() {
   const { t, lang } = useI18n();
-  const { customers, loading } = useDashboard();
+  const [fyParam, setFyParam] = useState<number | 'all' | null>(null);
+  const { customers, loading } = useDashboard(fyParam === 'all' ? null : fyParam);
   const [q, setQ] = useState('');
   const [sort, setSort] = useState<'due' | 'name' | 'oldest'>('due');
   const [shopSettings, setShopSettings] = useState<ShopProfile>({});
@@ -108,12 +109,38 @@ export default function CustomersPage() {
   const totalDue = customers.reduce((s, c) => s + c.due, 0);
   const overdueCount = customers.filter((c) => c.due > 0).length;
 
+  // FY label
+  const now = new Date();
+  const currentFY = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+
   return (
     <div className="space-y-4">
       <PageHeader
         title={t('navCustomers')}
         subtitle={`${customers.length} ${t('customersCount')} · ${overdueCount} ${t('overdue')} · ${fmt(totalDue)} ${t('due')}`}
       />
+
+      {/* FY selector */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-[var(--text-muted)]">{t('financialYear')}:</span>
+        {[
+          { key: null, label: `FY ${currentFY}-${String((currentFY + 1) % 100).padStart(2, '0')}` },
+          { key: currentFY - 1, label: `FY ${currentFY - 1}-${String(currentFY % 100).padStart(2, '0')}` },
+          { key: 'all' as const, label: t('allTime') },
+        ].map((opt) => (
+          <button
+            key={String(opt.key)}
+            onClick={() => setFyParam(opt.key)}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
+              fyParam === opt.key
+                ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'
+                : 'border border-[var(--border-input)] text-[var(--text-secondary)] hover:bg-[var(--bg-base)]'
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
 
       {/* Action bar */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">

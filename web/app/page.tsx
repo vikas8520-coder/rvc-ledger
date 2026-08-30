@@ -13,6 +13,17 @@ import { fmt } from '@/lib/format';
 import { computeAging } from '@/lib/statement';
 import { StockLevel, DailySummary } from '@/lib/types';
 
+interface FarmerSummary {
+  farmer: string;
+  totalSales: number;
+  totalBags: number;
+  totalKgs: number;
+  totalHamali: number;
+  commission: number;
+  netPayable: number;
+  lineCount: number;
+}
+
 export default function Home() {
   const { t, lang } = useI18n();
 
@@ -23,6 +34,7 @@ export default function Home() {
   const [daily, setDaily] = useState<DailySummary | null>(null);
   const [stockLoading, setStockLoading] = useState(true);
   const [commissionPct, setCommissionPct] = useState<number | null>(null);
+  const [farmers, setFarmers] = useState<FarmerSummary[]>([]);
 
   useEffect(() => {
     fetch('/api/stock')
@@ -42,6 +54,19 @@ export default function Home() {
       })
       .catch(() => {});
   }, []);
+
+  // Fetch farmer summary when FY changes
+  useEffect(() => {
+    if (fyParam === 'all') {
+      setFarmers([]);
+      return;
+    }
+    const fy = fyParam === null ? currentFY : fyParam;
+    fetch(`/api/farmers?fy=${fy}`)
+      .then((r) => r.json())
+      .then((d) => setFarmers(d.farmers || []))
+      .catch(() => setFarmers([]));
+  }, [fyParam]);
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -149,6 +174,52 @@ export default function Home() {
           </div>
         )}
       </section>
+
+      {/* Farmer-wise summary */}
+      {farmers.length > 0 && (
+        <Card>
+          <SectionHeader title={t('farmerSummary')} icon={<TrendingIcon size={16} />} />
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--border-light)] text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
+                  <th className="px-2 py-2 text-left">{t('farmer')}</th>
+                  <th className="px-2 py-2 text-right">{t('lines')}</th>
+                  <th className="px-2 py-2 text-right">{t('totalBags')}</th>
+                  <th className="px-2 py-2 text-right">{t('totalKgs')}</th>
+                  <th className="px-2 py-2 text-right">{t('fySales')}</th>
+                  <th className="px-2 py-2 text-right">{t('hamali')}</th>
+                  <th className="px-2 py-2 text-right">{t('commissionEarned')}</th>
+                  <th className="px-2 py-2 text-right">{t('netPayable')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {farmers.map((f) => (
+                  <tr key={f.farmer} className="border-b border-[var(--border-card)]">
+                    <td className="px-2 py-2 font-medium">{f.farmer}</td>
+                    <td className="px-2 py-2 text-right tabular-nums text-[var(--text-muted)]">{f.lineCount}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{f.totalBags > 0 ? f.totalBags : '—'}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{f.totalKgs > 0 ? f.totalKgs : '—'}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{fmt(f.totalSales)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums text-[var(--text-muted)]">{f.totalHamali > 0 ? fmt(f.totalHamali) : '—'}</td>
+                    <td className="px-2 py-2 text-right tabular-nums text-[var(--bg-primary)]">{f.commission > 0 ? fmt(f.commission) : '—'}</td>
+                    <td className="px-2 py-2 text-right tabular-nums font-semibold text-[var(--bg-success)]">{fmt(f.netPayable)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-[var(--bg-primary)] font-bold">
+                  <td className="px-2 py-2" colSpan={4}>{t('total')}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{fmt(farmers.reduce((s, f) => s + f.totalSales, 0))}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{fmt(farmers.reduce((s, f) => s + f.totalHamali, 0))}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{fmt(farmers.reduce((s, f) => s + f.commission, 0))}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{fmt(farmers.reduce((s, f) => s + f.netPayable, 0))}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </Card>
+      )}
 
       {/* Stock alerts */}
       {(lowStock.length > 0 || outStock.length > 0) && (

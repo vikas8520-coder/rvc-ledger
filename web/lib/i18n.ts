@@ -376,6 +376,8 @@ const dictionary: Record<Lang, Record<string, string>> = {
     commissionEarned: 'Commission Earned',
     fyNetPosition: 'FY Net Position',
     noOutstanding: 'No outstanding balances',
+    farmerSummary: 'Farmer Summary',
+    netPayable: 'Net Payable',
   },
   te: {
     appTitle: 'RVC లెడ్గర్',
@@ -726,6 +728,8 @@ const dictionary: Record<Lang, Record<string, string>> = {
     commissionEarned: 'కమీషన్ ఆదాయం',
     fyNetPosition: 'ఆర్థిక సంవత్సరం నికర స్థితి',
     noOutstanding: 'బాకీలు లేవు',
+    farmerSummary: 'రైతు సారాంశం',
+    netPayable: 'చెల్లించాల్సిన నికర మొత్తం',
   },
   hi: {
     appTitle: 'RVC लेजर',
@@ -1076,6 +1080,8 @@ const dictionary: Record<Lang, Record<string, string>> = {
     commissionEarned: 'कमीशन आय',
     fyNetPosition: 'वित्तीय वर्ष शुद्ध स्थिति',
     noOutstanding: 'कोई बकाया नहीं',
+    farmerSummary: 'किसान सारांश',
+    netPayable: 'शुद्ध देय',
   },
   all: {},
 };
