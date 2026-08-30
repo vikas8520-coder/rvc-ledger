@@ -7,18 +7,22 @@ import { formatCustomerName, getUiLang } from '@/lib/i18n';
 import { useDashboard } from './components/useDashboard';
 import TxnCard from './components/TxnCard';
 import AgingBadge from './components/AgingBadge';
-import { Card, SectionHeader, StatCard, EmptyState, StatSkeleton, ListSkeleton, PageHeader } from './components/ui';
-import { UsersIcon, DollarIcon, PackageIcon, CalendarIcon, TrendingIcon, CameraIcon } from './components/Icons';
-import { fmt, thisMonthKey } from '@/lib/format';
+import { Card, SectionHeader, StatCard, EmptyState, StatSkeleton, ListSkeleton } from './components/ui';
+import { UsersIcon, DollarIcon, PackageIcon, CalendarIcon, TrendingIcon } from './components/Icons';
+import { fmt } from '@/lib/format';
 import { computeAging } from '@/lib/statement';
 import { StockLevel, DailySummary } from '@/lib/types';
 
 export default function Home() {
   const { t, lang } = useI18n();
-  const { customers, configured, loading } = useDashboard();
+
+  // FY selector: null = current FY (default), 'all' = all-time, number = specific FY
+  const [fyParam, setFyParam] = useState<number | 'all' | null>(null);
+  const { customers, configured, loading, fySummary, fyUsed } = useDashboard(fyParam === 'all' ? null : fyParam);
   const [stock, setStock] = useState<StockLevel[]>([]);
   const [daily, setDaily] = useState<DailySummary | null>(null);
   const [stockLoading, setStockLoading] = useState(true);
+  const [commissionPct, setCommissionPct] = useState<number | null>(null);
 
   useEffect(() => {
     fetch('/api/stock')
@@ -30,26 +34,33 @@ export default function Home() {
       .then((r) => r.json())
       .then((d) => setDaily(d))
       .catch(() => setDaily(null));
+    fetch('/api/settings')
+      .then((r) => r.json())
+      .then((d) => {
+        const pct = d.settings?.commissionPct;
+        if (pct) setCommissionPct(Number(pct));
+      })
+      .catch(() => {});
   }, []);
 
-  const totalBilled = customers.reduce((s, c) => s + c.billed, 0);
-  const totalPaid = customers.reduce((s, c) => s + c.paid, 0);
-  const totalDue = customers.reduce((s, c) => s + c.due, 0);
-  const month = thisMonthKey();
   const today = new Date().toISOString().slice(0, 10);
-  const monthBilled = customers.reduce(
-    (s, c) => s + c.txns.filter((t) => t.type === 'bill' && t.date.startsWith(month)).reduce((a, t) => a + t.amount, 0),
-    0
-  );
-  const monthPaid = customers.reduce(
-    (s, c) => s + c.txns.filter((t) => t.type === 'payment' && t.date.startsWith(month)).reduce((a, t) => a + t.amount, 0),
-    0
-  );
+
+  // FY label
+  const now = new Date();
+  const currentFY = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  const fyLabel = fyParam === 'all' ? t('allTime') : fyParam === null ? `FY ${currentFY}-${String((currentFY + 1) % 100).padStart(2, '0')}` : `FY ${fyParam}-${String((fyParam + 1) % 100).padStart(2, '0')}`;
+
+  // Use fySummary from backend if available, otherwise calculate from customers
+  const totalSales = fySummary?.totalSales ?? customers.reduce((s, c) => s + c.billed, 0);
+  const totalPayments = fySummary?.totalPayments ?? customers.reduce((s, c) => s + c.paid, 0);
+  const totalOutstanding = fySummary?.totalOutstanding ?? customers.reduce((s, c) => s + c.due, 0);
+  const customerCount = fySummary?.customerCount ?? customers.length;
+  const commissionEarned = commissionPct ? (totalSales * commissionPct / 100) : 0;
 
   const lowStock = stock.filter((s) => s.qty > 0 && s.qty < 5);
   const outStock = stock.filter((s) => s.qty <= 0);
 
-  const topDues = [...customers].sort((a, b) => b.due - a.due).slice(0, 6);
+  const topDues = [...customers].filter((c) => c.due > 0).sort((a, b) => b.due - a.due).slice(0, 6);
   const recent = customers
     .flatMap((c) => c.txns.map((txn) => ({ ...txn, customerName: c.name, customerId: c.id, englishName: c.englishName, teluguName: c.teluguName, hindiName: c.hindiName })))
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
@@ -70,13 +81,34 @@ export default function Home() {
     <div className="space-y-5">
       <p className="text-xs text-[var(--text-faint)]">{configured ? t('liveFrom') : 'Preview from local CSV'}</p>
 
+      {/* FY selector */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-[var(--text-muted)]">{t('financialYear')}:</span>
+        {[
+          { key: null, label: `FY ${currentFY}-${String((currentFY + 1) % 100).padStart(2, '0')}` },
+          { key: currentFY - 1, label: `FY ${currentFY - 1}-${String(currentFY % 100).padStart(2, '0')}` },
+          { key: 'all' as const, label: t('allTime') },
+        ].map((opt) => (
+          <button
+            key={String(opt.key)}
+            onClick={() => setFyParam(opt.key)}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
+              fyParam === opt.key
+                ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'
+                : 'border border-[var(--border-input)] text-[var(--text-secondary)] hover:bg-[var(--bg-base)]'
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
       {/* Today's snapshot */}
       {daily && (daily.sold > 0 || daily.purchased > 0 || daily.collected > 0) && (
         <Card>
           <SectionHeader
             title={`${t('dailyOps')} — ${today}`}
             icon={<CalendarIcon size={16} />}
-            action={<Link href="/daily" className="text-xs text-[var(--bg-primary)] hover:underline">{t('dailyOps')} →</Link>}
           />
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div>
@@ -101,19 +133,21 @@ export default function Home() {
         </Card>
       )}
 
-      {/* Main stats */}
-      <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <StatCard label={t('due')} value={fmt(totalDue)} accent="primary" icon={<DollarIcon size={14} />} />
-        <StatCard label={t('billed')} value={fmt(totalBilled)} icon={<TrendingIcon size={14} />} />
-        <StatCard label={t('paid')} value={fmt(totalPaid)} accent="success" icon={<DollarIcon size={14} />} />
-        <StatCard label={t('customersCount')} value={String(customers.length)} icon={<UsersIcon size={14} />} />
-      </section>
-
-      {/* Month stats */}
-      <section className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <StatCard label={`${t('thisMonth')} · ${t('billed')}`} value={fmt(monthBilled)} />
-        <StatCard label={`${t('thisMonth')} · ${t('paid')}`} value={fmt(monthPaid)} />
-        <StatCard label={t('bills')} value={String(customers.reduce((s, c) => s + c.txns.filter((t) => t.type === 'bill').length, 0))} />
+      {/* FY Summary — the 5 core questions */}
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold text-[var(--text-secondary)]">{fyLabel}</h2>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <StatCard label={t('fySales')} value={fmt(totalSales)} icon={<TrendingIcon size={14} />} />
+          <StatCard label={t('fyPayments')} value={fmt(totalPayments)} accent="success" icon={<DollarIcon size={14} />} />
+          <StatCard label={t('fyOutstanding')} value={fmt(totalOutstanding)} accent="primary" icon={<DollarIcon size={14} />} />
+          <StatCard label={t('customersCount')} value={String(customerCount)} icon={<UsersIcon size={14} />} />
+        </div>
+        {commissionPct && (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <StatCard label={`${t('commissionEarned')} (${commissionPct}%)`} value={fmt(commissionEarned)} accent="success" icon={<TrendingIcon size={14} />} />
+            <StatCard label={t('fyNetPosition')} value={fmt(totalOutstanding - commissionEarned)} icon={<DollarIcon size={14} />} />
+          </div>
+        )}
       </section>
 
       {/* Stock alerts */}
@@ -122,7 +156,6 @@ export default function Home() {
           <SectionHeader
             title={t('navStock')}
             icon={<PackageIcon size={16} />}
-            action={<Link href="/stock" className="text-xs text-[var(--bg-primary)] hover:underline">{t('navStock')} →</Link>}
           />
           <div className="flex flex-wrap gap-2">
             {outStock.map((s) => (
@@ -169,7 +202,7 @@ export default function Home() {
                 </Link>
               </li>
             ))}
-            {topDues.length === 0 && <li className="py-3 text-sm text-[var(--text-faint)]">{t('noCustomers')}</li>}
+            {topDues.length === 0 && <li className="py-3 text-sm text-[var(--text-faint)]">{t('noOutstanding')}</li>}
           </ul>
         </Card>
 
