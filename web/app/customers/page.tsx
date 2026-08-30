@@ -73,6 +73,23 @@ export default function CustomersPage() {
     window.open(link, '_blank');
   };
 
+  const shareCustomerList = () => {
+    const shopName = shopSettings.shopName || 'RVC';
+    const dueCustomers = customers.filter((c) => c.due > 0).sort((a, b) => b.due - a.due);
+    const lines: string[] = [];
+    lines.push(`${shopName} — Customer Outstanding List`);
+    lines.push(`Date: ${new Date().toLocaleDateString('en-IN')}`);
+    lines.push('');
+    dueCustomers.forEach((c, i) => {
+      lines.push(`${i + 1}. ${formatCustomerName(c, uiLang)} — ${fmt(c.due)}`);
+    });
+    lines.push('');
+    lines.push(`Total customers: ${dueCustomers.length}`);
+    lines.push(`Total outstanding: ${fmt(dueCustomers.reduce((s, c) => s + c.due, 0))}`);
+    const link = waLink(lines.join('\n'));
+    window.open(link, '_blank');
+  };
+
   const sendAllReminders = () => {
     let count = 0;
     for (const c of overdue) {
@@ -177,6 +194,9 @@ export default function CustomersPage() {
         </Button>
         <Button variant="secondary" size="sm" onClick={sendBatchReminders}>
           <span className="flex items-center gap-1.5"><MessageIcon size={14} /> {t('batchReminders')}</span>
+        </Button>
+        <Button variant="secondary" size="sm" onClick={shareCustomerList} disabled={overdueCount === 0}>
+          <span className="flex items-center gap-1.5"><MessageIcon size={14} /> {t('shareList')}</span>
         </Button>
         <Button variant="primary" size="sm" onClick={printLedger} disabled={overdueCount === 0}>
           <span className="flex items-center gap-1.5"><PrinterIcon size={14} /> {t('printCreditLedger')}</span>
