@@ -16,6 +16,9 @@ export interface BillItem {
   display?: string;
   kind?: ChargeKind;
   chargeCode?: ChargeCode | null;
+  farmer?: string | null;
+  hamali?: number | null;
+  bags?: number | null;
 }
 
 export interface BillData {

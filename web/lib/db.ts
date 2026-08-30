@@ -28,6 +28,9 @@ async function ensureSchema() {
   const sql = getSql();
   await sql`ALTER TABLE bill_items ADD COLUMN IF NOT EXISTS kind TEXT DEFAULT 'item'`;
   await sql`ALTER TABLE bill_items ADD COLUMN IF NOT EXISTS charge_code TEXT`;
+  await sql`ALTER TABLE bill_items ADD COLUMN IF NOT EXISTS farmer TEXT`;
+  await sql`ALTER TABLE bill_items ADD COLUMN IF NOT EXISTS hamali NUMERIC(12,2) DEFAULT 0`;
+  await sql`ALTER TABLE bill_items ADD COLUMN IF NOT EXISTS bags NUMERIC(10,2) DEFAULT 0`;
   await sql`ALTER TABLE customers ADD COLUMN IF NOT EXISTS phone TEXT`;
   await sql`ALTER TABLE customers ADD COLUMN IF NOT EXISTS english_name TEXT`;
   await sql`ALTER TABLE customers ADD COLUMN IF NOT EXISTS telugu_name TEXT`;
@@ -356,6 +359,11 @@ export async function getCustomerList(shopId: string): Promise<{ id: string; nam
   }
   await ensureSchema();
   const sql = getSql();
+  // Ensure CASH SALES customer exists for this shop
+  const [cash] = await sql`SELECT id FROM customers WHERE name = 'CASH SALES' AND shop_id = ${shopId}`;
+  if (!cash) {
+    await sql`INSERT INTO customers (name, english_name, telugu_name, hindi_name, shop_id) VALUES ('CASH SALES', 'CASH SALES', 'నగదు అమ్మకాలు', 'नकद बिक्री', ${shopId})`;
+  }
   const rows = await sql`SELECT id, name, english_name, telugu_name, hindi_name, phone FROM customers WHERE shop_id = ${shopId} ORDER BY name`;
   return rows.map((r) => ({ id: r.id as string, name: r.name as string, englishName: r.english_name as string | null, teluguName: r.telugu_name as string | null, hindiName: r.hindi_name as string | null, phone: r.phone as string | null }));
 }
@@ -547,8 +555,8 @@ export async function saveBill(shopId: string, bill: BillData): Promise<void> {
   for (const it of bill.items) {
     const inferred = inferItemKind(it);
     await sql`
-      INSERT INTO bill_items (transaction_id, raw_text, confirmed_name, qty, rate, amount, display, kind, charge_code, shop_id)
-      VALUES (${transaction.id}, ${it.raw_text}, ${it.confirmed_name}, ${it.qty}, ${it.rate}, ${it.amount}, ${it.display}, ${inferred.kind}, ${inferred.chargeCode}, ${shopId})
+      INSERT INTO bill_items (transaction_id, raw_text, confirmed_name, qty, rate, amount, display, kind, charge_code, shop_id, farmer, hamali, bags)
+      VALUES (${transaction.id}, ${it.raw_text}, ${it.confirmed_name}, ${it.qty}, ${it.rate}, ${it.amount}, ${it.display}, ${inferred.kind}, ${inferred.chargeCode}, ${shopId}, ${it.farmer || null}, ${it.hamali || null}, ${it.bags || null})
     `;
   }
 }
@@ -577,6 +585,47 @@ export async function recordPayment(shopId: string, customerName: string, date: 
     INSERT INTO transactions (customer_id, date, bill_no, bill_amount, amount_paid, notes, image_path, shop_id, payment_method)
     VALUES (${customer.id}, ${date}, NULL, 0, ${amount}, ${notes || 'Payment received'}, NULL, ${shopId}, ${paymentMethod})
   `;
+}
+
+export async function getDaySales(shopId: string, date: string): Promise<any[]> {
+  if (!isDbConfigured()) return [];
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql`
+    SELECT
+      t.id as txn_id,
+      t.bill_amount,
+      t.customer_id,
+      c.name as customer_name,
+      bi.confirmed_name as item,
+      bi.qty,
+      bi.rate,
+      bi.amount,
+      bi.bags,
+      bi.hamali,
+      bi.farmer
+    FROM transactions t
+    JOIN customers c ON c.id = t.customer_id
+    LEFT JOIN bill_items bi ON bi.transaction_id = t.id
+    WHERE t.date = ${date}
+      AND t.shop_id = ${shopId}
+      AND t.bill_amount > 0
+      AND (bi.kind = 'item' OR bi.kind IS NULL)
+    ORDER BY t.created_at, bi.created_at
+  `;
+  return rows.map((r: any) => ({
+    id: r.txn_id + '-' + (r.item || ''),
+    txnId: r.txn_id,
+    item: r.item || '',
+    farmer: r.farmer || '',
+    customerId: r.customer_id,
+    customerName: r.customer_name || '',
+    bags: r.bags,
+    kgs: r.qty,
+    rate: r.rate,
+    amount: Number(r.amount || r.bill_amount || 0),
+    hamali: r.hamali,
+  }));
 }
 
 /* ---- Purchases ---- */

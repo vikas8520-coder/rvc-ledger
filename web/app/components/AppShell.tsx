@@ -24,23 +24,15 @@ interface NavItem {
 
 const PRIMARY_NAV: NavItem[] = [
   { href: '/', label: 'navOverview', icon: HomeIcon },
-  { href: '/daily', label: 'dailyOps', icon: CalendarIcon },
-  { href: '/rates', label: 'rateSheet', icon: TrendingIcon },
   { href: '/customers', label: 'navCustomers', icon: UsersIcon },
-  { href: '/purchases', label: 'navPurchases', icon: TruckIcon },
-  { href: '/suppliers', label: 'navSuppliers', icon: StoreIcon },
 ];
 
 const SECONDARY_NAV: NavItem[] = [
-  { href: '/stock', label: 'navStock', icon: BoxIcon },
-  { href: '/wastage', label: 'navWastage', icon: PackageIcon },
-  { href: '/expenses', label: 'navExpenses', icon: DollarIcon },
-  { href: '/catalog', label: 'navCatalog', icon: LayersIcon },
   { href: '/reports', label: 'navReports', icon: ChartIcon },
   { href: '/settings', label: 'settings', icon: SettingsIcon },
 ];
 
-// Mobile bottom bar — 3 clear actions
+// Mobile bottom bar — 3 core actions
 const MOBILE_ACTIONS: NavItem[] = [
   { href: '/receive', label: 'receiveStock', icon: TruckIcon },
   { href: '/sell', label: 'sell', icon: StoreIcon },
