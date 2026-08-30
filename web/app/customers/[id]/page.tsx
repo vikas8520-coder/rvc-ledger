@@ -1,6 +1,7 @@
 'use client';
 
 import { use, useEffect, useMemo, useState } from 'react';
+import { TxnView } from '@/lib/types';
 import Link from 'next/link';
 import { useI18n } from '../../components/I18nProvider';
 import { formatCustomerName, getUiLang } from '@/lib/i18n';
@@ -34,6 +35,52 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
   const [creditStatus, setCreditStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [shopSettings, setShopSettings] = useState<{ shopName?: string; shopAddress?: string; shopPhone?: string; billFormat?: string }>({});
   const [showPdfFormats, setShowPdfFormats] = useState(false);
+
+  // Date range filter
+  type RangePreset = 'all' | 'today' | 'month' | 'year' | 'custom';
+  const [rangePreset, setRangePreset] = useState<RangePreset>('all');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+
+  const todayStr = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const monthStart = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+  };
+  const yearStart = () => `${new Date().getFullYear()}-01-01`;
+
+  const effectiveFrom = rangePreset === 'today' ? todayStr()
+    : rangePreset === 'month' ? monthStart()
+    : rangePreset === 'year' ? yearStart()
+    : rangePreset === 'custom' ? fromDate
+    : '';
+  const effectiveTo = rangePreset === 'custom' ? toDate : '';
+
+  // Filter txns by date range
+  const filteredTxns: TxnView[] = useMemo(() => {
+    if (!customer) return [];
+    return customer.txns.filter((tx) => {
+      if (effectiveFrom && tx.date < effectiveFrom) return false;
+      if (effectiveTo && tx.date > effectiveTo) return false;
+      return true;
+    });
+  }, [customer, effectiveFrom, effectiveTo]);
+
+  // Opening balance = sum of all txns before the from-date
+  const openingBalance = useMemo(() => {
+    if (!customer || !effectiveFrom) return 0;
+    return customer.txns
+      .filter((tx) => tx.date < effectiveFrom)
+      .reduce((bal, tx) => bal + (tx.type === 'bill' ? tx.amount : -tx.amount), 0);
+  }, [customer, effectiveFrom]);
+
+  // Filtered totals
+  const filteredBilled = filteredTxns.filter((tx) => tx.type === 'bill').reduce((s, tx) => s + tx.amount, 0);
+  const filteredPaid = filteredTxns.filter((tx) => tx.type === 'payment').reduce((s, tx) => s + tx.amount, 0);
+  const closingBalance = openingBalance + filteredBilled - filteredPaid;
 
   useEffect(() => {
     if (customer?.phone) setPhone(customer.phone);
@@ -214,6 +261,58 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
         <StatCard label={t('due')} value={fmt(customer.due)} accent="primary" />
       </section>
 
+      {/* Date range filter */}
+      <section className="rounded-2xl bg-[var(--bg-card)] p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-1">
+            {([
+              { key: 'all', label: t('allTime') },
+              { key: 'today', label: t('today') },
+              { key: 'month', label: t('thisMonth') },
+              { key: 'year', label: t('thisYear') },
+              { key: 'custom', label: t('custom') },
+            ] as { key: RangePreset; label: string }[]).map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => setRangePreset(opt.key)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
+                  rangePreset === opt.key
+                    ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'
+                    : 'border border-[var(--border-input)] text-[var(--text-secondary)] hover:bg-[var(--bg-base)]'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {rangePreset === 'custom' && (
+            <div className="flex items-center gap-1.5">
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-1.5 text-xs"
+              />
+              <span className="text-xs text-[var(--text-muted)]">→</span>
+              <input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-1.5 text-xs"
+              />
+            </div>
+          )}
+          {rangePreset !== 'all' && (
+            <button
+              onClick={() => { setRangePreset('all'); setFromDate(''); setToDate(''); }}
+              className="text-xs text-[var(--bg-primary)] hover:underline"
+            >
+              {t('clear')}
+            </button>
+          )}
+        </div>
+      </section>
+
       <Card>
         <SectionHeader title={t('actions')} icon={<DollarIcon size={16} />} />
         <div className="flex flex-wrap gap-2">
@@ -315,7 +414,13 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
 
       <section className="space-y-2">
         <SectionHeader title={t('ledger')} />
-        <LedgerTable customer={customer} shop={shopSettings} defaultFormat={(shopSettings.billFormat as any) || 'itemized'} />
+        <LedgerTable
+          customer={customer}
+          shop={shopSettings}
+          defaultFormat={(shopSettings.billFormat as any) || 'itemized'}
+          filteredTxns={rangePreset === 'all' ? undefined : filteredTxns}
+          openingBalance={rangePreset === 'all' ? 0 : openingBalance}
+        />
       </section>
     </div>
   );

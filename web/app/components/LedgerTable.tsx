@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Customer } from '@/lib/types';
+import { Customer, TxnView } from '@/lib/types';
 import { localizeName } from '@/lib/catalog';
 import { yardById } from '@/lib/market';
 import { fmt, fmtDate } from '@/lib/format';
@@ -14,16 +14,24 @@ export default function LedgerTable({
   customer,
   shop,
   defaultFormat = 'itemized',
+  filteredTxns,
+  openingBalance = 0,
 }: {
   customer: Customer;
   shop?: ShopProfile;
   defaultFormat?: BillFormat;
+  filteredTxns?: TxnView[];
+  openingBalance?: number;
 }) {
   const { lang, t } = useI18n();
   const uiLang = getUiLang(lang);
   const [printMenuTxn, setPrintMenuTxn] = useState<string | null>(null);
 
-  if (customer.txns.length === 0) {
+  // Use filtered txns if provided, otherwise all txns
+  const txns = filteredTxns !== undefined ? filteredTxns : customer.txns;
+  const hasDateFilter = filteredTxns !== undefined;
+
+  if (txns.length === 0 && !hasDateFilter) {
     return <p className="text-sm text-[var(--text-faint)]">{t('noActivity')}</p>;
   }
 
@@ -34,34 +42,62 @@ export default function LedgerTable({
     particulars: string;
     qty: string;
     rate: string;
-    amount: number;
+    debit: number;  // bill amount (customer owes more)
+    credit: number; // payment amount (customer paid)
     balance: number | null;
     isTotal: boolean;
     isPayment: boolean;
     isCharge: boolean;
     isFirst: boolean;
+    isOpening: boolean;
   };
 
   const rows: Row[] = [];
-  for (const txn of customer.txns) {
+
+  // Opening balance row (only when date filter is active)
+  if (hasDateFilter) {
+    rows.push({
+      txnId: '__opening__',
+      date: '',
+      particulars: t('openingBalance'),
+      qty: '',
+      rate: '',
+      debit: openingBalance > 0 ? openingBalance : 0,
+      credit: openingBalance < 0 ? Math.abs(openingBalance) : 0,
+      balance: openingBalance,
+      isTotal: true,
+      isPayment: false,
+      isCharge: false,
+      isFirst: true,
+      isOpening: true,
+    });
+  }
+
+  // Running balance starts from opening balance if filtering, else 0
+  let runningBalance = hasDateFilter ? openingBalance : 0;
+
+  for (const txn of txns) {
     const isPayment = txn.type === 'payment';
     const yard = txn.market?.marketYard
       ? ` · ${yardById(txn.market.marketYard)?.name || txn.market.marketYard}`
       : '';
 
     if (isPayment) {
+      runningBalance -= txn.amount;
       rows.push({
         txnId: txn.id,
         date: fmtDate(txn.date),
         particulars: t('paymentReceived'),
         qty: '—',
         rate: '—',
-        amount: -txn.amount,
-        balance: txn.balanceAfter,
+        debit: 0,
+        credit: txn.amount,
+        balance: runningBalance,
         isTotal: true,
         isPayment: true,
         isCharge: false,
         isFirst: true,
+        isOpening: false,
       });
     } else {
       const title = txn.billNo ? `${t('billNo')} ${txn.billNo}` : t('bill');
@@ -75,42 +111,48 @@ export default function LedgerTable({
             particulars: idx === 0 ? `${title}${yard}` : localizeName(it.name, uiLang),
             qty: it.qty || '—',
             rate: it.rate || '—',
-            amount: it.amount,
+            debit: it.amount,
+            credit: 0,
             balance: null,
             isTotal: false,
             isPayment: false,
             isCharge: it.kind === 'charge',
             isFirst: idx === 0,
+            isOpening: false,
           });
         });
-        // Total row
+        runningBalance += txn.amount;
         rows.push({
           txnId: txn.id,
           date: '',
           particulars: t('billTotal'),
           qty: '',
           rate: '',
-          amount: txn.amount,
-          balance: txn.balanceAfter,
+          debit: txn.amount,
+          credit: 0,
+          balance: runningBalance,
           isTotal: true,
           isPayment: false,
           isCharge: false,
           isFirst: false,
+          isOpening: false,
         });
       } else {
-        // Bill with no items
+        runningBalance += txn.amount;
         rows.push({
           txnId: txn.id,
           date: fmtDate(txn.date),
           particulars: `${title}${yard}`,
           qty: '—',
           rate: '—',
-          amount: txn.amount,
-          balance: txn.balanceAfter,
+          debit: txn.amount,
+          credit: 0,
+          balance: runningBalance,
           isTotal: true,
           isPayment: false,
           isCharge: false,
           isFirst: true,
+          isOpening: false,
         });
       }
     }
@@ -122,6 +164,11 @@ export default function LedgerTable({
     lastRowOfTxn.set(r.txnId, i);
   });
 
+  // Footer totals
+  const totalDebit = rows.filter((r) => !r.isOpening).reduce((s, r) => s + r.debit, 0);
+  const totalCredit = rows.filter((r) => !r.isOpening).reduce((s, r) => s + r.credit, 0);
+  const closingBalance = runningBalance;
+
   return (
     <div className="overflow-x-auto rounded-lg border border-[var(--border-light)] bg-[var(--bg-input)] shadow-sm">
       <table className="w-full border-collapse text-sm">
@@ -131,7 +178,8 @@ export default function LedgerTable({
             <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">{t('particulars')}</th>
             <th className="w-[70px] px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">{t('qty')}</th>
             <th className="w-[70px] px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">{t('rate')}</th>
-            <th className="w-[90px] px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">{t('amt')}</th>
+            <th className="w-[90px] px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">{t('debit')}</th>
+            <th className="w-[90px] px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">{t('credit')}</th>
             <th className="w-[100px] px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">{t('balanceAfter')}</th>
             <th className="w-[45px] px-2 py-2.5"></th>
           </tr>
@@ -144,21 +192,24 @@ export default function LedgerTable({
             if (r.isTotal) {
               // Total/subtotal row — bold, tinted background
               return (
-                <tr key={i} className={`${borderClass} bg-[var(--bg-base)] font-semibold`}>
+                <tr key={i} className={`${borderClass} ${r.isOpening ? 'bg-[var(--bg-base)] italic' : 'bg-[var(--bg-base)] font-semibold'}`}>
                   <td className="px-3 py-1.5 text-xs text-[var(--text-secondary)]">{r.date}</td>
-                  <td className={`px-3 py-1.5 ${r.isPayment ? 'text-[var(--bg-success)]' : 'text-[var(--text-primary)]'}`}>
+                  <td className={`px-3 py-1.5 ${r.isPayment ? 'text-[var(--bg-success)]' : r.isOpening ? 'text-[var(--text-muted)]' : 'text-[var(--text-primary)]'}`}>
                     {r.particulars}
                   </td>
                   <td className="px-3 py-1.5 text-right tabular-nums text-[var(--text-faint)]">{r.qty}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums text-[var(--text-faint)]">{r.rate}</td>
-                  <td className={`px-3 py-1.5 text-right tabular-nums ${r.isPayment ? 'text-[var(--bg-success)]' : 'text-[var(--text-primary)]'}`}>
-                    {r.isPayment ? '−' : '+'}{fmt(Math.abs(r.amount))}
+                  <td className="px-3 py-1.5 text-right tabular-nums text-[var(--text-primary)]">
+                    {r.debit > 0 ? fmt(r.debit) : ''}
+                  </td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-[var(--bg-success)]">
+                    {r.credit > 0 ? fmt(r.credit) : ''}
                   </td>
                   <td className="px-3 py-1.5 text-right tabular-nums text-[var(--text-secondary)]">
                     {r.balance !== null ? fmt(r.balance) : ''}
                   </td>
                   <td className="px-2 py-1.5 text-right whitespace-nowrap">
-                    {isLastOfTxn && !r.isPayment && shop && (
+                    {isLastOfTxn && !r.isPayment && !r.isOpening && shop && (
                       <span className="relative mr-1">
                         <button
                           onClick={() => setPrintMenuTxn(printMenuTxn === r.txnId ? null : r.txnId)}
@@ -186,7 +237,7 @@ export default function LedgerTable({
                         )}
                       </span>
                     )}
-                    {isLastOfTxn && <DeleteButton id={r.txnId} />}
+                    {isLastOfTxn && !r.isOpening && <DeleteButton id={r.txnId} />}
                   </td>
                 </tr>
               );
@@ -201,13 +252,26 @@ export default function LedgerTable({
                 </td>
                 <td className="px-3 py-1 text-right tabular-nums text-[var(--text-muted)]">{r.qty}</td>
                 <td className="px-3 py-1 text-right tabular-nums text-[var(--text-muted)]">{r.rate}</td>
-                <td className="px-3 py-1 text-right tabular-nums">{fmt(r.amount)}</td>
+                <td className="px-3 py-1 text-right tabular-nums">{fmt(r.debit)}</td>
+                <td className="px-3 py-1 text-right tabular-nums text-[var(--bg-success)]"></td>
                 <td className="px-3 py-1 text-right tabular-nums text-[var(--border-input)]"></td>
                 <td className="px-2 py-1"></td>
               </tr>
             );
           })}
         </tbody>
+        {/* Footer totals */}
+        <tfoot>
+          <tr className="border-t-2 border-[var(--bg-primary)] bg-[var(--bg-base)] font-bold">
+            <td colSpan={4} className="px-3 py-2 text-right text-xs uppercase tracking-wide text-[var(--text-muted)]">
+              {t('total')}
+            </td>
+            <td className="px-3 py-2 text-right tabular-nums text-[var(--text-primary)]">{fmt(totalDebit)}</td>
+            <td className="px-3 py-2 text-right tabular-nums text-[var(--bg-success)]">{fmt(totalCredit)}</td>
+            <td className="px-3 py-2 text-right tabular-nums text-[var(--bg-primary)]">{fmt(closingBalance)}</td>
+            <td></td>
+          </tr>
+        </tfoot>
       </table>
     </div>
   );
