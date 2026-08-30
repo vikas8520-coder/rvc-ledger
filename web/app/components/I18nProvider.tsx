@@ -18,12 +18,23 @@ const I18nContext = createContext<I18nContextType>({
 });
 
 const STORAGE_KEY = 'rvc-lang';
+const ADMIN_STORAGE_KEY = 'rvc-admin-lang';
+
+function isAdminRoute(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.location.pathname.startsWith('/admin');
+}
+
+function getStorageKey(): string {
+  return isAdminRoute() ? ADMIN_STORAGE_KEY : STORAGE_KEY;
+}
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
   const [lang, setLangState] = useState<Lang>('en'); // Default to 'en'
 
   useEffect(() => {
-    const saved = (typeof window !== 'undefined' && localStorage.getItem(STORAGE_KEY)) as Lang | null;
+    const storageKey = getStorageKey();
+    const saved = (typeof window !== 'undefined' && localStorage.getItem(storageKey)) as Lang | null;
     if (saved && LANGUAGES.some((l) => l.value === saved)) {
       setLangState(saved);
     }
@@ -32,7 +43,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   const setLang = (newLang: Lang) => {
     setLangState(newLang);
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY, newLang);
+      localStorage.setItem(getStorageKey(), newLang);
     }
   };
 
