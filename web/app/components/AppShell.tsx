@@ -13,8 +13,21 @@ import {
   DollarIcon, MenuIcon, XIcon, FileIcon, BoxIcon, LayersIcon,
 } from './Icons';
 
+// Check if Clerk is configured at all (has publishable key)
+const CLERK_CONFIGURED = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 // Check if Clerk production keys are configured (determined at build time)
 const CLERK_PRODUCTION = (process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || '').startsWith('pk_live_');
+
+// Safe wrapper: provides no-op fallbacks when Clerk isn't configured
+function useClerkSafe() {
+  if (!CLERK_CONFIGURED) {
+    return { isLoaded: true, user: null, signOut: () => {} };
+  }
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const u = useUser();
+  const c = useClerk();
+  return { isLoaded: u.isLoaded, user: u.user, signOut: c.signOut };
+}
 
 interface NavItem {
   href: string;
@@ -43,15 +56,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
   const path = usePathname();
   const router = useRouter();
-  const { isLoaded, user } = useUser();
-  const { signOut } = useClerk();
+  const { isLoaded, user, signOut } = useClerkSafe();
   const [authState, setAuthState] = useState<{ role: string; shopId: string | null } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
   const isAuthPage = path === '/sign-in' || path === '/sign-up' || path === '/onboarding';
 
   useEffect(() => {
-    if (!CLERK_PRODUCTION || !isLoaded || !user || isAuthPage) return;
+    if (!CLERK_CONFIGURED || !CLERK_PRODUCTION || !isLoaded || !user || isAuthPage) return;
     fetch('/api/me')
       .then((r) => r.json())
       .then((d) => {

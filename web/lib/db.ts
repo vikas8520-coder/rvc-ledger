@@ -417,13 +417,14 @@ export async function getFarmerSummary(shopId: string, fyStartYear: number): Pro
   const commissionPct = commissionPctStr ? Number(commissionPctStr) : 0;
 
   // Group bill_items by farmer within the FY date range
+  // qty is TEXT (from OCR), bags/hamali are NUMERIC — cast qty safely
   const rows = await sql`
     SELECT
       bi.farmer,
       COALESCE(SUM(bi.amount), 0) as total_sales,
-      COALESCE(SUM(bi.bags), 0) as total_bags,
-      COALESCE(SUM(bi.qty), 0) as total_kgs,
-      COALESCE(SUM(bi.hamali), 0) as total_hamali,
+      COALESCE(SUM(COALESCE(bi.bags, 0)), 0) as total_bags,
+      COALESCE(SUM(CASE WHEN bi.qty ~ '^[0-9]+\.?[0-9]*$' THEN bi.qty::numeric ELSE 0 END), 0) as total_kgs,
+      COALESCE(SUM(COALESCE(bi.hamali, 0)), 0) as total_hamali,
       COUNT(*) as line_count
     FROM bill_items bi
     JOIN transactions t ON t.id = bi.transaction_id

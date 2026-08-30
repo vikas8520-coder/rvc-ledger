@@ -18,6 +18,9 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Check if Clerk is configured (has real publishable key)
+const isClerkConfigured = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+
 export const metadata: Metadata = {
   title: "RVC Ledger",
   description: "Upload bills and track customer dues",
@@ -31,22 +34,28 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
+  const content = (
+    <ThemeProvider>
+      <I18nProvider>
+        <ToastProvider>
+          <AppShell>{children}</AppShell>
+          <ServiceWorkerRegister />
+        </ToastProvider>
+      </I18nProvider>
+    </ThemeProvider>
+  );
+
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-[var(--bg-base)] text-[var(--text-primary)]">
-        <ClerkProvider afterSignOutUrl="/sign-in">
-          <ThemeProvider>
-            <I18nProvider>
-              <ToastProvider>
-                <AppShell>{children}</AppShell>
-                <ServiceWorkerRegister />
-              </ToastProvider>
-            </I18nProvider>
-          </ThemeProvider>
-        </ClerkProvider>
+        {isClerkConfigured ? (
+          <ClerkProvider afterSignOutUrl="/sign-in">{content}</ClerkProvider>
+        ) : (
+          content
+        )}
       </body>
     </html>
   );
