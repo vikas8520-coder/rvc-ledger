@@ -1,5 +1,12 @@
 import type { ChargeCode, ChargeKind, MarketMeta } from './market';
 
+export interface BagGroup {
+  id: string;
+  weightKg: string;
+  numBags: string;
+  pricePerKg: string;
+}
+
 export interface BillItem {
   raw_text: string;
   confirmed_name: string;
@@ -118,6 +125,9 @@ export interface Transaction {
 export interface Customer {
   id: string;
   name: string;
+  englishName?: string | null;
+  teluguName?: string | null;
+  hindiName?: string | null;
   phone?: string | null;
   creditLimit?: number | null;
   billed: number;

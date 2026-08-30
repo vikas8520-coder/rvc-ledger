@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useI18n } from './components/I18nProvider';
+import AutoTranslateName from './components/AutoTranslateName';
 import { useDashboard } from './components/useDashboard';
 import TxnCard from './components/TxnCard';
 import AgingBadge from './components/AgingBadge';
@@ -13,7 +14,7 @@ import { computeAging } from '@/lib/statement';
 import { StockLevel, DailySummary } from '@/lib/types';
 
 export default function Home() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { customers, configured, loading } = useDashboard();
   const [stock, setStock] = useState<StockLevel[]>([]);
   const [daily, setDaily] = useState<DailySummary | null>(null);
@@ -161,7 +162,7 @@ export default function Home() {
               <li key={c.id}>
                 <Link href={`/customers/${c.id}`} className="flex items-center justify-between gap-2 py-2.5 hover:opacity-80">
                   <span className="flex min-w-0 items-center gap-2">
-                    <span className="truncate font-medium">{c.name}</span>
+                    <span className="truncate font-medium"><AutoTranslateName name={c.name} /></span>
                     <AgingBadge aging={computeAging(c.txns)} />
                   </span>
                   <span className="shrink-0 text-sm font-semibold text-[var(--bg-primary)]">{fmt(c.due)}</span>
@@ -181,7 +182,7 @@ export default function Home() {
               {recent.map((txn) => (
                 <div key={txn.id}>
                   <Link href={`/customers/${txn.customerId}`} className="mb-1 block text-[11px] text-[var(--bg-primary)] hover:underline">
-                    {txn.customerName}
+                    <AutoTranslateName name={txn.customerName} />
                   </Link>
                   <TxnCard txn={txn} compact />
                 </div>

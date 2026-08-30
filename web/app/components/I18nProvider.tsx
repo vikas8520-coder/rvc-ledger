@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useMemo } from 'react';
 import { Lang, t, LANGUAGES, getOcrLangs } from '@/lib/i18n';
 
 interface I18nContextType {
@@ -20,7 +20,7 @@ const I18nContext = createContext<I18nContextType>({
 const STORAGE_KEY = 'rvc-lang';
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [lang, setLangState] = useState<Lang>('all');
+  const [lang, setLangState] = useState<Lang>('en'); // Default to 'en'
 
   useEffect(() => {
     const saved = (typeof window !== 'undefined' && localStorage.getItem(STORAGE_KEY)) as Lang | null;
@@ -36,12 +36,12 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const value: I18nContextType = {
+  const value = useMemo(() => ({
     lang,
     setLang,
     t: (key: string) => t(lang, key),
     ocrLangs: getOcrLangs(lang),
-  };
+  }), [lang]);
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }

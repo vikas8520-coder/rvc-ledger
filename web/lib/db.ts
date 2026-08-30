@@ -29,6 +29,9 @@ async function ensureSchema() {
   await sql`ALTER TABLE bill_items ADD COLUMN IF NOT EXISTS kind TEXT DEFAULT 'item'`;
   await sql`ALTER TABLE bill_items ADD COLUMN IF NOT EXISTS charge_code TEXT`;
   await sql`ALTER TABLE customers ADD COLUMN IF NOT EXISTS phone TEXT`;
+  await sql`ALTER TABLE customers ADD COLUMN IF NOT EXISTS english_name TEXT`;
+  await sql`ALTER TABLE customers ADD COLUMN IF NOT EXISTS telugu_name TEXT`;
+  await sql`ALTER TABLE customers ADD COLUMN IF NOT EXISTS hindi_name TEXT`;
   await sql`
     CREATE TABLE IF NOT EXISTS purchases (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -347,6 +350,51 @@ export async function getCustomerNames(shopId: string): Promise<string[]> {
   return rows.map((r) => r.name as string);
 }
 
+export async function addCustomer(
+  shopId: string,
+  data: { 
+    name: string; 
+    englishName?: string | null; 
+    teluguName?: string | null;
+    hindiName?: string | null;
+    phone?: string | null; 
+    creditLimit?: number | null 
+  }
+): Promise<{ id: string; name: string }> {
+  await ensureSchema();
+  const sql = getSql();
+  
+  // Check if customer already exists
+  const [existing] = await sql`SELECT id FROM customers WHERE name = ${data.name} AND shop_id = ${shopId}`;
+  if (existing) {
+    // Update phone, english name, telugu name, hindi name and credit limit if provided
+    if (data.phone !== undefined) {
+      await sql`UPDATE customers SET phone = ${data.phone || null} WHERE id = ${(existing as any).id} AND shop_id = ${shopId}`;
+    }
+    if (data.englishName !== undefined) {
+      await sql`UPDATE customers SET english_name = ${data.englishName || null} WHERE id = ${(existing as any).id} AND shop_id = ${shopId}`;
+    }
+    if (data.teluguName !== undefined) {
+      await sql`UPDATE customers SET telugu_name = ${data.teluguName || null} WHERE id = ${(existing as any).id} AND shop_id = ${shopId}`;
+    }
+    if (data.hindiName !== undefined) {
+      await sql`UPDATE customers SET hindi_name = ${data.hindiName || null} WHERE id = ${(existing as any).id} AND shop_id = ${shopId}`;
+    }
+    if (data.creditLimit !== undefined) {
+      await sql`UPDATE customers SET credit_limit = ${data.creditLimit} WHERE id = ${(existing as any).id} AND shop_id = ${shopId}`;
+    }
+    return { id: (existing as any).id, name: data.name };
+  }
+  
+  // Insert new customer
+  const [row] = await sql`
+    INSERT INTO customers (name, english_name, telugu_name, hindi_name, phone, credit_limit, shop_id) 
+    VALUES (${data.name}, ${data.englishName || null}, ${data.teluguName || null}, ${data.hindiName || null}, ${data.phone || null}, ${data.creditLimit ?? null}, ${shopId}) 
+    RETURNING id, name
+  `;
+  return { id: (row as any).id, name: (row as any).name };
+}
+
 export async function getCustomers(shopId: string): Promise<Customer[]> {
   if (!isDbConfigured()) {
     return (seed as unknown as Customer[]).map((c) => ({
@@ -362,7 +410,7 @@ export async function getCustomers(shopId: string): Promise<Customer[]> {
   await ensureSchema();
   const sql = getSql();
 
-  const customers = await sql`SELECT id, name, phone, credit_limit FROM customers WHERE shop_id = ${shopId} ORDER BY name`;
+  const customers = await sql`SELECT id, name, english_name, telugu_name, hindi_name, phone, credit_limit FROM customers WHERE shop_id = ${shopId} ORDER BY name`;
   const txns = await sql`SELECT * FROM transactions WHERE shop_id = ${shopId} ORDER BY date, created_at`;
   const items = await sql`SELECT * FROM bill_items WHERE shop_id = ${shopId}`;
 
@@ -440,6 +488,9 @@ export async function getCustomers(shopId: string): Promise<Customer[]> {
     customersOut.push({
       id: c.id as string,
       name: c.name as string,
+      englishName: (c.english_name as string | null) ?? null,
+      teluguName: (c.telugu_name as string | null) ?? null,
+      hindiName: (c.hindi_name as string | null) ?? null,
       phone: (c.phone as string | null) ?? null,
       creditLimit: c.credit_limit !== null && c.credit_limit !== undefined ? Number(c.credit_limit) : null,
       billed,

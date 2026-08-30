@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useI18n } from '../components/I18nProvider';
 import { fmt } from '@/lib/format';
 import { CatalogItem } from '@/lib/types';
+import { localizeItem } from '@/lib/i18n';
 
 const empty: Omit<CatalogItem, 'id'> = {
   name: '',
@@ -16,7 +17,7 @@ const empty: Omit<CatalogItem, 'id'> = {
 };
 
 export default function CatalogPage() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -194,7 +195,7 @@ export default function CatalogPage() {
             <tbody>
               {items.map((it) => (
                 <tr key={it.id} className="border-t border-[var(--border-light)]">
-                  <td className="px-3 py-2 font-medium">{it.name}</td>
+                  <td className="px-3 py-2 font-medium">{localizeItem(it, lang)}</td>
                   <td className="px-3 py-2 text-[var(--text-muted)]">{it.defaultUnit || '—'}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{it.defaultSellPrice ? fmt(it.defaultSellPrice) : '—'}</td>
                   <td className="px-3 py-2 text-[11px] text-[var(--text-muted)]">{it.aliases.join(', ')}</td>

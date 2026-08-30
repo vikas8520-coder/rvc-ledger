@@ -236,7 +236,7 @@ const dictionary: Record<Lang, Record<string, string>> = {
     aliases: 'Aliases (comma-separated)',
     active: 'Active',
     noCatalogItems: 'No items in catalog yet.',
-    catalogHelp: 'Manage your item catalog. Aliases help OCR and reports group names correctly (e.g. mirchi, bendi, మిర్చి).',
+    catalogHelp: 'Manage your item catalog. Aliases help OCR and reports group names correctly (e.g. mirchi, bendi).',
     stockHelp: 'Current stock levels. Purchases add stock, bills and wastage reduce it.',
     noStock: 'No stock data yet.',
     inStock: 'In stock',
@@ -344,6 +344,9 @@ const dictionary: Record<Lang, Record<string, string>> = {
     printCreditLedger: 'Print credit ledger',
     creditLedger: 'Credit ledger',
     creditLedgerHelp: 'Print all customers with outstanding balances in ledger format.',
+    addSaleEntry: 'Add Sale Entry',
+    addCustomer: 'Add Customer',
+    customerName: 'Customer Name',
   },
   te: {
     appTitle: 'RVC లెడ్గర్',
@@ -662,6 +665,9 @@ const dictionary: Record<Lang, Record<string, string>> = {
     printCreditLedger: 'క్రెడిట్ లెడ్జర్ ప్రింట్',
     creditLedger: 'క్రెడిట్ లెడ్జర్',
     creditLedgerHelp: 'అన్ని కస్టమర్‌ల బాకీలను లెడ్జర్ ఫార్మాట్‌లో ప్రింట్ చేయండి.',
+    addSaleEntry: 'అమ్మకం ఎంట్రీ జోడించు',
+    addCustomer: 'కొత్త కస్టమర్ జోడించు',
+    customerName: 'కస్టమర్ పేరు',
   },
   hi: {
     appTitle: 'RVC लेजर',
@@ -980,13 +986,93 @@ const dictionary: Record<Lang, Record<string, string>> = {
     printCreditLedger: 'क्रेडिट लेजर प्रिंट करें',
     creditLedger: 'क्रेडिट लेजर',
     creditLedgerHelp: 'सभी ग्राहकों की बकाया राशि लेजर प्रारूप में प्रिंट करें।',
+    addSaleEntry: 'बिक्री प्रविष्टि जोड़ें',
+    addCustomer: 'नया ग्राहक जोड़ें',
+    customerName: 'ग्राहक नाम',
   },
   all: {},
 };
+
+
+export function localizeItem(item: { name: string; teluguName?: string | null; hindiName?: string | null }, lang: Lang): string {
+  const l = getUiLang(lang);
+  if (l === 'te' && item.teluguName) return item.teluguName;
+  if (l === 'hi' && item.hindiName) return item.hindiName;
+  return item.name;
+}
 
 dictionary.all = { ...dictionary.en };
 
 export function t(lang: Lang, key: string): string {
   const uiLang = getUiLang(lang);
   return dictionary[uiLang][key] || dictionary.en[key] || key;
+}
+
+export function formatCustomerName(c: { 
+  name: string, 
+  englishName?: string | null, 
+  teluguName?: string | null, 
+  hindiName?: string | null 
+}, lang: string): string {
+  if (lang === 'en' && c.englishName) return c.englishName;
+  if (lang === 'te' && c.teluguName) return c.teluguName;
+  if (lang === 'hi' && c.hindiName) return c.hindiName;
+  return c.name;
+}
+
+
+// Automatic translation for dynamic content (customer names, etc.)
+// Uses LibreTranslate (free, open-source) or can be swapped for Google Translate API
+const TRANSLATE_API_URL = 'https://libretranslate.de/translate';
+
+export async function translateText(text: string, targetLang: 'en' | 'te' | 'hi', sourceLang: 'auto' | 'en' | 'te' | 'hi' = 'auto'): Promise<string> {
+  if (!text.trim()) return text;
+  
+  try {
+    const response = await fetch(TRANSLATE_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        q: text,
+        source: sourceLang,
+        target: targetLang,
+        format: 'text'
+      })
+    });
+    
+    if (!response.ok) {
+      console.warn('Translation API failed:', response.status);
+      return text;
+    }
+    
+    const data = await response.json();
+    return data.translatedText || text;
+  } catch (error) {
+    console.warn('Translation error:', error);
+    return text;
+  }
+}
+
+// Client-side hook for automatic translation with caching
+export function useAutoTranslate() {
+  const { lang } = useI18n();
+  const cacheRef = useRef<Map<string, string>>(new Map());
+  
+  const translate = useCallback(async (text: string): Promise<string> => {
+    const l = getUiLang(lang);
+    if (l === 'en') return text; // Source is assumed to be English-ish or mixed
+    
+    const cacheKey = `${text}-${l}`;
+    if (cacheRef.current.has(cacheKey)) {
+      return cacheRef.current.get(cacheKey)!;
+    }
+    
+    // For now, we'll use a simple synchronous fallback for names
+    // and async for longer text
+    const translated = await translateText(text, l, 'auto');
+    cacheRef.current.set(cacheKey, translated);
+    return translated;
+  }, [lang]);
+  
+  return translate;
 }

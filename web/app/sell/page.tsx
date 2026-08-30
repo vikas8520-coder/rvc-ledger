@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useI18n } from '../components/I18nProvider';
 import { fmt } from '@/lib/format';
 import { smartRecognizeBill, SmartOcrProgress, OcrSource, GeminiBill, DailySummary } from '@/lib/ocr';
+import { Charge, CHARGE_TYPES } from '@/lib/charges';
 
 function today() {
   const d = new Date();
@@ -42,15 +43,40 @@ export default function SellPage() {
   const [geminiBills, setGeminiBills] = useState<GeminiBill[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [customers, setCustomers] = useState<string[]>([]);
+  const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
+
+  const [charges, setCharges] = useState<Charge[]>([]);
+  const [showCharges, setShowCharges] = useState(false);
+
+  // Add new customer modal state
+  const [showAddCustomer, setShowAddCustomer] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState('');
+  const [newCustomerPhone, setNewCustomerPhone] = useState('');
+  const [newCustomerEnglishName, setNewCustomerEnglishName] = useState('');
+  const [newCustomerTeluguName, setNewCustomerTeluguName] = useState('');
+  const [newCustomerHindiName, setNewCustomerHindiName] = useState('');
+  const [newCustomerCreditLimit, setNewCustomerCreditLimit] = useState('');
 
   useEffect(() => {
-    fetch('/api/dashboard').then((r) => r.json()).then((d) => setCustomers((d.customers || []).map((c: any) => c.name))).catch(() => {});
+    fetch('/api/dashboard')
+      .then((r) => r.json())
+      .then((d) => setCustomers(d.customers || []))
+      .catch(() => {});
   }, []);
 
   const totalBagsSold = sales.reduce((s, e) => s + num(e.bags), 0);
   const totalWeightSold = sales.reduce((s, e) => s + num(e.weightKg), 0);
   const totalSalesAmount = sales.reduce((s, e) => s + num(e.amount), 0);
+
+  // Calculate charge amounts (similar to Receive page)
+  const totalBags = totalBagsSold;
+  const chargeAmounts = charges.map((c) => {
+    if (c.rateType === 'per_bag') return num(c.rate) * totalBags;
+    if (c.rateType === 'percent') return (totalSalesAmount * num(c.rate)) / 100;
+    return num(c.amount) || num(c.rate);
+  });
+  const totalCharges = chargeAmounts.reduce((s, a) => s + a, 0);
+  const netAfterCharges = totalSalesAmount - totalCharges;
 
   const addSale = () => {
     const defaultPrice = sales[0]?.pricePerKg || '';
@@ -72,6 +98,24 @@ export default function SellPage() {
   };
 
   const removeSale = (id: string) => setSales(sales.filter((s) => s.id !== id));
+
+  const addCharge = (type: Charge['type']) => {
+    const def = CHARGE_TYPES.find((c) => c.type === type)!;
+    setCharges([...charges, {
+      id: newId(),
+      type,
+      label: def.label,
+      rateType: def.defaultRateType,
+      rate: '',
+      amount: '',
+    }]);
+  };
+
+  const updateCharge = (id: string, field: keyof Charge, value: string) => {
+    setCharges(charges.map((c) => (c.id === id ? { ...c, [field]: value } : c)));
+  };
+
+  const removeCharge = (id: string) => setCharges(charges.filter((c) => c.id !== id));
 
   // Load a Gemini bill into the sales rows
   const loadGeminiBill = (bill: GeminiBill) => {
@@ -120,7 +164,16 @@ export default function SellPage() {
     try {
       const validSales = sales.filter((s) => s.customerName.trim() && num(s.amount) > 0);
       for (const sale of validSales) {
-        const items = [{
+        const items: Array<{
+          raw_text?: string;
+          confirmed_name?: string;
+          name?: string;
+          qty: string | null;
+          rate: string | null;
+          amount: number;
+          kind: 'item' | 'charge';
+          chargeCode: null;
+        }> = [{
           raw_text: 'Produce',
           confirmed_name: 'Produce',
           qty: sale.weightKg ? `${sale.weightKg} kg` : (sale.bags ? `${sale.bags} bags` : ''),
@@ -129,6 +182,23 @@ export default function SellPage() {
           kind: 'item' as const,
           chargeCode: null,
         }];
+
+        // Add charges as line items
+        charges.forEach((c, i) => {
+          const amt = chargeAmounts[i];
+          if (amt > 0) {
+            items.push({
+              name: c.label,
+              qty: c.rateType === 'per_bag' ? `${c.rate}/bag × ${totalBags}` : c.rateType === 'percent' ? `${c.rate}%` : null,
+              rate: null,
+              amount: -amt,
+              kind: 'charge' as const,
+              chargeCode: null,
+            });
+          }
+        });
+
+        const total = num(sale.amount) - chargeAmounts.reduce((s, a) => s + a, 0);
         const res = await fetch('/api/bills', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -136,7 +206,7 @@ export default function SellPage() {
             customerName: sale.customerName.trim(),
             date,
             billNo: null,
-            total: num(sale.amount),
+            total,
             items,
           }),
         });
@@ -167,6 +237,9 @@ export default function SellPage() {
           <p className="mt-1 text-sm opacity-90">
             {sales.filter((s) => s.customerName.trim()).length} bills · {fmt(totalSalesAmount)} total
           </p>
+          {totalCharges > 0 && (
+            <p className="mt-1 text-sm opacity-90">Deductions: {fmt(totalCharges)} · Net: {fmt(netAfterCharges)}</p>
+          )}
         </div>
         <button onClick={reset} className="w-full rounded-lg bg-[var(--bg-primary)] py-3 text-sm font-medium text-[var(--text-on-primary)]">
           New Sales Entry
@@ -254,6 +327,96 @@ export default function SellPage() {
         </div>
       )}
 
+      {/* Optional charges section */}
+      <div className="rounded-2xl bg-[var(--bg-card)] p-4 space-y-3">
+        <button onClick={() => setShowCharges(!showCharges)}
+          className="flex w-full items-center justify-between text-sm font-medium">
+          <span>Charges & Deductions {charges.length > 0 && `(${charges.length})`}</span>
+          <span className="text-xs text-[var(--text-muted)]">{showCharges ? '▲' : '▼'} Optional</span>
+        </button>
+
+        {showCharges && (
+          <>
+            {charges.length === 0 && (
+              <p className="text-xs text-[var(--text-muted)]">Add only the charges that apply to this sale. Skip what doesn't.</p>
+            )}
+
+            {charges.map((c, i) => (
+              <div key={c.id} className="rounded-lg border border-[var(--border-input)] p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium">{c.label}</span>
+                  <button onClick={() => removeCharge(c.id)} className="text-xs text-[var(--text-primary)]">Remove</button>
+                </div>
+                <div className="flex items-end gap-2">
+                  {c.rateType === 'per_bag' && (
+                    <>
+                      <div className="flex-1">
+                        <label className="text-xs text-[var(--text-muted)]">₹ per bag</label>
+                        <input type="number" value={c.rate} onChange={(e) => updateCharge(c.id, 'rate', e.target.value)}
+                          placeholder="3" inputMode="decimal"
+                          className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
+                      </div>
+                      <div className="flex-1 rounded-lg bg-[var(--bg-secondary)] px-3 py-2 text-sm">
+                        × {totalBags} bags = <span className="font-bold">{fmt(num(c.rate) * totalBags)}</span>
+                      </div>
+                    </>
+                  )}
+                  {c.rateType === 'percent' && (
+                    <>
+                      <div className="flex-1">
+                        <label className="text-xs text-[var(--text-muted)]">%</label>
+                        <input type="number" value={c.rate} onChange={(e) => updateCharge(c.id, 'rate', e.target.value)}
+                          placeholder="6" inputMode="decimal"
+                          className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
+                      </div>
+                      <div className="flex-1 rounded-lg bg-[var(--bg-secondary)] px-3 py-2 text-sm">
+                        {c.rate}% of {fmt(totalSalesAmount)} = <span className="font-bold">{fmt((totalSalesAmount * num(c.rate)) / 100)}</span>
+                      </div>
+                    </>
+                  )}
+                  {c.rateType === 'flat' && (
+                    <div className="flex-1">
+                      <label className="text-xs text-[var(--text-muted)]">₹ amount</label>
+                      <input type="number" value={c.amount} onChange={(e) => updateCharge(c.id, 'amount', e.target.value)}
+                        placeholder="100" inputMode="numeric"
+                        className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {/* Add charge buttons */}
+            <div className="flex flex-wrap gap-1.5">
+              {CHARGE_TYPES.filter((ct) => !charges.some((c) => c.type === ct.type)).map((ct) => (
+                <button key={ct.type} onClick={() => addCharge(ct.type)}
+                  title={ct.hint}
+                  className="rounded-lg border border-dashed border-[var(--border-input)] px-2.5 py-1.5 text-xs text-[var(--text-muted)] hover:border-[var(--bg-primary)]">
+                  + {ct.label}
+                </button>
+              ))}
+            </div>
+
+            {totalCharges > 0 && (
+              <div className="rounded-lg bg-[var(--bg-secondary)] px-3 py-2 space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-muted)]">Gross sales</span>
+                  <span>{fmt(totalSalesAmount)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-muted)]">Total deductions</span>
+                  <span className="text-[var(--bg-primary)]">-{fmt(totalCharges)}</span>
+                </div>
+                <div className="flex justify-between border-t border-[var(--border-input)] pt-1 font-bold">
+                  <span>Net after charges</span>
+                  <span className="text-[var(--bg-success)]">{fmt(netAfterCharges)}</span>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
       {/* Sales rows */}
       <div className="rounded-2xl bg-[var(--bg-card)] p-4 space-y-3">
         <p className="text-sm font-medium">Customer Sales</p>
@@ -267,11 +430,16 @@ export default function SellPage() {
               )}
             </div>
 
-            <div>
-              <label className="text-xs text-[var(--text-muted)]">Customer name</label>
-              <input type="text" value={s.customerName} onChange={(e) => updateSale(s.id, 'customerName', e.target.value)}
-                list="customer-list" placeholder="e.g. Mangal Singh"
-                className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <label className="text-xs text-[var(--text-muted)]">Customer name</label>
+                <input type="text" value={s.customerName} onChange={(e) => updateSale(s.id, 'customerName', e.target.value)}
+                  list="customer-list" placeholder="e.g. Mangal Singh"
+                  className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
+              </div>
+              <button onClick={() => setShowAddCustomer(true)} className="h-10 rounded-lg bg-[var(--bg-primary)] px-3 text-xs font-medium text-[var(--text-on-primary)]">
+                + {t('addCustomer')}
+              </button>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
@@ -306,11 +474,78 @@ export default function SellPage() {
           </div>
         ))}
 
-        <datalist id="customer-list">{customers.map((c) => <option key={c} value={c} />)}</datalist>
+        <datalist id="customer-list">{customers.map((c) => <option key={c.id} value={c.name} />)}</datalist>
+
+      {/* Add Customer Modal */}
+      {showAddCustomer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowAddCustomer(false)}>
+          <div className="w-full max-w-md rounded-2xl bg-[var(--bg-card)] p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold">{t('addCustomer')}</h3>
+              <button onClick={() => setShowAddCustomer(false)} className="text-[var(--text-muted)]">✕</button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-[var(--text-muted)]">{t('customerName')} *</label>
+                <input type="text" value={newCustomerName} onChange={(e) => setNewCustomerName(e.target.value)}
+                  placeholder={t('customerName')}
+                  className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-[var(--text-muted)]">{t('phone')}</label>
+                <input type="tel" value={newCustomerPhone} onChange={(e) => setNewCustomerPhone(e.target.value)}
+                  placeholder={t('phone')}
+                  className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-[var(--text-muted)]">{t('creditLimit')}</label>
+                <input type="number" value={newCustomerCreditLimit} onChange={(e) => setNewCustomerCreditLimit(e.target.value)}
+                  placeholder={t('creditLimit')}
+                  className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
+              </div>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button onClick={() => {
+                setShowAddCustomer(false);
+                setNewCustomerName(''); setNewCustomerPhone(''); setNewCustomerCreditLimit('');
+              }} className="flex-1 rounded-lg border border-[var(--border-input)] py-2 text-sm text-[var(--text-primary)]">
+                {t('cancel')}
+              </button>
+              <button onClick={async () => {
+                if (!newCustomerName.trim()) return;
+                try {
+                  const res = await fetch('/api/customers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      name: newCustomerName.trim(),
+                      englishName: newCustomerEnglishName.trim() || null,
+                      teluguName: newCustomerTeluguName.trim() || null,
+                      hindiName: newCustomerHindiName.trim() || null,
+                      phone: newCustomerPhone.trim() || null,
+                      creditLimit: newCustomerCreditLimit ? parseFloat(newCustomerCreditLimit) : null
+                    })
+                  });
+                  if (res.ok) {
+                    const data = await res.json();
+                    setCustomers(prev => [...prev, { id: data.id, name: newCustomerName.trim() }]);
+                                                        setShowAddCustomer(false);
+                  setNewCustomerName(''); setNewCustomerEnglishName(''); setNewCustomerTeluguName(''); setNewCustomerHindiName(''); setNewCustomerPhone(''); setNewCustomerCreditLimit('');
+                  }
+                } catch (e) {
+                  console.error('Failed to add customer:', e);
+                }
+              }} className="flex-1 rounded-lg bg-[var(--bg-primary)] py-2 text-sm font-medium text-[var(--text-on-primary)]">
+                {t('save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
         <button onClick={addSale}
           className="w-full rounded-lg border border-dashed border-[var(--border-input)] py-2 text-sm text-[var(--text-muted)]">
-          + Add customer
+          + {t('addSaleEntry')}
         </button>
 
         {totalSalesAmount > 0 && (

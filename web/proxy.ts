@@ -1,11 +1,14 @@
 import { clerkMiddleware } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
-// Only run Clerk middleware if production keys are configured
-// Development keys (pk_test_) don't work on Vercel — they need a dev browser cookie
+// Check if Clerk is configured at all
+const isClerkConfigured = !!(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY);
+// Check if we're using production keys (pk_live_) vs development (pk_test_)
 const isClerkProduction = (process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || '').startsWith('pk_live_');
 
-export default isClerkProduction
+// If Clerk is configured, use clerkMiddleware; otherwise use noop
+// For API routes, we always need auth to work if Clerk is configured
+export default isClerkConfigured
   ? clerkMiddleware()
   : function noopMiddleware() {
       return NextResponse.next();

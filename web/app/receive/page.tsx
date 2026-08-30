@@ -13,34 +13,8 @@ let idCounter = 0;
 function newId() { return `r-${Date.now()}-${idCounter++}`; }
 function num(s: string): number { const n = parseFloat(s); return Number.isFinite(n) ? n : 0; }
 
-interface BagGroup {
-  id: string;
-  weightKg: string;
-  numBags: string;
-  pricePerKg: string;
-}
-
-interface Charge {
-  id: string;
-  type: 'hamali' | 'tulai' | 'bardana' | 'safai' | 'jhadai' | 'dami' | 'commission' | 'marketfee' | 'advance' | 'other';
-  label: string;
-  rateType: 'per_bag' | 'flat' | 'percent';
-  rate: string;
-  amount: string;
-}
-
-const CHARGE_TYPES: { type: Charge['type']; label: string; defaultRateType: Charge['rateType']; hint: string }[] = [
-  { type: 'hamali', label: 'Hamali (Labour)', defaultRateType: 'per_bag', hint: '₹ per bag — loading/unloading' },
-  { type: 'tulai', label: 'Tulai (Weighing)', defaultRateType: 'per_bag', hint: '₹ per bag — weighing charge' },
-  { type: 'bardana', label: 'Bardana (Bags/Crates)', defaultRateType: 'per_bag', hint: '₹ per bag — packaging cost' },
-  { type: 'safai', label: 'Safai (Cleaning)', defaultRateType: 'flat', hint: '₹ flat — floor cleaning' },
-  { type: 'jhadai', label: 'Jhadai (Sieving)', defaultRateType: 'flat', hint: '₹ flat — cleaning produce' },
-  { type: 'dami', label: 'Dami', defaultRateType: 'flat', hint: '₹ flat — traditional deduction' },
-  { type: 'commission', label: 'Commission (Arhat)', defaultRateType: 'percent', hint: '% of sale value' },
-  { type: 'marketfee', label: 'Market Fee (APMC)', defaultRateType: 'percent', hint: '% of sale value — buyer pays' },
-  { type: 'advance', label: 'Advance Recovery', defaultRateType: 'flat', hint: '₹ flat — recover prior advance' },
-  { type: 'other', label: 'Other Charge', defaultRateType: 'flat', hint: '₹ flat — custom deduction' },
-];
+import { BagGroup } from '@/lib/types';
+import { Charge, CHARGE_TYPES } from '@/lib/charges';
 
 export default function ReceivePage() {
   const { t } = useI18n();
