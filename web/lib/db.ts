@@ -732,6 +732,66 @@ export async function setShopActive(shopId: string, active: boolean): Promise<vo
   await sql`UPDATE shops SET active = ${active} WHERE id = ${shopId}`;
 }
 
+// Set trial end date for a shop
+export async function setShopTrialEnd(shopId: string, trialEnds: string | null): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`UPDATE shops SET trial_ends = ${trialEnds}, billing_status = 'trial' WHERE id = ${shopId}`;
+}
+
+// Extend a shop's subscription by adding days to the latest coverage end date.
+// If no existing subscription, creates one starting today.
+export async function extendSubscription(shopId: string, days: number): Promise<{ newCoversTo: string }> {
+  await ensureSchema();
+  const sql = getSql();
+  const [latest] = await sql`
+    SELECT covers_to FROM subscription_payments
+    WHERE shop_id = ${shopId}
+    ORDER BY covers_to DESC LIMIT 1
+  `;
+  const today = new Date().toISOString().slice(0, 10);
+  const baseDate = latest ? new Date((latest as any).covers_to) : new Date(today);
+  // If already expired, extend from today instead
+  if (baseDate < new Date(today)) {
+    baseDate.setTime(new Date(today).getTime());
+  }
+  baseDate.setDate(baseDate.getDate() + days);
+  const newCoversTo = baseDate.toISOString().slice(0, 10);
+
+  // Insert a $0 extension payment record (or we could update the existing one)
+  // For audit trail, record as a $0 extension with notes
+  await sql`
+    INSERT INTO subscription_payments
+      (shop_id, amount, payment_method, payment_date, plan, covers_from, covers_to, notes, recorded_by)
+    VALUES
+      (${shopId}, 0, 'extension', ${today}, 'extension', ${today}, ${newCoversTo}, ${'Extended by ' + days + ' days'}, 'admin')
+  `;
+  await sql`UPDATE shops SET billing_status = 'active' WHERE id = ${shopId}`;
+  return { newCoversTo };
+}
+
+// Get monthly revenue data for chart (last 12 months)
+export async function getMonthlyRevenue(): Promise<{ month: string; revenue: number; count: number }[]> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql`
+    SELECT
+      TO_CHAR(DATE_TRUNC('month', payment_date), 'YYYY-MM') as month,
+      COALESCE(SUM(amount), 0) as revenue,
+      COUNT(*) as count
+    FROM subscription_payments
+    WHERE payment_date >= CURRENT_DATE - INTERVAL '12 months'
+      AND amount > 0
+    GROUP BY DATE_TRUNC('month', payment_date)
+    ORDER BY month
+  `;
+  return (rows as any[]).map((r) => ({
+    month: r.month,
+    revenue: Number(r.revenue),
+    count: Number(r.count),
+  }));
+}
+
 /* ---- Subscriptions ---- */
 
 // Default pricing plans (in INR). Can be overridden via app_settings (global, shop_id = NULL).

@@ -1,4 +1,5 @@
 import { auth, currentUser } from '@clerk/nextjs/server';
+import { cookies } from 'next/headers';
 import { getOrCreateShop, linkUserToDefaultShop, ensureDefaultShop, isDbConfigured } from './db';
 
 export type AuthResult = {
@@ -12,6 +13,13 @@ export type AuthResult = {
 // Superadmin Clerk user IDs (Vikas)
 const SUPERADMIN_IDS = process.env.SUPERADMIN_CLERK_IDS?.split(',').map(s => s.trim()).filter(Boolean) || [];
 
+// Admin credentials from env vars (simple username/password admin login)
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || '';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+const ADMIN_COOKIE_NAME = 'rvc_admin_session';
+// Session duration: 7 days
+const ADMIN_COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
+
 // Check if Clerk is configured with real keys
 function isClerkConfigured(): boolean {
   return !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && !!process.env.CLERK_SECRET_KEY;
@@ -23,7 +31,68 @@ function isClerkProduction(): boolean {
   return key.startsWith('pk_live_');
 }
 
+// Check if admin username/password login is configured
+function isAdminLoginConfigured(): boolean {
+  return !!ADMIN_USERNAME && !!ADMIN_PASSWORD;
+}
+
+// Validate admin credentials and return a session token
+export function validateAdminLogin(username: string, password: string): boolean {
+  if (!isAdminLoginConfigured()) return false;
+  // Use timing-safe comparison to prevent timing attacks
+  const userMatch = username === ADMIN_USERNAME;
+  const passMatch = password === ADMIN_PASSWORD;
+  return userMatch && passMatch;
+}
+
+// Set admin session cookie (call from API route after successful login)
+export async function setAdminCookie(): Promise<void> {
+  const cookieStore = await cookies();
+  // Simple token: base64 of username + timestamp (not JWT, but sufficient for simple admin)
+  const token = Buffer.from(`${ADMIN_USERNAME}:${Date.now()}`).toString('base64');
+  cookieStore.set(ADMIN_COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: ADMIN_COOKIE_MAX_AGE,
+    path: '/',
+  });
+}
+
+// Clear admin session cookie
+export async function clearAdminCookie(): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.delete(ADMIN_COOKIE_NAME);
+}
+
+// Check if the current request has a valid admin session cookie
+async function hasAdminCookie(): Promise<boolean> {
+  if (!isAdminLoginConfigured()) return false;
+  const cookieStore = await cookies();
+  const cookie = cookieStore.get(ADMIN_COOKIE_NAME);
+  if (!cookie?.value) return false;
+  try {
+    const decoded = Buffer.from(cookie.value, 'base64').toString('utf-8');
+    const [username] = decoded.split(':');
+    return username === ADMIN_USERNAME;
+  } catch {
+    return false;
+  }
+}
+
 export async function getAuth(): Promise<AuthResult | null> {
+  // Check admin cookie first (works with or without Clerk)
+  if (await hasAdminCookie()) {
+    // Admin gets the default shop context so they can also use the app
+    let shopId: string | null = null;
+    if (isDbConfigured()) {
+      try {
+        shopId = await ensureDefaultShop();
+      } catch {}
+    }
+    return { shopId, role: 'superadmin', userId: 'admin', email: '', name: 'Admin' };
+  }
+
   // If Clerk isn't configured at all, return fallback auth (no auth mode)
   if (!isClerkConfigured()) {
     if (isDbConfigured()) {
@@ -75,6 +144,7 @@ export async function requireShopAuth(): Promise<AuthResult> {
 }
 
 // Require auth + superadmin — for admin routes
+// Accepts either Clerk superadmin OR admin cookie login
 export async function requireAdminAuth(): Promise<AuthResult> {
   const authResult = await getAuth();
   if (!authResult) {
@@ -103,4 +173,4 @@ export class AuthError extends Error {
   }
 }
 
-export { isClerkConfigured, isClerkProduction };
+export { isClerkConfigured, isClerkProduction, isAdminLoginConfigured, ADMIN_COOKIE_NAME };

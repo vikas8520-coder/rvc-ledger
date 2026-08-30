@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 
 type Shop = {
   id: string;
@@ -48,16 +49,21 @@ type SubscriptionSummary = {
   recentPayments: SubscriptionPayment[];
 };
 
+type MonthlyRevenue = { month: string; revenue: number; count: number };
+
 type Tab = 'shops' | 'payments' | 'pricing';
 
 export default function AdminPage() {
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>('shops');
   const [shops, setShops] = useState<Shop[]>([]);
   const [payments, setPayments] = useState<SubscriptionPayment[]>([]);
   const [summary, setSummary] = useState<SubscriptionSummary | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [monthlyRevenue, setMonthlyRevenue] = useState<MonthlyRevenue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const load = () => {
     Promise.all([
@@ -65,11 +71,18 @@ export default function AdminPage() {
       fetch('/api/admin/subscriptions').then((r) => r.json()),
     ])
       .then(([shopData, subData]) => {
+        if (shopData.error === 'Admin access required' || subData.error === 'Admin access required') {
+          setIsAdmin(false);
+          setLoading(false);
+          return;
+        }
+        setIsAdmin(true);
         if (shopData.shops) setShops(shopData.shops);
         else if (shopData.error) setError(shopData.error);
         if (subData.payments) setPayments(subData.payments);
         if (subData.summary) setSummary(subData.summary);
         if (subData.plans) setPlans(subData.plans);
+        if (subData.monthlyRevenue) setMonthlyRevenue(subData.monthlyRevenue);
       })
       .catch(() => setError('Failed to load'))
       .finally(() => setLoading(false));
@@ -77,8 +90,28 @@ export default function AdminPage() {
 
   useEffect(() => { load(); }, []);
 
+  const logout = async () => {
+    await fetch('/api/admin/logout', { method: 'POST' });
+    router.push('/admin/login');
+    router.refresh();
+  };
+
   if (loading) {
     return <p className="py-10 text-center text-sm text-[var(--text-faint)]">Loading…</p>;
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
+        <p className="text-sm text-[var(--text-faint)]">Admin access required.</p>
+        <button
+          onClick={() => router.push('/admin/login')}
+          className="rounded-lg bg-[var(--bg-primary)] px-4 py-2 text-sm font-semibold text-[var(--text-on-primary)] hover:bg-[var(--bg-primary-hover)]"
+        >
+          Go to Admin Login
+        </button>
+      </div>
+    );
   }
 
   if (error) {
@@ -89,7 +122,15 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-semibold">Admin Dashboard</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-semibold">Admin Dashboard</h1>
+        <button
+          onClick={logout}
+          className="rounded-md bg-[var(--bg-card)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-card-hover)]"
+        >
+          Logout
+        </button>
+      </div>
 
       {/* Summary cards */}
       {summary && (
@@ -113,6 +154,11 @@ export default function AdminPage() {
         </div>
       )}
 
+      {/* Revenue chart */}
+      {monthlyRevenue.length > 0 && (
+        <RevenueChart data={monthlyRevenue} fmtINR={fmtINR} />
+      )}
+
       {/* Tabs */}
       <div className="flex gap-1 border-b border-[var(--border-light)]">
         {(['shops', 'payments', 'pricing'] as Tab[]).map((t) => (
@@ -131,8 +177,42 @@ export default function AdminPage() {
       </div>
 
       {tab === 'shops' && <ShopsTab shops={shops} plans={plans} onReload={load} fmtINR={fmtINR} />}
-      {tab === 'payments' && <PaymentsTab payments={payments} onReload={load} fmtINR={fmtINR} />}
+      {tab === 'payments' && <PaymentsTab payments={payments} fmtINR={fmtINR} />}
       {tab === 'pricing' && <PricingTab plans={plans} onReload={load} />}
+    </div>
+  );
+}
+
+/* ---- Revenue Chart ---- */
+
+function RevenueChart({ data, fmtINR }: { data: MonthlyRevenue[]; fmtINR: (n: number) => string }) {
+  const maxRevenue = Math.max(...data.map((d) => d.revenue), 1);
+  const monthLabels: Record<string, string> = {
+    '01': 'Jan', '02': 'Feb', '03': 'Mar', '04': 'Apr', '05': 'May', '06': 'Jun',
+    '07': 'Jul', '08': 'Aug', '09': 'Sep', '10': 'Oct', '11': 'Nov', '12': 'Dec',
+  };
+
+  return (
+    <div className="rounded-xl bg-[var(--bg-card)] p-4">
+      <h2 className="text-sm font-semibold">Monthly Revenue (Last 12 Months)</h2>
+      <div className="mt-4 flex items-end gap-2" style={{ height: '120px' }}>
+        {data.map((d) => {
+          const [, mm] = d.month.split('-');
+          const heightPct = (d.revenue / maxRevenue) * 100;
+          return (
+            <div key={d.month} className="flex flex-1 flex-col items-center gap-1">
+              <div className="relative w-full" style={{ height: '100px' }}>
+                <div
+                  className="absolute bottom-0 w-full rounded-t bg-[var(--bg-primary)] transition-all hover:opacity-80"
+                  style={{ height: `${Math.max(heightPct, 2)}%` }}
+                  title={`${monthLabels[mm]} ${d.month.split('-')[0]}: ${fmtINR(d.revenue)} (${d.count} payments)`}
+                />
+              </div>
+              <span className="text-[9px] text-[var(--text-faint)]">{monthLabels[mm] || d.month}</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -146,9 +226,11 @@ function ShopsTab({ shops, plans, onReload, fmtINR }: {
   fmtINR: (n: number) => string;
 }) {
   const [showPaymentFor, setShowPaymentFor] = useState<string | null>(null);
+  const [showActionsFor, setShowActionsFor] = useState<string | null>(null);
   const [subStatuses, setSubStatuses] = useState<Record<string, any>>({});
+  const [extendDays, setExtendDays] = useState('7');
+  const [trialDate, setTrialDate] = useState('');
 
-  // Load subscription status for each shop
   useEffect(() => {
     shops.forEach(async (shop) => {
       try {
@@ -176,6 +258,48 @@ function ShopsTab({ shops, plans, onReload, fmtINR }: {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ shopId: shop.id, action: 'setBilling', status }),
     });
+    onReload();
+  };
+
+  const doExtend = async (shop: Shop) => {
+    const days = Number(extendDays);
+    if (!days) return;
+    await fetch('/api/admin/subscriptions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'extend', shopId: shop.id, days }),
+    });
+    setShowActionsFor(null);
+    onReload();
+  };
+
+  const doSuspend = async (shop: Shop) => {
+    if (!confirm(`Suspend ${shop.name}? They will lose access.`)) return;
+    await fetch('/api/admin/subscriptions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'suspend', shopId: shop.id }),
+    });
+    onReload();
+  };
+
+  const doUnsuspend = async (shop: Shop) => {
+    await fetch('/api/admin/subscriptions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'unsuspend', shopId: shop.id }),
+    });
+    onReload();
+  };
+
+  const doSetTrial = async (shop: Shop) => {
+    if (!trialDate) return;
+    await fetch('/api/admin/subscriptions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'setTrial', shopId: shop.id, trialEnds: trialDate }),
+    });
+    setShowActionsFor(null);
     onReload();
   };
 
@@ -211,6 +335,7 @@ function ShopsTab({ shops, plans, onReload, fmtINR }: {
                   </p>
                   <p className="text-[11px] text-[var(--text-faint)] mt-0.5">
                     Joined {new Date(shop.created_at).toLocaleDateString('en-IN')}
+                    {shop.trial_ends ? ` · Trial ends ${new Date(shop.trial_ends).toLocaleDateString('en-IN')}` : ''}
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-1">
@@ -265,6 +390,12 @@ function ShopsTab({ shops, plans, onReload, fmtINR }: {
                 >
                   Record Payment
                 </button>
+                <button
+                  onClick={() => setShowActionsFor(showActionsFor === shop.id ? null : shop.id)}
+                  className="rounded-md bg-[var(--bg-card)] px-3 py-1 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-card-hover)]"
+                >
+                  Manage
+                </button>
                 <a
                   href={`/api/admin/shops/${shop.id}/data`}
                   className="rounded-md bg-[var(--bg-secondary)] px-3 py-1 text-xs font-medium text-[var(--text-on-primary)] hover:bg-[var(--bg-secondary-hover)]"
@@ -272,6 +403,81 @@ function ShopsTab({ shops, plans, onReload, fmtINR }: {
                   View data
                 </a>
               </div>
+
+              {/* Manage panel: extend, suspend, trial */}
+              {showActionsFor === shop.id && (
+                <div className="mt-3 rounded-lg border border-[var(--border-card)] bg-[var(--bg-card)] p-3 space-y-3">
+                  <h3 className="text-sm font-semibold">Manage Subscription — {shop.name}</h3>
+
+                  {/* Extend */}
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div>
+                      <label className="text-[11px] text-[var(--text-faint)]">Extend by (days)</label>
+                      <input
+                        type="number"
+                        value={extendDays}
+                        onChange={(e) => setExtendDays(e.target.value)}
+                        className="mt-0.5 w-24 rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1 text-xs"
+                      />
+                    </div>
+                    <button
+                      onClick={() => doExtend(shop)}
+                      className="rounded-md bg-[var(--bg-success)] px-3 py-1.5 text-xs font-medium text-[var(--text-on-primary)] hover:bg-[var(--bg-success-hover)]"
+                    >
+                      Extend
+                    </button>
+                    <span className="text-[11px] text-[var(--text-faint)] py-1.5">
+                      Quick: <button onClick={() => setExtendDays('7')} className="underline">7d</button> ·
+                      <button onClick={() => setExtendDays('15')} className="underline ml-1">15d</button> ·
+                      <button onClick={() => setExtendDays('30')} className="underline ml-1">30d</button>
+                    </span>
+                  </div>
+
+                  {/* Set trial */}
+                  <div className="flex flex-wrap items-end gap-2 border-t border-[var(--border-card)] pt-2">
+                    <div>
+                      <label className="text-[11px] text-[var(--text-faint)]">Set trial end date</label>
+                      <input
+                        type="date"
+                        value={trialDate}
+                        onChange={(e) => setTrialDate(e.target.value)}
+                        className="mt-0.5 rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1 text-xs"
+                      />
+                    </div>
+                    <button
+                      onClick={() => doSetTrial(shop)}
+                      className="rounded-md bg-[var(--bg-warning)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)]"
+                    >
+                      Set Trial
+                    </button>
+                  </div>
+
+                  {/* Suspend / Unsuspend */}
+                  <div className="flex gap-2 border-t border-[var(--border-card)] pt-2">
+                    {shop.billing_status === 'suspended' ? (
+                      <button
+                        onClick={() => doUnsuspend(shop)}
+                        className="rounded-md bg-[var(--bg-success)] px-3 py-1.5 text-xs font-medium text-[var(--text-on-primary)]"
+                      >
+                        Unsuspend
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => doSuspend(shop)}
+                        className="rounded-md bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600"
+                      >
+                        Suspend Access
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setShowActionsFor(null)}
+                      className="rounded-md bg-[var(--bg-card)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)]"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {showPaymentFor === shop.id && (
                 <PaymentForm
@@ -309,7 +515,6 @@ function PaymentForm({ shop, plans, onSaved, onCancel }: {
 
   const selectedPlan = plans.find((p) => p.id === plan);
 
-  // Auto-calculate covers_to based on plan duration
   const coversTo = useMemo(() => {
     if (!selectedPlan) return today;
     const d = new Date(coversFrom);
@@ -317,7 +522,6 @@ function PaymentForm({ shop, plans, onSaved, onCancel }: {
     return d.toISOString().slice(0, 10);
   }, [coversFrom, selectedPlan]);
 
-  // Auto-fill amount when plan changes
   const onPlanChange = (newPlan: string) => {
     setPlan(newPlan);
     const p = plans.find((pl) => pl.id === newPlan);
@@ -451,9 +655,8 @@ function PaymentForm({ shop, plans, onSaved, onCancel }: {
 
 /* ---- Payments Tab ---- */
 
-function PaymentsTab({ payments, onReload, fmtINR }: {
+function PaymentsTab({ payments, fmtINR }: {
   payments: SubscriptionPayment[];
-  onReload: () => void;
   fmtINR: (n: number) => string;
 }) {
   if (payments.length === 0) {
@@ -467,7 +670,7 @@ function PaymentsTab({ payments, onReload, fmtINR }: {
 
   const totalCash = payments.filter((p) => p.payment_method === 'cash').reduce((s, p) => s + p.amount, 0);
   const totalUpi = payments.filter((p) => p.payment_method === 'upi').reduce((s, p) => s + p.amount, 0);
-  const totalOther = payments.filter((p) => !['cash', 'upi'].includes(p.payment_method)).reduce((s, p) => s + p.amount, 0);
+  const totalOther = payments.filter((p) => !['cash', 'upi', 'extension'].includes(p.payment_method)).reduce((s, p) => s + p.amount, 0);
 
   return (
     <div className="space-y-3">
@@ -485,6 +688,16 @@ function PaymentsTab({ payments, onReload, fmtINR }: {
           <p className="text-[11px] text-[var(--text-faint)]">Other</p>
           <p className="text-base font-bold text-[var(--text-primary)]">{fmtINR(totalOther)}</p>
         </div>
+      </div>
+
+      {/* Export button */}
+      <div className="flex justify-end">
+        <a
+          href="/api/admin/subscriptions?export=csv"
+          className="rounded-md bg-[var(--bg-card)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-card-hover)]"
+        >
+          ⬇ Export CSV
+        </a>
       </div>
 
       {/* Payments table */}
@@ -507,7 +720,7 @@ function PaymentsTab({ payments, onReload, fmtINR }: {
                 <td className="p-2 whitespace-nowrap">{new Date(p.payment_date).toLocaleDateString('en-IN')}</td>
                 <td className="p-2 font-medium">{p.shop_name}</td>
                 <td className="p-2 capitalize">{p.plan}</td>
-                <td className="p-2 text-right font-semibold">{fmtINR(p.amount)}</td>
+                <td className="p-2 text-right font-semibold">{p.amount > 0 ? fmtINR(p.amount) : '—'}</td>
                 <td className="p-2 capitalize">{p.payment_method}</td>
                 <td className="p-2 whitespace-nowrap text-[var(--text-faint)]">
                   {p.covers_from} → {p.covers_to}
