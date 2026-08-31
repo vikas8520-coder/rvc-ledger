@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePersistentState } from '../components/usePersistentState';
 import { useI18n } from '../components/I18nProvider';
 import { fmt, fmtDate } from '@/lib/format';
 import { MARKET_YARDS, EMPTY_MARKET, yardById, type MarketMeta } from '@/lib/market';
@@ -26,7 +27,7 @@ export default function PurchasesPage() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
 
-  const [date, setDate] = useState(today());
+  const [date, setDate] = usePersistentState('purchases-date', today());
   const [supplier, setSupplier] = useState('');
   const [billNo, setBillNo] = useState('');
   const [market, setMarket] = useState<MarketMeta>(EMPTY_MARKET);

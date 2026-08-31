@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useI18n } from '../components/I18nProvider';
 import { formatCustomerName, getUiLang } from '@/lib/i18n';
 import { useDashboard } from '../components/useDashboard';
+import { usePersistentState } from '../components/usePersistentState';
 import AgingBadge from '../components/AgingBadge';
 import { Card, SectionHeader, Button, EmptyState, ListSkeleton, PageHeader, Badge } from '../components/ui';
 import { UsersIcon, SearchIcon, DownloadIcon, MessageIcon, PrinterIcon, XIcon, DollarIcon } from '../components/Icons';
@@ -20,7 +21,7 @@ export default function CustomersPage() {
   const [fyParam, setFyParam] = useState<number | 'all' | null>(null);
   const { customers, loading } = useDashboard(fyParam === 'all' ? null : fyParam);
   const [q, setQ] = useState('');
-  const [sort, setSort] = useState<'due' | 'name' | 'oldest' | 'recent'>('due');
+  const [sort, setSort] = usePersistentState<'due' | 'name' | 'oldest' | 'recent'>('customers-sort', 'due');
   const [shopSettings, setShopSettings] = useState<ShopProfile>({});
   const [overdue, setOverdue] = useState<OverdueCustomer[]>([]);
   const [showBatch, setShowBatch] = useState(false);

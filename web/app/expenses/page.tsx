@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePersistentState } from '../components/usePersistentState';
 import { useI18n } from '../components/I18nProvider';
 import { fmt, fmtDate } from '@/lib/format';
 import { ExpenseEntry } from '@/lib/types';
@@ -18,7 +19,7 @@ export default function ExpensesPage() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
 
-  const [date, setDate] = useState(today());
+  const [date, setDate] = usePersistentState('expenses-date', today());
   const [category, setCategory] = useState('catRent');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');

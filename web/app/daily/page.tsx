@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePersistentState } from '../components/usePersistentState';
 import Link from 'next/link';
 import { useI18n } from '../components/I18nProvider';
 import { formatCustomerName, getUiLang } from '@/lib/i18n';
@@ -16,7 +17,7 @@ function today() {
 
 export default function DailyOpsPage() {
   const { t, lang } = useI18n();
-  const [date, setDate] = useState(today());
+  const [date, setDate] = usePersistentState('daily-date', today());
   const [summary, setSummary] = useState<DailySummary | null>(null);
   const [stock, setStock] = useState<StockLevel[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);

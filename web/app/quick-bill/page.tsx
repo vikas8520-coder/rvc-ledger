@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePersistentState } from '../components/usePersistentState';
 import { useRouter } from 'next/navigation';
 import { useI18n } from '../components/I18nProvider';
 import { fmt } from '@/lib/format';
@@ -29,7 +30,7 @@ export default function QuickBillPage() {
   const [loading, setLoading] = useState(true);
 
   const [customerName, setCustomerName] = useState('');
-  const [date, setDate] = useState(today());
+  const [date, setDate] = usePersistentState('quick-bill-date', today());
   const [billNo, setBillNo] = useState('');
   const [rows, setRows] = useState<BillRow[]>([]);
   const [status, setStatus] = useState<'idle' | 'saving'>('idle');

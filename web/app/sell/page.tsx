@@ -5,6 +5,7 @@ import { useI18n } from '../components/I18nProvider';
 import { fmt } from '@/lib/format';
 import { formatCustomerName, getUiLang } from '@/lib/i18n';
 import CustomerPicker, { CustomerOption } from '../components/CustomerPicker';
+import { usePersistentState } from '../components/usePersistentState';
 import { generateBillsPdf, generateCreditLedgerPdf, generateOutstandingListPdf, printPdfBlob } from '@/lib/pdfShare';
 import { BillPrintData, CreditLedgerEntry, ShopProfile } from '@/lib/billPrint';
 import { PrinterIcon } from '../components/Icons';
@@ -45,7 +46,7 @@ function newId() { return `line-${Date.now()}-${idCounter++}`; }
 export default function SellPage() {
   const { t, lang } = useI18n();
   const uiLang = getUiLang(lang);
-  const [date, setDate] = useState(today());
+  const [date, setDate] = usePersistentState('sell-date', today());
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [catalog, setCatalog] = useState<string[]>([]);
 

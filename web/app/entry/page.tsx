@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { usePersistentState } from '../components/usePersistentState';
 import { useI18n } from '../components/I18nProvider';
 import { fmt } from '@/lib/format';
 
@@ -46,7 +47,7 @@ export default function EntryPage() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
   // Step 1: Stock received
-  const [date, setDate] = useState(today());
+  const [date, setDate] = usePersistentState('entry-date', today());
   const [productName, setProductName] = useState('');
   const [farmerName, setFarmerName] = useState('');
   const [bagsCovers, setBagsCovers] = useState('');

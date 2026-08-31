@@ -1,6 +1,7 @@
 'use client';
 
 import { use, useEffect, useMemo, useState } from 'react';
+import { usePersistentState } from '../../components/usePersistentState';
 import Link from 'next/link';
 import { useI18n } from '../../components/I18nProvider';
 import { fmt, fmtDate } from '@/lib/format';
@@ -25,7 +26,7 @@ export default function SupplierLedgerPage({ params }: { params: Promise<{ id: s
   const [copied, setCopied] = useState(false);
 
   const [payOpen, setPayOpen] = useState(false);
-  const [payDate, setPayDate] = useState(today());
+  const [payDate, setPayDate] = usePersistentState('suppliers-pay-date', today());
   const [payAmount, setPayAmount] = useState('');
   const [payNotes, setPayNotes] = useState('');
   const [payStatus, setPayStatus] = useState<'idle' | 'saving'>('idle');

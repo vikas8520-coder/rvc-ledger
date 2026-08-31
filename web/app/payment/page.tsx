@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import { usePersistentState } from '../components/usePersistentState';
 import { useI18n } from '../components/I18nProvider';
 import { Card, SectionHeader, Button, PageHeader } from '../components/ui';
 import { CameraIcon, CheckIcon, AlertIcon } from '../components/Icons';
@@ -92,7 +93,7 @@ export default function PaymentPage() {
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState('');
-  const [date, setDate] = useState(today());
+  const [date, setDate] = usePersistentState('payment-date', today());
   const [amount, setAmount] = useState('');
   const [notes, setNotes] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi' | 'credit'>('cash');

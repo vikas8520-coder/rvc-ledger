@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePersistentState } from '../components/usePersistentState';
 import { useI18n } from '../components/I18nProvider';
 import { fmt, fmtDate } from '@/lib/format';
 import { WastageEntry } from '@/lib/types';
@@ -16,7 +17,7 @@ export default function WastagePage() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
 
-  const [date, setDate] = useState(today());
+  const [date, setDate] = usePersistentState('wastage-date', today());
   const [itemName, setItemName] = useState('');
   const [qty, setQty] = useState('');
   const [unit, setUnit] = useState('');

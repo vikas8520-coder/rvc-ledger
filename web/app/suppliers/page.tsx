@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { usePersistentState } from '../components/usePersistentState';
 import Link from 'next/link';
 import { useI18n } from '../components/I18nProvider';
 import { Card, SectionHeader, StatCard, Button, EmptyState, ListSkeleton, PageHeader } from '../components/ui';
@@ -22,7 +23,7 @@ export default function SuppliersPage() {
   const [showPay, setShowPay] = useState(false);
   const [paySupplier, setPaySupplier] = useState('');
   const [payAmount, setPayAmount] = useState('');
-  const [payDate, setPayDate] = useState(today());
+  const [payDate, setPayDate] = usePersistentState('suppliers-pay-date', today());
   const [payNotes, setPayNotes] = useState('');
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState('');

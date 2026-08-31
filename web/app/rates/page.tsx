@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePersistentState } from '../components/usePersistentState';
 import { useI18n } from '../components/I18nProvider';
 import { Card, EmptyState, PageHeader, StatSkeleton } from '../components/ui';
 import { TrendingIcon, ClockIcon } from '../components/Icons';
@@ -28,7 +29,7 @@ const TREND_COLORS: Record<string, string> = {
 
 export default function RateSheetPage() {
   const { t } = useI18n();
-  const [date, setDate] = useState(today());
+  const [date, setDate] = usePersistentState('rates-date', today());
   const [items, setItems] = useState<ItemRateHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);

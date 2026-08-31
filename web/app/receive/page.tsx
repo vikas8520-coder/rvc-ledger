@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { usePersistentState } from '../components/usePersistentState';
 import { useI18n } from '../components/I18nProvider';
 import { fmt } from '@/lib/format';
 
@@ -18,7 +19,7 @@ import { Charge, CHARGE_TYPES } from '@/lib/charges';
 
 export default function ReceivePage() {
   const { t } = useI18n();
-  const [date, setDate] = useState(today());
+  const [date, setDate] = usePersistentState('receive-date', today());
   const [productName, setProductName] = useState('');
   const [farmerName, setFarmerName] = useState('');
   const [bagsCovers, setBagsCovers] = useState('');
