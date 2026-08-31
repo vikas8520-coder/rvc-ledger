@@ -20,7 +20,7 @@ export default function CustomersPage() {
   const [fyParam, setFyParam] = useState<number | 'all' | null>(null);
   const { customers, loading } = useDashboard(fyParam === 'all' ? null : fyParam);
   const [q, setQ] = useState('');
-  const [sort, setSort] = useState<'due' | 'name' | 'oldest'>('due');
+  const [sort, setSort] = useState<'due' | 'name' | 'oldest' | 'recent'>('due');
   const [shopSettings, setShopSettings] = useState<ShopProfile>({});
   const [overdue, setOverdue] = useState<OverdueCustomer[]>([]);
   const [showBatch, setShowBatch] = useState(false);
@@ -314,6 +314,11 @@ export default function CustomersPage() {
     return withAging.sort((a, b) => {
       if (sort === 'name') return formatCustomerName(a.c, uiLang).localeCompare(formatCustomerName(b.c, uiLang));
       if (sort === 'oldest') return b.aging.oldestDays - a.aging.oldestDays;
+      if (sort === 'recent') {
+        const aLatest = a.c.txns.length ? a.c.txns.reduce((mx, tx) => tx.date > mx ? tx.date : mx, a.c.txns[0].date) : '';
+        const bLatest = b.c.txns.length ? b.c.txns.reduce((mx, tx) => tx.date > mx ? tx.date : mx, b.c.txns[0].date) : '';
+        return bLatest.localeCompare(aLatest);
+      }
       return b.c.due - a.c.due;
     });
   }, [customers, q, sort, uiLang]);
@@ -376,12 +381,13 @@ export default function CustomersPage() {
         </div>
         <select
           value={sort}
-          onChange={(e) => setSort(e.target.value as 'due' | 'name' | 'oldest')}
+          onChange={(e) => setSort(e.target.value as 'due' | 'name' | 'oldest' | 'recent')}
           className="rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2 text-sm"
         >
           <option value="due">{t('sortDue')}</option>
           <option value="oldest">{t('overdue')}</option>
           <option value="name">{t('sortName')}</option>
+          <option value="recent">Recent</option>
         </select>
       </div>
 
