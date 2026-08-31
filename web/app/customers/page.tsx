@@ -22,6 +22,7 @@ export default function CustomersPage() {
   const { customers, loading } = useDashboard(fyParam === 'all' ? null : fyParam);
   const [q, setQ] = useState('');
   const [sort, setSort] = usePersistentState<'due' | 'name' | 'oldest' | 'recent'>('customers-sort', 'due');
+  const [viewMode, setViewMode] = usePersistentState<'customers' | 'recent'>('customers-view', 'customers');
   const [shopSettings, setShopSettings] = useState<ShopProfile>({});
   const [overdue, setOverdue] = useState<OverdueCustomer[]>([]);
   const [showBatch, setShowBatch] = useState(false);
@@ -324,6 +325,31 @@ export default function CustomersPage() {
     });
   }, [customers, q, sort, uiLang]);
 
+  // Recent transactions across all customers
+  const recentTxns = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    const all = customers.flatMap((c) =>
+      c.txns.map((tx) => ({
+        txn: tx,
+        customer: c,
+        displayName: formatCustomerName(c, uiLang),
+      }))
+    );
+    const filtered = needle
+      ? all.filter(({ txn, displayName, customer }) => {
+          const itemMatch = txn.items?.some((it) =>
+            (it.name || it.display || '').toLowerCase().includes(needle)
+          );
+          return (
+            displayName.toLowerCase().includes(needle) ||
+            customer.name.toLowerCase().includes(needle) ||
+            itemMatch
+          );
+        })
+      : all;
+    return filtered.sort((a, b) => b.txn.date.localeCompare(a.txn.date));
+  }, [customers, q, uiLang]);
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -380,16 +406,32 @@ export default function CustomersPage() {
             className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] pl-9 pr-3 py-2 text-sm"
           />
         </div>
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value as 'due' | 'name' | 'oldest' | 'recent')}
-          className="rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2 text-sm"
-        >
-          <option value="due">{t('sortDue')}</option>
-          <option value="oldest">{t('overdue')}</option>
-          <option value="name">{t('sortName')}</option>
-          <option value="recent">Recent</option>
-        </select>
+        <div className="flex rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] p-0.5">
+          <button
+            onClick={() => setViewMode('customers')}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${viewMode === 'customers' ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
+          >
+            Customers
+          </button>
+          <button
+            onClick={() => setViewMode('recent')}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${viewMode === 'recent' ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
+          >
+            Recent
+          </button>
+        </div>
+        {viewMode === 'customers' && (
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as 'due' | 'name' | 'oldest' | 'recent')}
+            className="rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2 text-sm"
+          >
+            <option value="due">{t('sortDue')}</option>
+            <option value="oldest">{t('overdue')}</option>
+            <option value="name">{t('sortName')}</option>
+            <option value="recent">Recent</option>
+          </select>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -494,7 +536,7 @@ export default function CustomersPage() {
       )}
 
       {/* Customer list */}
-      {list.length === 0 ? (
+      {viewMode === 'customers' && (list.length === 0 ? (
         <Card>
           <EmptyState
             icon={<UsersIcon size={48} />}
@@ -571,6 +613,97 @@ export default function CustomersPage() {
             ))}
           </ul>
         </Card>
+      ))}
+
+      {/* Recent transactions view */}
+      {viewMode === 'recent' && (
+        recentTxns.length === 0 ? (
+          <Card>
+            <EmptyState
+              icon={<UsersIcon size={48} />}
+              title="No transactions yet"
+              description={q ? 'Try a different search term.' : 'Record sales on the Sell page to see transactions here.'}
+              action={q ? undefined : { label: t('sell'), href: '/sell' }}
+            />
+          </Card>
+        ) : (
+          <Card padding="p-0">
+            <div className="border-b border-[var(--border-light)] px-4 py-2.5">
+              <p className="text-xs font-semibold text-[var(--text-muted)]">
+                {recentTxns.length} transactions · sorted by date (newest first)
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--border-light)] text-left text-xs text-[var(--text-muted)]">
+                    <th className="px-4 py-2 pr-2">Date</th>
+                    <th className="px-2 py-2 pr-2">Item</th>
+                    <th className="px-2 py-2 pr-2">Buyer</th>
+                    <th className="px-2 py-2 pr-2 text-right">Bags</th>
+                    <th className="px-2 py-2 pr-2 text-right">Qty</th>
+                    <th className="px-2 py-2 pr-2 text-right">Rate</th>
+                    <th className="px-2 py-2 pr-2 text-right">Amount</th>
+                    <th className="px-2 py-2 pr-2">Type</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentTxns.map(({ txn, customer, displayName }) => {
+                    const items = txn.items || [];
+                    const isCash = customer.name === 'CASH SALES';
+                    return items.length > 0 ? items.map((it, i) => (
+                      <tr key={`${txn.id}-${i}`} className="border-b border-[var(--border-light)] hover:bg-[var(--bg-card-hover)] transition-colors">
+                        {i === 0 ? (
+                          <td className="px-4 py-2 pr-2 text-xs text-[var(--text-muted)] whitespace-nowrap" rowSpan={items.length}>
+                            {txn.date}
+                          </td>
+                        ) : null}
+                        <td className="px-2 py-2 pr-2">{it.name || it.display || '—'}</td>
+                        {i === 0 ? (
+                          <td className="px-2 py-2 pr-2" rowSpan={items.length}>
+                            <Link href={`/customers/${customer.id}`} className="font-medium hover:underline">
+                              {displayName}
+                            </Link>
+                          </td>
+                        ) : null}
+                        <td className="px-2 py-2 pr-2 text-right text-xs">{it.bags || '—'}</td>
+                        <td className="px-2 py-2 pr-2 text-right text-xs">{it.qty || '—'}</td>
+                        <td className="px-2 py-2 pr-2 text-right text-xs">{it.rate || '—'}</td>
+                        <td className="px-2 py-2 pr-2 text-right font-medium">{fmt(Number(it.amount) || 0)}</td>
+                        {i === 0 ? (
+                          <td className="px-2 py-2 pr-2" rowSpan={items.length}>
+                            <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${isCash ? 'bg-[var(--bg-card-hover)] text-[var(--text-muted)]' : 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'}`}>
+                              {isCash ? 'Cash' : 'Credit'}
+                            </span>
+                          </td>
+                        ) : null}
+                      </tr>
+                    )) : (
+                      <tr key={txn.id} className="border-b border-[var(--border-light)] hover:bg-[var(--bg-card-hover)] transition-colors">
+                        <td className="px-4 py-2 pr-2 text-xs text-[var(--text-muted)] whitespace-nowrap">{txn.date}</td>
+                        <td className="px-2 py-2 pr-2 text-[var(--text-muted)]">—</td>
+                        <td className="px-2 py-2 pr-2">
+                          <Link href={`/customers/${customer.id}`} className="font-medium hover:underline">
+                            {displayName}
+                          </Link>
+                        </td>
+                        <td className="px-2 py-2 pr-2 text-right text-xs">—</td>
+                        <td className="px-2 py-2 pr-2 text-right text-xs">—</td>
+                        <td className="px-2 py-2 pr-2 text-right text-xs">—</td>
+                        <td className="px-2 py-2 pr-2 text-right font-medium">{fmt(txn.amount)}</td>
+                        <td className="px-2 py-2 pr-2">
+                          <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${txn.type === 'payment' ? 'bg-[var(--bg-success)] text-[var(--text-on-primary)]' : isCash ? 'bg-[var(--bg-card-hover)] text-[var(--text-muted)]' : 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'}`}>
+                            {txn.type === 'payment' ? 'Payment' : isCash ? 'Cash' : 'Credit'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )
       )}
     </div>
   );
