@@ -93,16 +93,8 @@ export async function getAuth(): Promise<AuthResult | null> {
     return { shopId, role: 'superadmin', userId: 'admin', email: '', name: 'Admin' };
   }
 
-  // If Clerk isn't configured at all, return fallback auth (no auth mode)
+  // If Clerk isn't configured at all, return null (no access)
   if (!isClerkConfigured()) {
-    if (isDbConfigured()) {
-      try {
-        const shopId = await ensureDefaultShop();
-        return { shopId, role: 'owner', userId: 'anonymous', email: '', name: '' };
-      } catch (e) {
-        return null;
-      }
-    }
     return null;
   }
 
