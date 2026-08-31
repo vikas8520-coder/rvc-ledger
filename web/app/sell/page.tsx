@@ -5,9 +5,10 @@ import { useI18n } from '../components/I18nProvider';
 import { fmt } from '@/lib/format';
 import { formatCustomerName, getUiLang } from '@/lib/i18n';
 import CustomerPicker, { CustomerOption } from '../components/CustomerPicker';
-import { generateBillsPdf, printPdfBlob } from '@/lib/pdfShare';
-import { BillPrintData, ShopProfile, txnToBillData } from '@/lib/billPrint';
+import { generateBillsPdf, generateCreditLedgerPdf, generateOutstandingListPdf, printPdfBlob } from '@/lib/pdfShare';
+import { BillPrintData, CreditLedgerEntry, ShopProfile } from '@/lib/billPrint';
 import { PrinterIcon } from '../components/Icons';
+import { Customer } from '@/lib/types';
 
 function today() {
   const d = new Date();
@@ -258,18 +259,104 @@ export default function SellPage() {
     return bills;
   };
 
-  const generateDayPdf = (format: 'patti' | 'simple' | 'itemized'): { blob: Blob; filename: string } => {
-    const dateStr = date.replace(/-/g, '-');
-    const bills = dayLinesToBills();
-    if (bills.length === 0) throw new Error('No sales today');
-    const labelMap = { patti: 'compact-bills', simple: 'simple-bills', itemized: 'itemized-bills' };
-    return {
-      blob: generateBillsPdf(bills, shopSettings, format),
-      filename: `day-sales-${labelMap[format]}-${dateStr}.pdf`,
-    };
+  // Build credit entries from today's credit sales (exclude CASH SALES)
+  const dayCreditEntries = (): CreditLedgerEntry[] => {
+    const byCustomer = new Map<string, { name: string; englishName?: string | null; teluguName?: string | null; hindiName?: string | null; phone?: string | null; amount: number }>();
+    for (const l of dayLines) {
+      if (l.customerName === 'CASH SALES') continue;
+      const key = l.customerId || l.customerName;
+      const existing = byCustomer.get(key);
+      if (existing) {
+        existing.amount += l.amount;
+      } else {
+        byCustomer.set(key, {
+          name: l.customerName,
+          englishName: l.englishName,
+          teluguName: l.teluguName,
+          hindiName: l.hindiName,
+          phone: customers.find((c) => c.id === l.customerId)?.phone || null,
+          amount: l.amount,
+        });
+      }
+    }
+    return Array.from(byCustomer.entries())
+      .sort((a, b) => a[1].name.localeCompare(b[1].name))
+      .map(([id, data], i) => ({
+        code: String(i + 1),
+        name: formatCustomerName({
+          name: data.name,
+          englishName: data.englishName,
+          teluguName: data.teluguName,
+          hindiName: data.hindiName,
+        }, uiLang),
+        phone: data.phone || undefined,
+        amount: Math.round(data.amount),
+        isCredit: false,
+      }));
   };
 
-  const printDayPdf = (format: 'patti' | 'simple' | 'itemized') => {
+  // Build Customer-like objects from today's sales for Dues Summary
+  const dayDueCustomers = (): Customer[] => {
+    const byCustomer = new Map<string, { name: string; englishName?: string | null; teluguName?: string | null; hindiName?: string | null; phone?: string | null; billed: number }>();
+    for (const l of dayLines) {
+      if (l.customerName === 'CASH SALES') continue;
+      const key = l.customerId || l.customerName;
+      const existing = byCustomer.get(key);
+      if (existing) {
+        existing.billed += l.amount;
+      } else {
+        byCustomer.set(key, {
+          name: l.customerName,
+          englishName: l.englishName,
+          teluguName: l.teluguName,
+          hindiName: l.hindiName,
+          phone: customers.find((c) => c.id === l.customerId)?.phone || null,
+          billed: l.amount,
+        });
+      }
+    }
+    return Array.from(byCustomer.values()).map((data) => ({
+      id: '',
+      name: data.name,
+      englishName: data.englishName,
+      teluguName: data.teluguName,
+      hindiName: data.hindiName,
+      phone: data.phone,
+      billed: data.billed,
+      paid: 0,
+      due: data.billed,
+      txns: [],
+    }));
+  };
+
+  const generateDayPdf = (format: 'creditLedger' | 'outstanding' | 'patti' | 'simple' | 'itemized'): { blob: Blob; filename: string } => {
+    const dateStr = new Date(date + 'T00:00:00').toLocaleDateString('en-IN').replace(/\//g, '-');
+    if (format === 'creditLedger') {
+      const entries = dayCreditEntries();
+      if (entries.length === 0) throw new Error('No credit sales today');
+      return {
+        blob: generateCreditLedgerPdf(entries, shopSettings, dateStr, `Mandi Ledger ${date}`),
+        filename: `mandi-ledger-${dateStr}.pdf`,
+      };
+    } else if (format === 'outstanding') {
+      const dueCustomers = dayDueCustomers();
+      if (dueCustomers.length === 0) throw new Error('No credit sales today');
+      return {
+        blob: generateOutstandingListPdf(dueCustomers, shopSettings, uiLang),
+        filename: `dues-summary-${dateStr}.pdf`,
+      };
+    } else {
+      const bills = dayLinesToBills();
+      if (bills.length === 0) throw new Error('No sales today');
+      const labelMap = { patti: 'compact-bills', simple: 'simple-bills', itemized: 'itemized-bills' };
+      return {
+        blob: generateBillsPdf(bills, shopSettings, format),
+        filename: `day-sales-${labelMap[format]}-${dateStr}.pdf`,
+      };
+    }
+  };
+
+  const printDayPdf = (format: 'creditLedger' | 'outstanding' | 'patti' | 'simple' | 'itemized') => {
     setShowLedgerMenu(false);
     try {
       const { blob } = generateDayPdf(format);
@@ -279,7 +366,7 @@ export default function SellPage() {
     }
   };
 
-  const shareDayPdf = async (format: 'patti' | 'simple' | 'itemized') => {
+  const shareDayPdf = async (format: 'creditLedger' | 'outstanding' | 'patti' | 'simple' | 'itemized') => {
     setShowLedgerMenu(false);
     setLedgerStatus('generating');
     try {
@@ -382,8 +469,23 @@ export default function SellPage() {
             {showLedgerMenu && (
               <span className="absolute right-0 top-9 z-20 w-64 rounded-lg border border-[var(--border-light)] bg-[var(--bg-input)] p-1 shadow-lg">
                 <div className="px-2 py-1.5">
+                  <p className="text-xs font-semibold text-[var(--text-secondary)]">Mandi Ledger</p>
+                  <p className="text-[10px] text-[var(--text-muted)]">Credit sales — {date}</p>
+                  <div className="mt-1 flex gap-1">
+                    <button onClick={() => printDayPdf('creditLedger')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">🖨 Print</button>
+                    <button onClick={() => shareDayPdf('creditLedger')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">📤 Share</button>
+                  </div>
+                </div>
+                <div className="border-t border-[var(--border-light)] px-2 py-1.5">
+                  <p className="text-xs font-semibold text-[var(--text-secondary)]">Dues Summary</p>
+                  <p className="text-[10px] text-[var(--text-muted)]">Credit customers — {date}</p>
+                  <div className="mt-1 flex gap-1">
+                    <button onClick={() => printDayPdf('outstanding')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">🖨 Print</button>
+                    <button onClick={() => shareDayPdf('outstanding')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">📤 Share</button>
+                  </div>
+                </div>
+                <div className="border-t border-[var(--border-light)] px-2 py-1.5">
                   <p className="text-xs font-semibold text-[var(--text-secondary)]">Compact Bills (6 per page)</p>
-                  <p className="text-[10px] text-[var(--text-muted)]">All bills from {date}</p>
                   <div className="mt-1 flex gap-1">
                     <button onClick={() => printDayPdf('patti')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">🖨 Print</button>
                     <button onClick={() => shareDayPdf('patti')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">📤 Share</button>
