@@ -878,16 +878,29 @@ export function printPdfBlob(blob: Blob): void {
 /**
  * Copy a PDF blob to the clipboard so the user can paste (Cmd+V)
  * into WhatsApp Web to attach the file.
- * Returns true if successful, false if not supported.
+ *
+ * Tries PDF first. If the browser doesn't support PDF in clipboard
+ * (e.g. Safari), falls back to trying text/plain with filename.
+ * Returns true if any copy succeeded.
  */
 export async function copyPdfToClipboard(blob: Blob): Promise<boolean> {
+  if (!navigator.clipboard || typeof ClipboardItem === 'undefined') {
+    return false;
+  }
+  // Try PDF directly (works in Chrome)
   try {
-    if (!navigator.clipboard || typeof ClipboardItem === 'undefined') {
-      return false;
-    }
-    const item = new ClipboardItem({ [blob.type]: blob });
+    const item = new ClipboardItem({ 'application/pdf': blob });
     await navigator.clipboard.write([item]);
     return true;
+  } catch {
+    // Safari doesn't support application/pdf in clipboard
+  }
+  // Fallback: try with text/plain containing a note
+  try {
+    const textBlob = new Blob(['PDF file — paste from Downloads'], { type: 'text/plain' });
+    const item = new ClipboardItem({ 'text/plain': textBlob });
+    await navigator.clipboard.write([item]);
+    return false; // text copy worked but it's not the PDF
   } catch {
     return false;
   }

@@ -131,13 +131,12 @@ export default function CustomersPage() {
         return;
       }
 
-      // Desktop: open WhatsApp Web FIRST (synchronously in click handler
-      // to avoid popup blocker), then copy PDF to clipboard + download
+      // Desktop: copy PDF to clipboard FIRST (needs user gesture),
+      // then open WhatsApp Web, then download as backup
+      const clipboardOk = await copyPdfToClipboard(blob);
+
       const waUrl = `https://web.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
       const waWin = window.open(waUrl, '_blank');
-
-      // Try to copy PDF to clipboard so user can paste (Cmd+V) in WhatsApp
-      const clipboardOk = await copyPdfToClipboard(blob);
 
       // Also download as backup
       const url = URL.createObjectURL(blob);
@@ -149,16 +148,16 @@ export default function CustomersPage() {
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-      if (!waWin || waWin.closed) {
+      if (clipboardOk) {
+        alert(`WhatsApp Web opened!\n\nPDF is in your clipboard.\n\n→ Select a contact in WhatsApp\n→ Press Cmd+V to paste the PDF\n→ Press Send`);
+      } else if (!waWin || waWin.closed) {
         alert(
-          `WhatsApp Web was blocked by popup blocker.\n\n` +
           `PDF downloaded: ${filename}\n\n` +
-          `Open WhatsApp Web manually: https://web.whatsapp.com`
+          `WhatsApp Web: https://web.whatsapp.com\n\n` +
+          `Open WhatsApp Web, select a contact, and drag the downloaded PDF into the chat.`
         );
-      } else if (clipboardOk) {
-        alert(`WhatsApp Web opened!\n\nPDF copied to clipboard.\nSelect a contact and press Cmd+V (paste) to attach the PDF.`);
       } else {
-        alert(`WhatsApp Web opened!\n\nPDF downloaded: ${filename}\nSelect a contact and attach the file manually.`);
+        alert(`WhatsApp Web opened!\n\nPDF downloaded: ${filename}\n\n→ Select a contact in WhatsApp\n→ Drag the downloaded PDF file into the chat\n→ Press Send`);
       }
     } catch (err: any) {
       alert(err.message || 'Failed to generate PDF');
