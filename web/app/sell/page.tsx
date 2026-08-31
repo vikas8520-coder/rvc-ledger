@@ -441,13 +441,13 @@ export default function SellPage() {
             </div>
           </div>
           <div className="mt-2 grid grid-cols-2 gap-3">
-            <div className="rounded-lg bg-[var(--bg-success)] bg-opacity-10 p-2 text-center">
+            <div className="rounded-lg border-l-4 border-l-[var(--bg-success)] bg-[var(--bg-base)] p-2 text-center">
               <p className="text-xs text-[var(--text-muted)]">{t('cash')}</p>
-              <p className="text-sm font-bold text-[var(--bg-success)]">{fmt(cashTotal)}</p>
+              <p className="text-sm font-bold">{fmt(cashTotal)}</p>
             </div>
-            <div className="rounded-lg bg-[var(--bg-primary)] bg-opacity-10 p-2 text-center">
+            <div className="rounded-lg border-l-4 border-l-[var(--bg-primary)] bg-[var(--bg-base)] p-2 text-center">
               <p className="text-xs text-[var(--text-muted)]">{t('credit')}</p>
-              <p className="text-sm font-bold text-[var(--bg-primary)]">{fmt(creditTotal)}</p>
+              <p className="text-sm font-bold">{fmt(creditTotal)}</p>
             </div>
           </div>
         </section>
