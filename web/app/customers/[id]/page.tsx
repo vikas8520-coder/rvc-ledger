@@ -21,7 +21,7 @@ import {
   waLink,
 } from '@/lib/statement';
 import { printBill, printBills, printCreditLedger, txnToBillData, CreditLedgerEntry } from '@/lib/billPrint';
-import { generateStatementPdf, generateOutstandingListPdf, generateCreditLedgerPdf, generateBillsPdf, printPdfBlob, copyPdfToClipboard } from '@/lib/pdfShare';
+import { generateStatementPdf, generateOutstandingListPdf, generateCreditLedgerPdf, generateBillsPdf, printPdfBlob } from '@/lib/pdfShare';
 
 export default function CustomerLedgerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -233,12 +233,10 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
       const shareText = `${shopSettings.shopName || 'RVC'} — ${displayName}`;
       const file = new File([blob], filename, { type: 'application/pdf' });
 
-      // Detect mobile (touch + small screen) — only use native share sheet on actual mobile
-      const isMobile = /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(navigator.userAgent)
-        || (navigator.maxTouchPoints > 0 && window.innerWidth < 1024);
-
-      // Mobile: use Web Share API (opens native share sheet with WhatsApp)
-      if (isMobile && navigator.share && navigator.canShare?.({ files: [file] })) {
+      // Use native share sheet on all platforms (mobile + desktop)
+      // On macOS this opens the share sheet with AirDrop, Messages, Mail, etc.
+      // If WhatsApp desktop app is installed, it appears as a share target
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
         setLedgerStatus('sharing');
         navigator.share({ files: [file], title: filename, text: shareText })
           .then(() => setLedgerStatus('idle'))
@@ -246,14 +244,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
         return;
       }
 
-      // Desktop: copy PDF to clipboard FIRST (needs user gesture),
-      // then open WhatsApp Web, then download as backup
-      const clipboardOk = await copyPdfToClipboard(blob);
-
-      const waUrl = `https://web.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
-      const waWin = window.open(waUrl, '_blank');
-
-      // Also download as backup
+      // Fallback: download the PDF
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -262,18 +253,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-
-      if (clipboardOk) {
-        alert(`WhatsApp Web opened!\n\nPDF is in your clipboard.\n\n→ Select a contact in WhatsApp\n→ Press Cmd+V to paste the PDF\n→ Press Send`);
-      } else if (!waWin || waWin.closed) {
-        alert(
-          `PDF downloaded: ${filename}\n\n` +
-          `WhatsApp Web: https://web.whatsapp.com\n\n` +
-          `Open WhatsApp Web, select a contact, and drag the downloaded PDF into the chat.`
-        );
-      } else {
-        alert(`WhatsApp Web opened!\n\nPDF downloaded: ${filename}\n\n→ Select a contact in WhatsApp\n→ Drag the downloaded PDF file into the chat\n→ Press Send`);
-      }
+      setLedgerStatus('idle');
     } catch (err: any) {
       alert(err.message || 'Failed to generate PDF');
       setLedgerStatus('idle');
@@ -407,7 +387,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
                       🖨 Print
                     </button>
                     <button onClick={() => shareLedgerFormat('statement')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
-                      📤 WhatsApp
+                      📤 Share
                     </button>
                   </div>
                 </div>
@@ -418,7 +398,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
                       🖨 Print
                     </button>
                     <button onClick={() => shareLedgerFormat('simple')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
-                      📤 WhatsApp
+                      📤 Share
                     </button>
                   </div>
                 </div>
@@ -429,7 +409,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
                       🖨 Print
                     </button>
                     <button onClick={() => shareLedgerFormat('itemized')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
-                      📤 WhatsApp
+                      📤 Share
                     </button>
                   </div>
                 </div>
@@ -440,7 +420,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
                       🖨 Print
                     </button>
                     <button onClick={() => shareLedgerFormat('creditLedger')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
-                      📤 WhatsApp
+                      📤 Share
                     </button>
                   </div>
                 </div>
@@ -451,7 +431,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
                       🖨 Print
                     </button>
                     <button onClick={() => shareLedgerFormat('patti')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
-                      📤 WhatsApp
+                      📤 Share
                     </button>
                   </div>
                 </div>
