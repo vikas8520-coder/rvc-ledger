@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useI18n } from '../components/I18nProvider';
 import { fmt } from '@/lib/format';
+import { formatCustomerName, getUiLang } from '@/lib/i18n';
 import CustomerPicker, { CustomerOption } from '../components/CustomerPicker';
 
 function today() {
@@ -21,6 +22,9 @@ interface SaleLine {
   farmer: string;
   customerId: string | null;
   customerName: string;
+  englishName?: string | null;
+  teluguName?: string | null;
+  hindiName?: string | null;
   bags: string;
   kgs: string;
   rate: string;
@@ -36,6 +40,7 @@ function newId() { return `line-${Date.now()}-${idCounter++}`; }
 
 export default function SellPage() {
   const { t, lang } = useI18n();
+  const uiLang = getUiLang(lang);
   const [date, setDate] = useState(today());
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [catalog, setCatalog] = useState<string[]>([]);
@@ -100,6 +105,9 @@ export default function SellPage() {
           farmer: l.farmer || '',
           customerId: l.customerId || null,
           customerName: l.customerName || '',
+          englishName: l.englishName || null,
+          teluguName: l.teluguName || null,
+          hindiName: l.hindiName || null,
           bags: l.bags ? String(l.bags) : '',
           kgs: l.kgs ? String(l.kgs) : '',
           rate: l.rate ? String(l.rate) : '',
@@ -159,12 +167,16 @@ export default function SellPage() {
       if (!res.ok) throw new Error(data.error || 'Save failed');
 
       // Add to day grid
+      const selectedCustomer = customers.find((c) => c.id === customerId);
       setDayLines(prev => [...prev, {
         id: newId(),
         item: item.trim(),
         farmer: farmer.trim(),
         customerId,
         customerName: customerName.trim(),
+        englishName: selectedCustomer?.englishName || null,
+        teluguName: selectedCustomer?.teluguName || null,
+        hindiName: selectedCustomer?.hindiName || null,
         bags,
         kgs,
         rate,
@@ -378,6 +390,7 @@ export default function SellPage() {
                   <th className="py-1.5 pr-2">#</th>
                   <th className="py-1.5 pr-2">{t('item')}</th>
                   <th className="py-1.5 pr-2">{t('buyer')}</th>
+                  <th className="py-1.5 pr-2 text-center">Type</th>
                   <th className="py-1.5 pr-2 text-right">{t('bags')}</th>
                   <th className="py-1.5 pr-2 text-right">{t('kgs')}</th>
                   <th className="py-1.5 pr-2 text-right">{t('rate')}</th>
@@ -387,19 +400,35 @@ export default function SellPage() {
                 </tr>
               </thead>
               <tbody>
-                {dayLines.map((l, i) => (
-                  <tr key={l.id} className="border-b border-[var(--border-light)]">
-                    <td className="py-1.5 pr-2 text-xs text-[var(--text-muted)]">{i + 1}</td>
-                    <td className="py-1.5 pr-2 font-medium">{l.item}</td>
-                    <td className="py-1.5 pr-2">{l.customerName}</td>
-                    <td className="py-1.5 pr-2 text-right">{l.bags || '—'}</td>
-                    <td className="py-1.5 pr-2 text-right">{l.kgs || '—'}</td>
-                    <td className="py-1.5 pr-2 text-right">{l.rate}</td>
-                    <td className="py-1.5 pr-2 text-right">{l.hamaliEnabled ? l.hamali : '—'}</td>
-                    <td className="py-1.5 pr-2 text-right font-medium">{fmt(l.amount)}</td>
-                    <td className="py-1.5 pr-2 text-xs text-[var(--text-muted)]">{l.farmer || '—'}</td>
-                  </tr>
-                ))}
+                {dayLines.map((l, i) => {
+                  const isCash = l.customerName === 'CASH SALES';
+                  const displayName = formatCustomerName({
+                    name: l.customerName,
+                    englishName: l.englishName,
+                    teluguName: l.teluguName,
+                    hindiName: l.hindiName,
+                  }, uiLang);
+                  return (
+                    <tr key={l.id} className={`border-b border-[var(--border-light)] ${isCash ? 'bg-[var(--bg-success)] bg-opacity-5' : 'bg-[var(--bg-primary)] bg-opacity-5'}`}>
+                      <td className="py-1.5 pr-2 text-xs text-[var(--text-muted)]">{i + 1}</td>
+                      <td className="py-1.5 pr-2 font-medium">{l.item}</td>
+                      <td className="py-1.5 pr-2">{displayName}</td>
+                      <td className="py-1.5 pr-2 text-center">
+                        <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${isCash ? 'bg-[var(--bg-success)] text-[var(--text-on-primary)]' : 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'}`}>
+                          {isCash ? 'CASH' : 'CREDIT'}
+                        </span>
+                      </td>
+                      <td className="py-1.5 pr-2 text-right">{l.bags || '—'}</td>
+                      <td className="py-1.5 pr-2 text-right">{l.kgs || '—'}</td>
+                      <td className="py-1.5 pr-2 text-right">{l.rate}</td>
+                      <td className="py-1.5 pr-2 text-right">{l.hamaliEnabled ? l.hamali : '—'}</td>
+                      <td className={`py-1.5 pr-2 text-right font-bold ${isCash ? 'text-[var(--bg-success)]' : 'text-[var(--bg-primary)]'}`}>
+                        {fmt(l.amount)}
+                      </td>
+                      <td className="py-1.5 pr-2 text-xs text-[var(--text-muted)]">{l.farmer || '—'}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

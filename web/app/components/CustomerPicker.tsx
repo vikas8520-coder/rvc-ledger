@@ -106,7 +106,7 @@ export default function CustomerPicker({ customers, value, onChange, onAddNew, p
                 key={c.id}
                 type="button"
                 onClick={() => {
-                  onChange(c.id, c.name);
+                  onChange(c.id, formatCustomerName(c, uiLang));
                   setOpen(false);
                   setQuery('');
                 }}
