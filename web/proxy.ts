@@ -1,26 +1,48 @@
-import { clerkMiddleware } from '@clerk/nextjs/server';
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 
-// Check if Clerk is configured at all
-const isClerkConfigured = !!(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY);
-// Check if we're using production keys (pk_live_) vs development (pk_test_)
-const isClerkProduction = (process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || '').startsWith('pk_live_');
+const ADMIN_COOKIE_NAME = 'rvc_admin_session';
 
-// If Clerk is configured, use clerkMiddleware; otherwise use noop
-// For API routes, we always need auth to work if Clerk is configured
-export default isClerkConfigured
-  ? clerkMiddleware()
-  : function noopMiddleware() {
-      return NextResponse.next();
-    };
+const publicPaths = [
+  '/admin/login',
+  '/api/admin/login',
+  '/api/admin/logout',
+  '/api/subscription',
+  '/pdf/', // shared PDF viewer — public by design
+  '/sign-in',
+  '/sign-up',
+];
+
+function isPublicPath(pathname: string): boolean {
+  return publicPaths.some((p) => pathname === p || pathname.startsWith(p + '/') || pathname.startsWith(p));
+}
+
+export function proxy(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+
+  // Allow public routes
+  if (isPublicPath(pathname)) {
+    return NextResponse.next();
+  }
+
+  // Allow static files and Next.js internals
+  if (pathname.startsWith('/_next') || pathname.includes('.')) {
+    return NextResponse.next();
+  }
+
+  // Check for admin session cookie
+  const adminCookie = req.cookies.get(ADMIN_COOKIE_NAME);
+  if (adminCookie?.value) {
+    return NextResponse.next();
+  }
+
+  // Not authenticated — redirect to admin login
+  const loginUrl = new URL('/admin/login', req.url);
+  return NextResponse.redirect(loginUrl);
+}
 
 export const config = {
   matcher: [
-    // Skip Next.js internals and all static files, unless found in search params
     '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    // Always run for API routes
     '/(api|trpc)(.*)',
-    // Always run for Clerk-specific frontend API routes
-    '/__clerk/(.*)',
   ],
 };
