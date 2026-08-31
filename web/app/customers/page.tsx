@@ -395,7 +395,7 @@ export default function CustomersPage() {
         <span className="relative">
           <Button variant="primary" size="sm" onClick={() => setShowLedgerMenu((v) => !v)} disabled={overdueCount === 0 || ledgerStatus !== 'idle'}>
             <span className="flex items-center gap-1.5">
-              <PrinterIcon size={14} /> {ledgerStatus === 'generating' ? 'Generating…' : ledgerStatus === 'sharing' ? 'Sharing…' : t('ledger')} ▾
+              <PrinterIcon size={14} /> {ledgerStatus === 'generating' ? 'Generating…' : ledgerStatus === 'sharing' ? 'Sharing…' : 'Print / Share'} ▾
             </span>
           </Button>
           {showLedgerMenu && (

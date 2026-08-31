@@ -397,7 +397,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
           <span className="relative">
             <Button variant="primary" size="sm" onClick={() => setShowLedgerMenu((v) => !v)} disabled={ledgerStatus !== 'idle'}>
               <span className="flex items-center gap-1.5">
-                <PrinterIcon size={14} /> {ledgerStatus === 'generating' ? 'Generating…' : ledgerStatus === 'sharing' ? 'Sharing…' : t('ledger')} ▾
+                <PrinterIcon size={14} /> {ledgerStatus === 'generating' ? 'Generating…' : ledgerStatus === 'sharing' ? 'Sharing…' : 'Print / Share'} ▾
               </span>
             </Button>
             {showLedgerMenu && (
