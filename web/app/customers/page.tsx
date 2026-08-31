@@ -9,7 +9,7 @@ import AgingBadge from '../components/AgingBadge';
 import { Card, SectionHeader, Button, EmptyState, ListSkeleton, PageHeader, Badge } from '../components/ui';
 import { UsersIcon, SearchIcon, DownloadIcon, MessageIcon, PrinterIcon, XIcon, DollarIcon } from '../components/Icons';
 import { fmt } from '@/lib/format';
-import { computeAging, customersCsv, downloadCsv, reminderText, statementText, waLink, waAppLink } from '@/lib/statement';
+import { computeAging, customersCsv, downloadCsv, reminderText, statementText, waLink } from '@/lib/statement';
 import { printCreditLedger, CreditLedgerEntry, ShopProfile } from '@/lib/billPrint';
 import { OverdueCustomer } from '@/lib/types';
 import { generateOutstandingListPdf, generateCreditLedgerPdf, generateBillsPdf, generateStatementPdf, printPdfBlob } from '@/lib/pdfShare';
@@ -76,7 +76,7 @@ export default function CustomersPage() {
       return;
     }
 
-    // macOS desktop fallback: upload PDF, open WhatsApp desktop app with link
+    // macOS desktop fallback: upload PDF, open WhatsApp Web with link
     try {
       const formData = new FormData();
       formData.append('pdf', file);
@@ -86,7 +86,7 @@ export default function CustomersPage() {
       const { id } = await res.json();
       const pdfLink = `${window.location.origin}/pdf/${id}`;
       const fullMsg = `${msg}\n\nView PDF: ${pdfLink}`;
-      window.location.href = waAppLink(fullMsg, c.phone);
+      window.open(`https://web.whatsapp.com/send?text=${encodeURIComponent(fullMsg)}`, '_blank');
     } catch {
       // Fallback: just send text via wa.me
       window.open(waLink(msg, c.phone), '_blank');
@@ -177,8 +177,8 @@ export default function CustomersPage() {
       const pdfLink = `${baseUrl}/pdf/${id}`;
       const waText = `${shareText}\n\nView PDF: ${pdfLink}`;
 
-      // Open WhatsApp desktop app using whatsapp:// protocol
-      window.location.href = `whatsapp://send?text=${encodeURIComponent(waText)}`;
+      // Open WhatsApp Web in browser with the link
+      window.open(`https://web.whatsapp.com/send?text=${encodeURIComponent(waText)}`, '_blank');
 
       // Also download as backup
       const url = URL.createObjectURL(blob);

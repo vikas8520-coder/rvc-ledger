@@ -19,7 +19,6 @@ import {
   reminderText,
   statementText,
   waLink,
-  waAppLink,
 } from '@/lib/statement';
 import { printBill, printBills, printCreditLedger, txnToBillData, CreditLedgerEntry } from '@/lib/billPrint';
 import { generateStatementPdf, generateOutstandingListPdf, generateCreditLedgerPdf, generateBillsPdf, printPdfBlob } from '@/lib/pdfShare';
@@ -263,8 +262,8 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
       const pdfLink = `${baseUrl}/pdf/${id}`;
       const waText = `${shareText}\n\nView PDF: ${pdfLink}`;
 
-      // Open WhatsApp desktop app using whatsapp:// protocol
-      window.location.href = `whatsapp://send?text=${encodeURIComponent(waText)}`;
+      // Open WhatsApp Web in browser with the link
+      window.open(`https://web.whatsapp.com/send?text=${encodeURIComponent(waText)}`, '_blank');
 
       // Also download as backup
       const url = URL.createObjectURL(blob);
@@ -374,13 +373,17 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
         <SectionHeader title={t('actions')} icon={<DollarIcon size={16} />} />
         <div className="flex flex-wrap gap-2">
           <a
-            href={waAppLink(reminderText(customer, shopSettings.shopName || 'RVC', displayName), customer.phone)}
+            href={waLink(reminderText(customer, shopSettings.shopName || 'RVC', displayName), customer.phone)}
+            target="_blank"
+            rel="noopener noreferrer"
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-[var(--text-on-primary)] ${customer.due > 0 ? 'bg-[var(--bg-success)] hover:bg-[var(--bg-success-hover)]' : 'bg-[#a8a095] pointer-events-none'}`}
           >
             <MessageIcon size={14} /> {t('sendReminder')}
           </a>
           <a
-            href={waAppLink(statementText(customer, shopSettings.shopName || 'RVC', displayName), customer.phone)}
+            href={waLink(statementText(customer, shopSettings.shopName || 'RVC', displayName), customer.phone)}
+            target="_blank"
+            rel="noopener noreferrer"
             className="flex items-center gap-1.5 rounded-lg bg-[var(--bg-primary)] px-3 py-1.5 text-sm font-medium text-[var(--text-on-primary)] hover:bg-[var(--bg-primary-hover)]"
           >
             <MessageIcon size={14} /> {t('shareStatement')}
