@@ -484,7 +484,7 @@ export default function SellPage() {
                   </div>
                 </div>
                 <div className="border-t border-[var(--border-light)] px-2 py-1.5">
-                  <p className="text-xs font-semibold text-[var(--text-secondary)]">Compact Bills (6 per page)</p>
+                  <p className="text-xs font-semibold text-[var(--text-secondary)]">Patti (6 per page)</p>
                   <p className="text-[10px] text-[var(--text-muted)]">All bills — {date}</p>
                   <div className="mt-1 flex gap-1">
                     <button onClick={() => printDayPdf('patti')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">🖨 Print</button>

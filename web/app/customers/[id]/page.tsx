@@ -447,7 +447,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
                   </div>
                 </div>
                 <div className="border-t border-[var(--border-light)] px-2 py-1.5">
-                  <p className="text-xs font-semibold text-[var(--text-secondary)]">Compact Bills (6 per page)</p>
+                  <p className="text-xs font-semibold text-[var(--text-secondary)]">Patti (6 per page)</p>
                   <div className="mt-1 flex gap-1">
                     <button onClick={() => printLedgerFormat('patti')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
                       🖨 Print
