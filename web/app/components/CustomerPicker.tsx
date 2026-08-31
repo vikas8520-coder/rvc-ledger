@@ -83,7 +83,7 @@ export default function CustomerPicker({ customers, value, onChange, onAddNew, p
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute z-50 mt-1 w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] shadow-lg max-h-64 overflow-hidden flex flex-col">
+        <div className="absolute z-[100] mt-1 w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] shadow-lg max-h-64 overflow-hidden flex flex-col">
           {/* Search input */}
           <div className="border-b border-[var(--border-input)] p-2">
             <input

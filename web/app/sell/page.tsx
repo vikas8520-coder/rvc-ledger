@@ -245,7 +245,7 @@ export default function SellPage() {
       </div>
 
       {/* Entry form */}
-      <section className="rounded-2xl bg-[var(--bg-card)] p-4 space-y-3">
+      <section className="rounded-2xl bg-[var(--bg-card)] p-4 space-y-3 overflow-visible">
         <div className="grid gap-3 sm:grid-cols-3">
           {/* Item */}
           <div>
