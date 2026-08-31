@@ -1229,6 +1229,7 @@ export async function getCustomers(shopId: string, fyStartYear?: number): Promis
           display: detail,
           kind: inferred.kind,
           chargeCode: inferred.chargeCode,
+          bags: it.bags ? String(it.bags) : null,
         };
       });
 

@@ -148,6 +148,7 @@ export interface TxnItemView {
   display: string;
   kind?: ChargeKind;
   chargeCode?: ChargeCode | null;
+  bags?: string | null;
 }
 
 export interface TxnView {

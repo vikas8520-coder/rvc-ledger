@@ -699,8 +699,9 @@ export function generatePattiPdf(bills: BillPrintData[], shop: ShopProfile): Blo
       doc.setLineWidth(0.15);
       doc.line(innerLeft, cy - 2, innerRight, cy - 2);
       doc.text('Item', innerLeft, cy);
-      doc.text('Qty', innerRight - 22, cy, { align: 'right' });
-      doc.text('Rate', innerRight - 11, cy, { align: 'right' });
+      doc.text('Bags', innerRight - 30, cy, { align: 'right' });
+      doc.text('Qty', innerRight - 20, cy, { align: 'right' });
+      doc.text('Rate', innerRight - 10, cy, { align: 'right' });
       doc.text('Amt', innerRight, cy, { align: 'right' });
       cy += 2;
       doc.line(innerLeft, cy, innerRight, cy);
@@ -715,10 +716,11 @@ export function generatePattiPdf(bills: BillPrintData[], shop: ShopProfile): Blo
       const bottomLimit = y0 + rowH - 22; // leave room for total + signature
       for (const it of showItems) {
         if (cy > bottomLimit) break;
-        const name = it.name.length > 16 ? it.name.slice(0, 16) : it.name;
+        const name = it.name.length > 14 ? it.name.slice(0, 14) : it.name;
         doc.text(name, innerLeft, cy);
-        doc.text(it.qty || '', innerRight - 22, cy, { align: 'right' });
-        doc.text(it.rate || '', innerRight - 11, cy, { align: 'right' });
+        doc.text(it.bags || '', innerRight - 30, cy, { align: 'right' });
+        doc.text(it.qty || '', innerRight - 20, cy, { align: 'right' });
+        doc.text(it.rate || '', innerRight - 10, cy, { align: 'right' });
         doc.text(money(it.amount), innerRight, cy, { align: 'right' });
         cy += itemH;
       }
