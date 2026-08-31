@@ -390,7 +390,6 @@ export default function SellPage() {
                   <th className="py-1.5 pr-2">#</th>
                   <th className="py-1.5 pr-2">{t('item')}</th>
                   <th className="py-1.5 pr-2">{t('buyer')}</th>
-                  <th className="py-1.5 pr-2 text-center">Type</th>
                   <th className="py-1.5 pr-2 text-right">{t('bags')}</th>
                   <th className="py-1.5 pr-2 text-right">{t('kgs')}</th>
                   <th className="py-1.5 pr-2 text-right">{t('rate')}</th>
@@ -409,22 +408,15 @@ export default function SellPage() {
                     hindiName: l.hindiName,
                   }, uiLang);
                   return (
-                    <tr key={l.id} className={`border-b border-[var(--border-light)] ${isCash ? 'bg-[var(--bg-success)] bg-opacity-5' : 'bg-[var(--bg-primary)] bg-opacity-5'}`}>
+                    <tr key={l.id} className={`border-l-4 ${isCash ? 'border-l-[var(--bg-success)]' : 'border-l-[var(--bg-primary)]'} border-b border-[var(--border-light)]`}>
                       <td className="py-1.5 pr-2 text-xs text-[var(--text-muted)]">{i + 1}</td>
                       <td className="py-1.5 pr-2 font-medium">{l.item}</td>
                       <td className="py-1.5 pr-2">{displayName}</td>
-                      <td className="py-1.5 pr-2 text-center">
-                        <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${isCash ? 'bg-[var(--bg-success)] text-[var(--text-on-primary)]' : 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'}`}>
-                          {isCash ? 'CASH' : 'CREDIT'}
-                        </span>
-                      </td>
                       <td className="py-1.5 pr-2 text-right">{l.bags || '—'}</td>
                       <td className="py-1.5 pr-2 text-right">{l.kgs || '—'}</td>
                       <td className="py-1.5 pr-2 text-right">{l.rate}</td>
                       <td className="py-1.5 pr-2 text-right">{l.hamaliEnabled ? l.hamali : '—'}</td>
-                      <td className={`py-1.5 pr-2 text-right font-bold ${isCash ? 'text-[var(--bg-success)]' : 'text-[var(--bg-primary)]'}`}>
-                        {fmt(l.amount)}
-                      </td>
+                      <td className="py-1.5 pr-2 text-right font-medium">{fmt(l.amount)}</td>
                       <td className="py-1.5 pr-2 text-xs text-[var(--text-muted)]">{l.farmer || '—'}</td>
                     </tr>
                   );
