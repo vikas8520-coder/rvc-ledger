@@ -113,72 +113,73 @@ export function generateOutstandingListPdf(
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
-  const margin = 15;
-  let y = margin;
+  const margin = 18;
+  let y = margin + 4;
 
   // Header
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
+  doc.setFontSize(18);
   doc.text((shop.shopName || 'RVC').toUpperCase(), pageW / 2, y, { align: 'center' });
-  y += 7;
-  doc.setFontSize(11);
+  y += 8;
+  doc.setFontSize(12);
   doc.text('CUSTOMER OUTSTANDING LIST', pageW / 2, y, { align: 'center' });
-  y += 5;
+  y += 6;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.text(`Date: ${new Date().toLocaleDateString('en-IN')}`, pageW / 2, y, { align: 'center' });
-  y += 3;
+  y += 5;
   doc.setLineWidth(0.5);
   doc.line(margin, y, pageW - margin, y);
-  y += 8;
+  y += 10;
 
   const dueCustomers = customers.filter((c) => c.due > 0).sort((a, b) => b.due - a.due);
 
-  // Column positions
+  // Column positions — wider gaps for readability
   const colNo = margin;
-  const colName = margin + 10;
-  const colBilled = pageW - margin - 55;
-  const colPaid = pageW - margin - 30;
+  const colName = margin + 12;
+  const colBilled = pageW - margin - 60;
+  const colPaid = pageW - margin - 32;
   const colDue = pageW - margin;
 
   // Table header
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
+  doc.setFontSize(10);
   doc.text('#', colNo, y);
   doc.text('Customer Name', colName, y);
   doc.text('Billed', colBilled, y, { align: 'right' });
   doc.text('Paid', colPaid, y, { align: 'right' });
   doc.text('Due', colDue, y, { align: 'right' });
-  y += 3;
+  y += 4;
   doc.setLineWidth(0.3);
   doc.line(margin, y, pageW - margin, y);
-  y += 6;
+  y += 8;
 
-  // Rows
+  // Rows — generous line height for neat appearance
+  const rowH = 7;
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
+  doc.setFontSize(10);
   for (let i = 0; i < dueCustomers.length; i++) {
     const c = dueCustomers[i];
-    if (y > pageH - 25) {
+    if (y > pageH - 30) {
       doc.addPage();
-      y = margin;
+      y = margin + 4;
       // Repeat header
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
+      doc.setFontSize(10);
       doc.text('#', colNo, y);
       doc.text('Customer Name', colName, y);
       doc.text('Billed', colBilled, y, { align: 'right' });
       doc.text('Paid', colPaid, y, { align: 'right' });
       doc.text('Due', colDue, y, { align: 'right' });
-      y += 3;
+      y += 4;
       doc.setLineWidth(0.3);
       doc.line(margin, y, pageW - margin, y);
-      y += 6;
+      y += 8;
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
+      doc.setFontSize(10);
     }
     const name = formatCustomerName(c, uiLang);
-    const displayName = name.length > 38 ? name.slice(0, 38) + '…' : name;
+    const displayName = name.length > 36 ? name.slice(0, 36) + '…' : name;
     doc.text(String(i + 1), colNo, y);
     doc.text(displayName, colName, y);
     doc.text(fmt(c.billed), colBilled, y, { align: 'right' });
@@ -186,19 +187,19 @@ export function generateOutstandingListPdf(
     doc.setFont('helvetica', 'bold');
     doc.text(fmt(c.due), colDue, y, { align: 'right' });
     doc.setFont('helvetica', 'normal');
-    y += 5.5;
+    y += rowH;
   }
 
   // Total
-  y += 2;
+  y += 3;
   doc.setLineWidth(0.5);
   doc.line(margin, y, pageW - margin, y);
-  y += 6;
+  y += 8;
   const totalDue = dueCustomers.reduce((s, c) => s + c.due, 0);
   const totalBilled = dueCustomers.reduce((s, c) => s + c.billed, 0);
   const totalPaid = dueCustomers.reduce((s, c) => s + c.paid, 0);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
+  doc.setFontSize(12);
   doc.text(`Customers: ${dueCustomers.length}`, colName, y);
   doc.text(fmt(totalBilled), colBilled, y, { align: 'right' });
   doc.text(fmt(totalPaid), colPaid, y, { align: 'right' });
@@ -207,10 +208,12 @@ export function generateOutstandingListPdf(
   // Footer
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
+  doc.setTextColor(120, 120, 120);
   doc.text(
     `${shop.shopName || 'RVC Ledger'} | Generated ${new Date().toLocaleString('en-IN')}`,
-    pageW / 2, pageH - 8, { align: 'center' }
+    pageW / 2, pageH - 10, { align: 'center' }
   );
+  doc.setTextColor(0, 0, 0);
 
   return doc.output('blob');
 }
@@ -600,9 +603,11 @@ export function generatePattiPdf(bills: BillPrintData[], shop: ShopProfile): Blo
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const pageW = 210;
   const pageH = 297;
-  const margin = 5;
-  const colW = (pageW - margin * 2) / 2;
-  const rowH = (pageH - margin * 2) / 3;
+  const margin = 6;
+  const colGap = 2;
+  const rowGap = 2;
+  const colW = (pageW - margin * 2 - colGap) / 2;
+  const rowH = (pageH - margin * 2 - rowGap * 2) / 3;
 
   // Group bills into pages of 6
   for (let page = 0; page < Math.ceil(bills.length / 6); page++) {
@@ -612,8 +617,8 @@ export function generatePattiPdf(bills: BillPrintData[], shop: ShopProfile): Blo
     for (let i = 0; i < 6; i++) {
       const col = i % 2;
       const row = Math.floor(i / 2);
-      const x = margin + col * colW;
-      const y0 = margin + row * rowH;
+      const x = margin + col * (colW + colGap);
+      const y0 = margin + row * (rowH + rowGap);
 
       // Draw border
       doc.setLineWidth(0.3);
@@ -625,103 +630,112 @@ export function generatePattiPdf(bills: BillPrintData[], shop: ShopProfile): Blo
       const items = bill.items.filter((it) => it.kind !== 'charge');
       const charges = bill.items.filter((it) => it.kind === 'charge');
       const goodsSum = goodsTotal(bill.items);
-      let cy = y0 + 4;
+      const pad = 4;
+      let cy = y0 + 5;
 
       // Shop name
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
+      doc.setFontSize(10);
       const shopName = shop.shopName || 'RVC Vegetable Shop';
-      doc.text(shopName.length > 30 ? shopName.slice(0, 30) : shopName, x + colW / 2, cy, { align: 'center' });
-      cy += 3;
+      doc.text(shopName.length > 28 ? shopName.slice(0, 28) : shopName, x + colW / 2, cy, { align: 'center' });
+      cy += 4;
       if (shop.shopAddress) {
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(6);
-        doc.text(shop.shopAddress, x + colW / 2, cy, { align: 'center' });
-        cy += 2.5;
+        doc.setFontSize(7);
+        const addr = shop.shopAddress.length > 36 ? shop.shopAddress.slice(0, 36) : shop.shopAddress;
+        doc.text(addr, x + colW / 2, cy, { align: 'center' });
+        cy += 3;
       }
 
-      // Meta
+      // Separator after header
       cy += 1;
+      doc.setLineWidth(0.2);
+      doc.line(x + pad, cy, x + colW - pad, cy);
+      cy += 4;
+
+      // Meta
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7);
-      doc.text(`No: ${bill.billNo || '-'}`, x + 3, cy);
-      doc.text(fmtDate(bill.date), x + colW - 3, cy, { align: 'right' });
-      cy += 3;
+      doc.setFontSize(8);
+      doc.text(`No: ${bill.billNo || '-'}`, x + pad, cy);
+      doc.text(fmtDate(bill.date), x + colW - pad, cy, { align: 'right' });
+      cy += 4;
 
       // Customer
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8);
-      const custName = bill.customerName.length > 35 ? bill.customerName.slice(0, 35) + '…' : bill.customerName;
-      doc.text(custName, x + 3, cy);
-      cy += 3;
+      doc.setFontSize(9);
+      const custName = bill.customerName.length > 32 ? bill.customerName.slice(0, 32) + '…' : bill.customerName;
+      doc.text(custName, x + pad, cy);
+      cy += 4;
 
       // Table header
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(6);
-      doc.setLineWidth(0.1);
-      doc.line(x + 3, cy - 1, x + colW - 3, cy - 1);
-      doc.text('Item', x + 3, cy + 1);
-      doc.text('Qty', x + colW - 22, cy + 1, { align: 'right' });
-      doc.text('Rate', x + colW - 12, cy + 1, { align: 'right' });
-      doc.text('Amt', x + colW - 3, cy + 1, { align: 'right' });
-      cy += 3;
-
-      // Items (max 12 to fit)
-      doc.setFont('helvetica', 'normal');
       doc.setFontSize(7);
-      const maxItems = 12;
+      doc.setLineWidth(0.15);
+      doc.line(x + pad, cy - 1.5, x + colW - pad, cy - 1.5);
+      doc.text('Item', x + pad, cy);
+      doc.text('Qty', x + colW - 28, cy, { align: 'right' });
+      doc.text('Rate', x + colW - 15, cy, { align: 'right' });
+      doc.text('Amt', x + colW - pad, cy, { align: 'right' });
+      cy += 3.5;
+
+      // Items (max 10 to fit with better spacing)
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      const maxItems = 10;
       const showItems = items.slice(0, maxItems);
+      const itemH = 4;
       for (const it of showItems) {
-        if (cy > y0 + rowH - 15) break;
-        const name = it.name.length > 20 ? it.name.slice(0, 20) : it.name;
-        doc.text(name, x + 3, cy);
-        doc.text(it.qty || '', x + colW - 22, cy, { align: 'right' });
-        doc.text(it.rate || '', x + colW - 12, cy, { align: 'right' });
-        doc.text(money(it.amount), x + colW - 3, cy, { align: 'right' });
-        cy += 3;
+        if (cy > y0 + rowH - 18) break;
+        const name = it.name.length > 18 ? it.name.slice(0, 18) : it.name;
+        doc.text(name, x + pad, cy);
+        doc.text(it.qty || '', x + colW - 28, cy, { align: 'right' });
+        doc.text(it.rate || '', x + colW - 15, cy, { align: 'right' });
+        doc.text(money(it.amount), x + colW - pad, cy, { align: 'right' });
+        cy += itemH;
       }
       if (items.length > maxItems) {
-        doc.setFontSize(6);
-        doc.setTextColor(150, 150, 150);
+        doc.setFontSize(7);
+        doc.setTextColor(120, 120, 120);
         doc.text(`+ ${items.length - maxItems} more items`, x + colW / 2, cy, { align: 'center' });
         doc.setTextColor(0, 0, 0);
-        cy += 2.5;
-        doc.setFontSize(7);
+        cy += 3.5;
+        doc.setFontSize(8);
       }
 
       // Charges
-      if (charges.length > 0 && cy < y0 + rowH - 12) {
+      if (charges.length > 0 && cy < y0 + rowH - 16) {
+        cy += 1;
         for (const it of charges) {
-          if (cy > y0 + rowH - 12) break;
-          doc.setFontSize(6);
-          doc.text(it.name, x + 3, cy);
-          doc.text(money(it.amount), x + colW - 3, cy, { align: 'right' });
-          cy += 2.5;
+          if (cy > y0 + rowH - 16) break;
+          doc.setFontSize(7);
+          doc.text(it.name, x + pad, cy);
+          doc.text(money(it.amount), x + colW - pad, cy, { align: 'right' });
+          cy += 3.5;
         }
         if (charges.length > 0) {
           doc.setFont('helvetica', 'bold');
-          doc.setFontSize(6);
-          doc.text('Goods', x + 3, cy);
-          doc.text(money(goodsSum), x + colW - 3, cy, { align: 'right' });
-          cy += 2.5;
+          doc.setFontSize(7);
+          doc.text('Goods', x + pad, cy);
+          doc.text(money(goodsSum), x + colW - pad, cy, { align: 'right' });
+          cy += 3.5;
           doc.setFont('helvetica', 'normal');
         }
       }
 
-      // Total
-      cy = y0 + rowH - 6;
-      doc.setLineWidth(0.2);
-      doc.line(x + 3, cy - 2, x + colW - 3, cy - 2);
+      // Total — anchored at bottom with enough space
+      const totalY = y0 + rowH - 8;
+      doc.setLineWidth(0.3);
+      doc.line(x + pad, totalY - 3, x + colW - pad, totalY - 3);
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.text('TOTAL', x + 3, cy + 1);
-      doc.text(money(bill.total), x + colW - 3, cy + 1, { align: 'right' });
+      doc.setFontSize(11);
+      doc.text('TOTAL', x + pad, totalY);
+      doc.text(money(bill.total), x + colW - pad, totalY, { align: 'right' });
 
       // Signature
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(5);
-      doc.setTextColor(150, 150, 150);
-      doc.text('Authorized Signatory', x + colW / 2, y0 + rowH - 2, { align: 'center' });
+      doc.setFontSize(6);
+      doc.setTextColor(130, 130, 130);
+      doc.text('Authorized Signatory', x + colW / 2, y0 + rowH - 2.5, { align: 'center' });
       doc.setTextColor(0, 0, 0);
     }
   }
