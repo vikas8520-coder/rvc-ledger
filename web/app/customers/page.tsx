@@ -9,10 +9,10 @@ import AgingBadge from '../components/AgingBadge';
 import { Card, SectionHeader, Button, EmptyState, ListSkeleton, PageHeader, Badge } from '../components/ui';
 import { UsersIcon, SearchIcon, DownloadIcon, MessageIcon, PrinterIcon, XIcon, DollarIcon } from '../components/Icons';
 import { fmt } from '@/lib/format';
-import { computeAging, customersCsv, downloadCsv, reminderText, statementText, waLink } from '@/lib/statement';
+import { computeAging, customersCsv, downloadCsv, reminderText, statementText, waLink, waAppLink } from '@/lib/statement';
 import { printCreditLedger, CreditLedgerEntry, ShopProfile } from '@/lib/billPrint';
 import { OverdueCustomer } from '@/lib/types';
-import { generateOutstandingListPdf, generateCreditLedgerPdf, generateBillsPdf, printPdfBlob } from '@/lib/pdfShare';
+import { generateOutstandingListPdf, generateCreditLedgerPdf, generateBillsPdf, generateStatementPdf, printPdfBlob } from '@/lib/pdfShare';
 import { txnToBillData } from '@/lib/billPrint';
 
 export default function CustomersPage() {
@@ -56,11 +56,39 @@ export default function CustomersPage() {
     window.open(link, '_blank');
   };
 
-  const shareStatement = (c: typeof customers[number]) => {
+  const shareStatement = async (c: typeof customers[number]) => {
     const dn = formatCustomerName(c, uiLang);
     const msg = statementText(c, shopSettings.shopName || 'RVC', dn);
-    const link = waLink(msg, c.phone);
-    window.open(link, '_blank');
+
+    // Generate statement PDF
+    const dateStr = new Date().toLocaleDateString('en-IN').replace(/\//g, '-');
+    const blob = generateStatementPdf(c, shopSettings as any, dn);
+    const filename = `${dn.replace(/\s+/g, '-')}-statement-${dateStr}.pdf`;
+    const file = new File([blob], filename, { type: 'application/pdf' });
+
+    // Mobile: use native share sheet with file attachment
+    const isMobile = /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(navigator.userAgent)
+      || (navigator.maxTouchPoints > 0 && window.innerWidth < 1024);
+    if (isMobile && navigator.share && navigator.canShare?.({ files: [file] })) {
+      navigator.share({ files: [file], title: filename, text: msg }).catch(() => {});
+      return;
+    }
+
+    // Desktop: upload PDF, open WhatsApp desktop app with link
+    try {
+      const formData = new FormData();
+      formData.append('pdf', file);
+      formData.append('title', `${shopSettings.shopName || 'RVC'} — ${dn}`);
+      const res = await fetch('/api/pdf', { method: 'POST', body: formData });
+      if (!res.ok) throw new Error('Upload failed');
+      const { id } = await res.json();
+      const pdfLink = `${window.location.origin}/pdf/${id}`;
+      const fullMsg = `${msg}\n\nView PDF: ${pdfLink}`;
+      window.location.href = waAppLink(fullMsg, c.phone);
+    } catch {
+      // Fallback: just send text via wa.me
+      window.open(waLink(msg, c.phone), '_blank');
+    }
   };
 
   // Generate the PDF blob for a given format (used by both print and share)
@@ -130,7 +158,7 @@ export default function CustomersPage() {
         return;
       }
 
-      // Desktop: upload PDF to server, get shareable link, open WhatsApp Web
+      // Desktop: upload PDF to server, get shareable link, open WhatsApp desktop app
       setLedgerStatus('sharing');
       const formData = new FormData();
       formData.append('pdf', file);
@@ -145,8 +173,8 @@ export default function CustomersPage() {
       const pdfLink = `${baseUrl}/pdf/${id}`;
       const waText = `${shareText}\n\nView PDF: ${pdfLink}`;
 
-      // Open WhatsApp Web with the link
-      window.open(`https://web.whatsapp.com/send?text=${encodeURIComponent(waText)}`, '_blank');
+      // Open WhatsApp desktop app using whatsapp:// protocol
+      window.location.href = `whatsapp://send?text=${encodeURIComponent(waText)}`;
 
       // Also download as backup
       const url = URL.createObjectURL(blob);

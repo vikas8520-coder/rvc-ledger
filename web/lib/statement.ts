@@ -113,6 +113,20 @@ export function waLink(message: string, phone?: string | null): string {
   return `https://wa.me/?text=${text}`;
 }
 
+/**
+ * WhatsApp desktop app deep link using whatsapp:// protocol.
+ * Opens the WhatsApp desktop application instead of the browser.
+ */
+export function waAppLink(message: string, phone?: string | null): string {
+  const text = encodeURIComponent(message);
+  const digits = (phone || '').replace(/\D/g, '');
+  if (digits.length >= 10) {
+    const withCode = digits.length === 10 ? `91${digits}` : digits;
+    return `whatsapp://send?phone=${withCode}&text=${text}`;
+  }
+  return `whatsapp://send?text=${text}`;
+}
+
 function csvCell(value: unknown): string {
   const s = String(value ?? '');
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
