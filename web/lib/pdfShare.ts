@@ -874,3 +874,21 @@ export function printPdfBlob(blob: Blob): void {
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   }, 1000);
 }
+
+/**
+ * Copy a PDF blob to the clipboard so the user can paste (Cmd+V)
+ * into WhatsApp Web to attach the file.
+ * Returns true if successful, false if not supported.
+ */
+export async function copyPdfToClipboard(blob: Blob): Promise<boolean> {
+  try {
+    if (!navigator.clipboard || typeof ClipboardItem === 'undefined') {
+      return false;
+    }
+    const item = new ClipboardItem({ [blob.type]: blob });
+    await navigator.clipboard.write([item]);
+    return true;
+  } catch {
+    return false;
+  }
+}

@@ -12,7 +12,7 @@ import { fmt } from '@/lib/format';
 import { computeAging, customersCsv, downloadCsv, reminderText, statementText, waLink } from '@/lib/statement';
 import { printCreditLedger, CreditLedgerEntry, ShopProfile } from '@/lib/billPrint';
 import { OverdueCustomer } from '@/lib/types';
-import { generateOutstandingListPdf, generateCreditLedgerPdf, generateBillsPdf, printPdfBlob } from '@/lib/pdfShare';
+import { generateOutstandingListPdf, generateCreditLedgerPdf, generateBillsPdf, printPdfBlob, copyPdfToClipboard } from '@/lib/pdfShare';
 import { txnToBillData } from '@/lib/billPrint';
 
 export default function CustomersPage() {
@@ -111,7 +111,7 @@ export default function CustomersPage() {
     }
   };
 
-  const shareLedgerFormat = (format: 'outstanding' | 'creditLedger' | 'patti') => {
+  const shareLedgerFormat = async (format: 'outstanding' | 'creditLedger' | 'patti') => {
     setShowLedgerMenu(false);
     try {
       const { blob, filename } = generateLedgerPdf(format);
@@ -132,11 +132,14 @@ export default function CustomersPage() {
       }
 
       // Desktop: open WhatsApp Web FIRST (synchronously in click handler
-      // to avoid popup blocker), then download the PDF
+      // to avoid popup blocker), then copy PDF to clipboard + download
       const waUrl = `https://web.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
       const waWin = window.open(waUrl, '_blank');
 
-      // Download the PDF
+      // Try to copy PDF to clipboard so user can paste (Cmd+V) in WhatsApp
+      const clipboardOk = await copyPdfToClipboard(blob);
+
+      // Also download as backup
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -152,8 +155,10 @@ export default function CustomersPage() {
           `PDF downloaded: ${filename}\n\n` +
           `Open WhatsApp Web manually: https://web.whatsapp.com`
         );
+      } else if (clipboardOk) {
+        alert(`WhatsApp Web opened!\n\nPDF copied to clipboard.\nSelect a contact and press Cmd+V (paste) to attach the PDF.`);
       } else {
-        alert(`PDF downloaded. WhatsApp Web opened in a new tab — please attach "${filename}" to your message.`);
+        alert(`WhatsApp Web opened!\n\nPDF downloaded: ${filename}\nSelect a contact and attach the file manually.`);
       }
     } catch (err: any) {
       alert(err.message || 'Failed to generate PDF');
