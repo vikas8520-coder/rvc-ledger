@@ -233,8 +233,12 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
       const shareText = `${shopSettings.shopName || 'RVC'} — ${displayName}`;
       const file = new File([blob], filename, { type: 'application/pdf' });
 
+      // Detect mobile (touch + small screen) — only use native share sheet on actual mobile
+      const isMobile = /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(navigator.userAgent)
+        || (navigator.maxTouchPoints > 0 && window.innerWidth < 1024);
+
       // Mobile: use Web Share API (opens native share sheet with WhatsApp)
-      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+      if (isMobile && navigator.share && navigator.canShare?.({ files: [file] })) {
         setLedgerStatus('sharing');
         navigator.share({ files: [file], title: filename, text: shareText })
           .then(() => setLedgerStatus('idle'))
