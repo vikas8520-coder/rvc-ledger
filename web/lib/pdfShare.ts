@@ -803,3 +803,21 @@ export async function sharePdfViaWhatsApp(
 
   return 'downloaded';
 }
+
+/**
+ * Print a PDF blob by opening it in a new window and triggering print.
+ */
+export function printPdfBlob(blob: Blob): void {
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
+  if (!win) {
+    alert('Please allow popups to print');
+    return;
+  }
+  // The browser's PDF viewer has its own print button, but we can
+  // try to trigger print automatically after a short delay
+  setTimeout(() => {
+    try { win.print(); } catch { /* user can print manually */ }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }, 1000);
+}

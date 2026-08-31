@@ -12,7 +12,7 @@ import { fmt } from '@/lib/format';
 import { computeAging, customersCsv, downloadCsv, reminderText, statementText, waLink } from '@/lib/statement';
 import { printCreditLedger, CreditLedgerEntry, ShopProfile } from '@/lib/billPrint';
 import { OverdueCustomer } from '@/lib/types';
-import { generateOutstandingListPdf, generateCreditLedgerPdf, generateBillsPdf, sharePdfViaWhatsApp } from '@/lib/pdfShare';
+import { generateOutstandingListPdf, generateCreditLedgerPdf, generateBillsPdf, sharePdfViaWhatsApp, printPdfBlob } from '@/lib/pdfShare';
 import { txnToBillData } from '@/lib/billPrint';
 
 export default function CustomersPage() {
@@ -25,8 +25,8 @@ export default function CustomersPage() {
   const [overdue, setOverdue] = useState<OverdueCustomer[]>([]);
   const [showBatch, setShowBatch] = useState(false);
   const [batchLoading, setBatchLoading] = useState(false);
-  const [showShareFormats, setShowShareFormats] = useState(false);
-  const [shareStatus, setShareStatus] = useState<'idle' | 'generating' | 'sharing'>('idle');
+  const [showLedgerMenu, setShowLedgerMenu] = useState(false);
+  const [ledgerStatus, setLedgerStatus] = useState<'idle' | 'generating' | 'sharing'>('idle');
 
   useEffect(() => {
     fetch('/api/settings')
@@ -42,20 +42,6 @@ export default function CustomersPage() {
       .then((d) => setOverdue(d.overdue || []))
       .catch(() => setOverdue([]))
       .finally(() => setBatchLoading(false));
-  };
-
-  const printLedger = () => {
-    const entries: CreditLedgerEntry[] = customers
-      .filter((c) => c.due > 0)
-      .sort((a, b) => formatCustomerName(a, uiLang).localeCompare(formatCustomerName(b, uiLang)))
-      .map((c, i) => ({
-        code: String(i + 1),
-        name: formatCustomerName(c, uiLang),
-        phone: c.phone || undefined,
-        amount: Math.round(c.due),
-        isCredit: false,
-      }));
-    printCreditLedger(entries, shopSettings, undefined, 'All');
   };
 
   const sendBatchReminders = () => {
@@ -77,53 +63,68 @@ export default function CustomersPage() {
     window.open(link, '_blank');
   };
 
-  const sharePdfFormat = async (format: 'outstanding' | 'creditLedger' | 'patti') => {
-    setShowShareFormats(false);
-    setShareStatus('generating');
-    try {
-      let blob: Blob;
-      let filename: string;
-      const dateStr = new Date().toLocaleDateString('en-IN').replace(/\//g, '-');
+  // Generate the PDF blob for a given format (used by both print and share)
+  const generateLedgerPdf = (format: 'outstanding' | 'creditLedger' | 'patti'): { blob: Blob; filename: string } => {
+    const dateStr = new Date().toLocaleDateString('en-IN').replace(/\//g, '-');
 
-      if (format === 'outstanding') {
-        blob = generateOutstandingListPdf(customers, shopSettings, uiLang);
-        filename = `outstanding-list-${dateStr}.pdf`;
-      } else if (format === 'creditLedger') {
-        const entries: CreditLedgerEntry[] = customers
-          .filter((c) => c.due > 0)
-          .sort((a, b) => formatCustomerName(a, uiLang).localeCompare(formatCustomerName(b, uiLang)))
-          .map((c, i) => ({
-            code: String(i + 1),
-            name: formatCustomerName(c, uiLang),
-            phone: c.phone || undefined,
-            amount: Math.round(c.due),
-            isCredit: false,
-          }));
-        blob = generateCreditLedgerPdf(entries, shopSettings, dateStr, 'All');
-        filename = `credit-ledger-${dateStr}.pdf`;
-      } else {
-        // Patti: all bills from all customers with dues
-        const allBills = customers.flatMap((c) =>
-          c.txns.filter((tx) => tx.type === 'bill').map((tx) => txnToBillData(tx, formatCustomerName(c, uiLang)))
-        );
-        if (allBills.length === 0) {
-          alert('No bills found');
-          setShareStatus('idle');
-          return;
-        }
-        blob = generateBillsPdf(allBills, shopSettings, 'patti');
-        filename = `all-bills-patti-${dateStr}.pdf`;
+    if (format === 'outstanding') {
+      return {
+        blob: generateOutstandingListPdf(customers, shopSettings, uiLang),
+        filename: `outstanding-list-${dateStr}.pdf`,
+      };
+    } else if (format === 'creditLedger') {
+      const entries: CreditLedgerEntry[] = customers
+        .filter((c) => c.due > 0)
+        .sort((a, b) => formatCustomerName(a, uiLang).localeCompare(formatCustomerName(b, uiLang)))
+        .map((c, i) => ({
+          code: String(i + 1),
+          name: formatCustomerName(c, uiLang),
+          phone: c.phone || undefined,
+          amount: Math.round(c.due),
+          isCredit: false,
+        }));
+      return {
+        blob: generateCreditLedgerPdf(entries, shopSettings, dateStr, 'All'),
+        filename: `credit-ledger-${dateStr}.pdf`,
+      };
+    } else {
+      const allBills = customers.flatMap((c) =>
+        c.txns.filter((tx) => tx.type === 'bill').map((tx) => txnToBillData(tx, formatCustomerName(c, uiLang)))
+      );
+      if (allBills.length === 0) {
+        throw new Error('No bills found');
       }
+      return {
+        blob: generateBillsPdf(allBills, shopSettings, 'patti'),
+        filename: `all-bills-patti-${dateStr}.pdf`,
+      };
+    }
+  };
 
-      setShareStatus('sharing');
+  const printLedgerFormat = (format: 'outstanding' | 'creditLedger' | 'patti') => {
+    setShowLedgerMenu(false);
+    try {
+      const { blob } = generateLedgerPdf(format);
+      printPdfBlob(blob);
+    } catch (err: any) {
+      alert(err.message || 'Failed to generate PDF');
+    }
+  };
+
+  const shareLedgerFormat = async (format: 'outstanding' | 'creditLedger' | 'patti') => {
+    setShowLedgerMenu(false);
+    setLedgerStatus('generating');
+    try {
+      const { blob, filename } = generateLedgerPdf(format);
+      setLedgerStatus('sharing');
       const result = await sharePdfViaWhatsApp(blob, filename, `${shopSettings.shopName || 'RVC'} — Customer Outstanding List`);
       if (result === 'downloaded') {
         alert('PDF downloaded. WhatsApp Web is opening — please attach the downloaded PDF to your message.');
       }
-    } catch (err) {
-      alert('Failed to generate PDF');
+    } catch (err: any) {
+      alert(err.message || 'Failed to generate PDF');
     } finally {
-      setShareStatus('idle');
+      setLedgerStatus('idle');
     }
   };
 
@@ -233,26 +234,49 @@ export default function CustomersPage() {
           <span className="flex items-center gap-1.5"><MessageIcon size={14} /> {t('batchReminders')}</span>
         </Button>
         <span className="relative">
-          <Button variant="secondary" size="sm" onClick={() => setShowShareFormats((v) => !v)} disabled={overdueCount === 0 || shareStatus !== 'idle'}>
-            <span className="flex items-center gap-1.5"><MessageIcon size={14} /> {shareStatus === 'generating' ? 'Generating…' : shareStatus === 'sharing' ? 'Sharing…' : t('sharePdf')} ▾</span>
+          <Button variant="primary" size="sm" onClick={() => setShowLedgerMenu((v) => !v)} disabled={overdueCount === 0 || ledgerStatus !== 'idle'}>
+            <span className="flex items-center gap-1.5">
+              <PrinterIcon size={14} /> {ledgerStatus === 'generating' ? 'Generating…' : ledgerStatus === 'sharing' ? 'Sharing…' : t('ledger')} ▾
+            </span>
           </Button>
-          {showShareFormats && (
-            <span className="absolute left-0 top-9 z-10 flex flex-col gap-0.5 rounded-lg border border-[var(--border-light)] bg-[var(--bg-input)] p-1 shadow-lg">
-              <button onClick={() => sharePdfFormat('outstanding')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
-                Outstanding list (names + dues)
-              </button>
-              <button onClick={() => sharePdfFormat('creditLedger')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
-                {t('printCreditLedger')} (dot-matrix)
-              </button>
-              <button onClick={() => sharePdfFormat('patti')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
-                {t('billFormatPatti')} (6 per page)
-              </button>
+          {showLedgerMenu && (
+            <span className="absolute left-0 top-9 z-10 w-64 rounded-lg border border-[var(--border-light)] bg-[var(--bg-input)] p-1 shadow-lg">
+              <div className="px-2 py-1.5">
+                <p className="text-xs font-semibold text-[var(--text-secondary)]">Credit ledger (dot-matrix)</p>
+                <div className="mt-1 flex gap-1">
+                  <button onClick={() => printLedgerFormat('creditLedger')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
+                    🖨 Print
+                  </button>
+                  <button onClick={() => shareLedgerFormat('creditLedger')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
+                    📤 Share
+                  </button>
+                </div>
+              </div>
+              <div className="border-t border-[var(--border-light)] px-2 py-1.5">
+                <p className="text-xs font-semibold text-[var(--text-secondary)]">Outstanding list (names + dues)</p>
+                <div className="mt-1 flex gap-1">
+                  <button onClick={() => printLedgerFormat('outstanding')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
+                    🖨 Print
+                  </button>
+                  <button onClick={() => shareLedgerFormat('outstanding')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
+                    📤 Share
+                  </button>
+                </div>
+              </div>
+              <div className="border-t border-[var(--border-light)] px-2 py-1.5">
+                <p className="text-xs font-semibold text-[var(--text-secondary)]">{t('billFormatPatti')} (6 per page)</p>
+                <div className="mt-1 flex gap-1">
+                  <button onClick={() => printLedgerFormat('patti')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
+                    🖨 Print
+                  </button>
+                  <button onClick={() => shareLedgerFormat('patti')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
+                    📤 Share
+                  </button>
+                </div>
+              </div>
             </span>
           )}
         </span>
-        <Button variant="primary" size="sm" onClick={printLedger} disabled={overdueCount === 0}>
-          <span className="flex items-center gap-1.5"><PrinterIcon size={14} /> {t('printCreditLedger')}</span>
-        </Button>
       </div>
 
       {/* Batch reminders panel */}

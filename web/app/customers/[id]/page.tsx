@@ -21,7 +21,7 @@ import {
   waLink,
 } from '@/lib/statement';
 import { printBill, printBills, printCreditLedger, txnToBillData, CreditLedgerEntry } from '@/lib/billPrint';
-import { generateStatementPdf, generateOutstandingListPdf, generateCreditLedgerPdf, generateBillsPdf, sharePdfViaWhatsApp } from '@/lib/pdfShare';
+import { generateStatementPdf, generateOutstandingListPdf, generateCreditLedgerPdf, generateBillsPdf, sharePdfViaWhatsApp, printPdfBlob } from '@/lib/pdfShare';
 
 export default function CustomerLedgerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -36,8 +36,8 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
   const [creditStatus, setCreditStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [shopSettings, setShopSettings] = useState<{ shopName?: string; shopAddress?: string; shopPhone?: string; billFormat?: string }>({});
   const [showPdfFormats, setShowPdfFormats] = useState(false);
-  const [showShareFormats, setShowShareFormats] = useState(false);
-  const [shareStatus, setShareStatus] = useState<'idle' | 'generating' | 'sharing'>('idle');
+  const [showLedgerMenu, setShowLedgerMenu] = useState(false);
+  const [ledgerStatus, setLedgerStatus] = useState<'idle' | 'generating' | 'sharing'>('idle');
 
   // Date range filter
   type RangePreset = 'all' | 'today' | 'month' | 'fy' | 'custom';
@@ -179,103 +179,18 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
     }
   };
 
-  const printPdf = () => {
-    setShowPdfFormats((v) => !v);
-  };
+  // Generate the PDF blob for a given format (used by both print and share)
+  const generateLedgerPdf = (format: 'statement' | 'simple' | 'itemized' | 'creditLedger' | 'patti'): { blob: Blob; filename: string } => {
+    const dateStr = new Date().toLocaleDateString('en-IN').replace(/\//g, '-');
 
-  const shareCustomerPdf = async (format: 'statement' | 'simple' | 'itemized' | 'creditLedger' | 'patti') => {
-    setShowShareFormats(false);
-    setShareStatus('generating');
-    try {
-      let blob: Blob;
-      let filename: string;
-      const dateStr = new Date().toLocaleDateString('en-IN').replace(/\//g, '-');
-
-      if (format === 'statement') {
-        blob = generateStatementPdf(customer, shopSettings as any, displayName);
-        filename = `${displayName.replace(/\s+/g, '-')}-statement-${dateStr}.pdf`;
-      } else if (format === 'creditLedger') {
-        if (customer.due <= 0) {
-          alert('This customer has no outstanding balance');
-          setShareStatus('idle');
-          return;
-        }
-        const entries: CreditLedgerEntry[] = [{
-          code: '1',
-          name: displayName,
-          phone: customer.phone || undefined,
-          amount: Math.round(customer.due),
-          isCredit: false,
-        }];
-        blob = generateCreditLedgerPdf(entries, shopSettings as any, dateStr, displayName);
-        filename = `${displayName.replace(/\s+/g, '-')}-credit-ledger-${dateStr}.pdf`;
-      } else {
-        // Bill formats: simple, itemized, patti
-        const bills = customer.txns.filter((tx) => tx.type === 'bill');
-        if (bills.length === 0) {
-          alert('No bills found for this customer');
-          setShareStatus('idle');
-          return;
-        }
-        const billData = bills.map((b) => txnToBillData(b, displayName));
-        blob = generateBillsPdf(billData, shopSettings as any, format);
-        filename = `${displayName.replace(/\s+/g, '-')}-${format}-${dateStr}.pdf`;
-      }
-
-      setShareStatus('sharing');
-      const result = await sharePdfViaWhatsApp(blob, filename, `${shopSettings.shopName || 'RVC'} — ${displayName}`);
-      if (result === 'downloaded') {
-        alert('PDF downloaded. WhatsApp Web is opening — please attach the downloaded PDF to your message.');
-      }
-    } catch {
-      alert('Failed to generate PDF');
-    } finally {
-      setShareStatus('idle');
-    }
-  };
-
-  const printStatement = (format: 'statement' | 'simple' | 'itemized' | 'market' | 'patti') => {
-    setShowPdfFormats(false);
     if (format === 'statement') {
-      // Original statement format — all transactions summary
-      const win = window.open('', '_blank');
-      if (!win) return;
-      const shopName = shopSettings.shopName || 'RVC Vegetable Shop';
-      const shopAddr = shopSettings.shopAddress || 'Bowenpally, Hyderabad';
-      const shopPh = shopSettings.shopPhone || '';
-      const html = `<!DOCTYPE html><html><head><title>${displayName} - Statement</title>
-      <style>
-        body{font-family:Georgia,serif;max-width:700px;margin:40px auto;padding:20px;color:#333}
-        h1{color:#8b2e2e;border-bottom:2px solid #8b2e2e;padding-bottom:8px}
-        h2{font-size:14px;color:#666;margin-top:24px}
-        table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}
-        th,td{padding:6px 8px;text-align:left;border-bottom:1px solid #ddd}
-        th{background:#f5f0e6;font-size:11px;text-transform:uppercase}
-        .due{color:#8b2e2e;font-weight:bold;font-size:18px}
-        .shop{text-align:right;font-size:12px;color:#888}
-        @media print{body{margin:0}}
-      </style></head><body>
-      <div class="shop">${shopName}<br>${shopAddr}${shopPh ? '<br>' + shopPh : ''}</div>
-      <h1>Customer Statement</h1>
-      <p><strong>${displayName}</strong><br>
-      Date: ${new Date().toLocaleDateString('en-IN')}</p>
-      <h2>Summary</h2>
-      <table><tr><th>Total Billed</th><th>Total Paid</th><th>Outstanding</th></tr>
-      <tr><td>₹${customer.billed.toFixed(2)}</td><td>₹${customer.paid.toFixed(2)}</td><td class="due">₹${customer.due.toFixed(2)}</td></tr></table>
-      <h2>Ledger</h2>
-      <table><tr><th>Date</th><th>Type</th><th>Bill No</th><th>Amount</th></tr>
-      ${customer.txns.map((tx) => `<tr><td>${fmtDate(tx.date)}</td><td>${tx.type === 'bill' ? 'Bill' : 'Payment'}</td><td>${tx.billNo || ''}</td><td>₹${tx.amount.toFixed(2)}</td></tr>`).join('')}
-      </table>
-      <p style="margin-top:24px;font-size:11px;color:#888">Generated by ${shopName} on ${new Date().toLocaleString('en-IN')}</p>
-      <script>window.onload=()=>window.print()</script>
-      </body></html>`;
-      win.document.write(html);
-      win.document.close();
-    } else if (format === 'market') {
-      // Credit ledger format — THIS customer only
+      return {
+        blob: generateStatementPdf(customer, shopSettings as any, displayName),
+        filename: `${displayName.replace(/\s+/g, '-')}-statement-${dateStr}.pdf`,
+      };
+    } else if (format === 'creditLedger') {
       if (customer.due <= 0) {
-        alert('This customer has no outstanding balance');
-        return;
+        throw new Error('This customer has no outstanding balance');
       }
       const entries: CreditLedgerEntry[] = [{
         code: '1',
@@ -284,16 +199,47 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
         amount: Math.round(customer.due),
         isCredit: false,
       }];
-      printCreditLedger(entries, shopSettings, undefined, displayName);
+      return {
+        blob: generateCreditLedgerPdf(entries, shopSettings as any, dateStr, displayName),
+        filename: `${displayName.replace(/\s+/g, '-')}-credit-ledger-${dateStr}.pdf`,
+      };
     } else {
-      // Print ALL bills in selected format — each bill on its own page
       const bills = customer.txns.filter((tx) => tx.type === 'bill');
       if (bills.length === 0) {
-        alert('No bills found for this customer');
-        return;
+        throw new Error('No bills found for this customer');
       }
       const billData = bills.map((b) => txnToBillData(b, displayName));
-      printBills(billData, shopSettings, format);
+      return {
+        blob: generateBillsPdf(billData, shopSettings as any, format),
+        filename: `${displayName.replace(/\s+/g, '-')}-${format}-${dateStr}.pdf`,
+      };
+    }
+  };
+
+  const printLedgerFormat = (format: 'statement' | 'simple' | 'itemized' | 'creditLedger' | 'patti') => {
+    setShowLedgerMenu(false);
+    try {
+      const { blob } = generateLedgerPdf(format);
+      printPdfBlob(blob);
+    } catch (err: any) {
+      alert(err.message || 'Failed to generate PDF');
+    }
+  };
+
+  const shareLedgerFormat = async (format: 'statement' | 'simple' | 'itemized' | 'creditLedger' | 'patti') => {
+    setShowLedgerMenu(false);
+    setLedgerStatus('generating');
+    try {
+      const { blob, filename } = generateLedgerPdf(format);
+      setLedgerStatus('sharing');
+      const result = await sharePdfViaWhatsApp(blob, filename, `${shopSettings.shopName || 'RVC'} — ${displayName}`);
+      if (result === 'downloaded') {
+        alert('PDF downloaded. WhatsApp Web is opening — please attach the downloaded PDF to your message.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to generate PDF');
+    } finally {
+      setLedgerStatus('idle');
     }
   };
 
@@ -406,54 +352,72 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
           <Button variant="outline" size="sm" onClick={copyStatement}>
             <span className="flex items-center gap-1.5">{copied ? <><CheckIcon size={14} /> {t('copied')}</> : t('copyStatement')}</span>
           </Button>
-          <span className="relative">
-            <Button variant="outline" size="sm" onClick={() => setShowShareFormats((v) => !v)} disabled={shareStatus !== 'idle'}>
-              <span className="flex items-center gap-1.5"><MessageIcon size={14} /> {shareStatus === 'generating' ? 'Generating…' : shareStatus === 'sharing' ? 'Sharing…' : t('sharePdf')} ▾</span>
-            </Button>
-            {showShareFormats && (
-              <span className="absolute right-0 top-9 z-10 flex flex-col gap-0.5 rounded-lg border border-[var(--border-light)] bg-[var(--bg-input)] p-1 shadow-lg">
-                <button onClick={() => shareCustomerPdf('statement')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
-                  Customer statement (all transactions)
-                </button>
-                <button onClick={() => shareCustomerPdf('simple')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
-                  {t('billFormatSimple')}
-                </button>
-                <button onClick={() => shareCustomerPdf('itemized')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
-                  {t('billFormatItemized')}
-                </button>
-                <button onClick={() => shareCustomerPdf('creditLedger')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
-                  {t('printCreditLedger')} (this customer)
-                </button>
-                <button onClick={() => shareCustomerPdf('patti')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
-                  {t('billFormatPatti')} (6 per page)
-                </button>
-              </span>
-            )}
-          </span>
           <Button variant="outline" size="sm" onClick={() => downloadCsv(`${displayName.replace(/\s+/g, '-')}-ledger.csv`, customerCsv(customer))}>
             <span className="flex items-center gap-1.5"><DownloadIcon size={14} /> {t('exportCsv')}</span>
           </Button>
           <span className="relative">
-            <Button variant="outline" size="sm" onClick={printPdf}>
-              <span className="flex items-center gap-1.5"><PrinterIcon size={14} /> {t('downloadPdf')} ▾</span>
+            <Button variant="primary" size="sm" onClick={() => setShowLedgerMenu((v) => !v)} disabled={ledgerStatus !== 'idle'}>
+              <span className="flex items-center gap-1.5">
+                <PrinterIcon size={14} /> {ledgerStatus === 'generating' ? 'Generating…' : ledgerStatus === 'sharing' ? 'Sharing…' : t('ledger')} ▾
+              </span>
             </Button>
-            {showPdfFormats && (
-              <span className="absolute right-0 top-9 z-10 flex flex-col gap-0.5 rounded-lg border border-[var(--border-light)] bg-[var(--bg-input)] p-1 shadow-lg">
-                <button onClick={() => printStatement('statement')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
-                  Customer statement (all transactions)
-                </button>
-                <button onClick={() => printStatement('simple')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
-                  {t('billFormatSimple')}
-                </button>
-                <button onClick={() => printStatement('itemized')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
-                  {t('billFormatItemized')}
-                </button>
-                <button onClick={() => printStatement('market')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
-                  {t('printCreditLedger')} (this customer)
-                </button>
-                <button onClick={() => printStatement('patti')} className="whitespace-nowrap rounded-md px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-card)]">
-                  {t('billFormatPatti')} (6 per page)
-                </button>
+            {showLedgerMenu && (
+              <span className="absolute right-0 top-9 z-10 w-64 rounded-lg border border-[var(--border-light)] bg-[var(--bg-input)] p-1 shadow-lg">
+                <div className="px-2 py-1.5">
+                  <p className="text-xs font-semibold text-[var(--text-secondary)]">Customer statement</p>
+                  <div className="mt-1 flex gap-1">
+                    <button onClick={() => printLedgerFormat('statement')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
+                      🖨 Print
+                    </button>
+                    <button onClick={() => shareLedgerFormat('statement')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
+                      📤 Share
+                    </button>
+                  </div>
+                </div>
+                <div className="border-t border-[var(--border-light)] px-2 py-1.5">
+                  <p className="text-xs font-semibold text-[var(--text-secondary)]">{t('billFormatSimple')}</p>
+                  <div className="mt-1 flex gap-1">
+                    <button onClick={() => printLedgerFormat('simple')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
+                      🖨 Print
+                    </button>
+                    <button onClick={() => shareLedgerFormat('simple')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
+                      📤 Share
+                    </button>
+                  </div>
+                </div>
+                <div className="border-t border-[var(--border-light)] px-2 py-1.5">
+                  <p className="text-xs font-semibold text-[var(--text-secondary)]">{t('billFormatItemized')}</p>
+                  <div className="mt-1 flex gap-1">
+                    <button onClick={() => printLedgerFormat('itemized')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
+                      🖨 Print
+                    </button>
+                    <button onClick={() => shareLedgerFormat('itemized')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
+                      📤 Share
+                    </button>
+                  </div>
+                </div>
+                <div className="border-t border-[var(--border-light)] px-2 py-1.5">
+                  <p className="text-xs font-semibold text-[var(--text-secondary)]">{t('printCreditLedger')} (this customer)</p>
+                  <div className="mt-1 flex gap-1">
+                    <button onClick={() => printLedgerFormat('creditLedger')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
+                      🖨 Print
+                    </button>
+                    <button onClick={() => shareLedgerFormat('creditLedger')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
+                      📤 Share
+                    </button>
+                  </div>
+                </div>
+                <div className="border-t border-[var(--border-light)] px-2 py-1.5">
+                  <p className="text-xs font-semibold text-[var(--text-secondary)]">{t('billFormatPatti')} (6 per page)</p>
+                  <div className="mt-1 flex gap-1">
+                    <button onClick={() => printLedgerFormat('patti')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
+                      🖨 Print
+                    </button>
+                    <button onClick={() => shareLedgerFormat('patti')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
+                      📤 Share
+                    </button>
+                  </div>
+                </div>
               </span>
             )}
           </span>
