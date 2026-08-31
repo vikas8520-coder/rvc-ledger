@@ -329,7 +329,7 @@ export default function SellPage() {
     }));
   };
 
-  const generateDayPdf = (format: 'creditLedger' | 'outstanding' | 'patti' | 'simple' | 'itemized'): { blob: Blob; filename: string } => {
+  const generateDayPdf = (format: 'creditLedger' | 'outstanding' | 'patti'): { blob: Blob; filename: string } => {
     const dateStr = new Date(date + 'T00:00:00').toLocaleDateString('en-IN').replace(/\//g, '-');
     if (format === 'creditLedger') {
       const entries = dayCreditEntries();
@@ -348,15 +348,14 @@ export default function SellPage() {
     } else {
       const bills = dayLinesToBills();
       if (bills.length === 0) throw new Error('No sales today');
-      const labelMap = { patti: 'compact-bills', simple: 'simple-bills', itemized: 'itemized-bills' };
       return {
-        blob: generateBillsPdf(bills, shopSettings, format),
-        filename: `day-sales-${labelMap[format]}-${dateStr}.pdf`,
+        blob: generateBillsPdf(bills, shopSettings, 'patti'),
+        filename: `compact-bills-${dateStr}.pdf`,
       };
     }
   };
 
-  const printDayPdf = (format: 'creditLedger' | 'outstanding' | 'patti' | 'simple' | 'itemized') => {
+  const printDayPdf = (format: 'creditLedger' | 'outstanding' | 'patti') => {
     setShowLedgerMenu(false);
     try {
       const { blob } = generateDayPdf(format);
@@ -366,7 +365,7 @@ export default function SellPage() {
     }
   };
 
-  const shareDayPdf = async (format: 'creditLedger' | 'outstanding' | 'patti' | 'simple' | 'itemized') => {
+  const shareDayPdf = async (format: 'creditLedger' | 'outstanding' | 'patti') => {
     setShowLedgerMenu(false);
     setLedgerStatus('generating');
     try {
@@ -486,23 +485,10 @@ export default function SellPage() {
                 </div>
                 <div className="border-t border-[var(--border-light)] px-2 py-1.5">
                   <p className="text-xs font-semibold text-[var(--text-secondary)]">Compact Bills (6 per page)</p>
+                  <p className="text-[10px] text-[var(--text-muted)]">All bills — {date}</p>
                   <div className="mt-1 flex gap-1">
                     <button onClick={() => printDayPdf('patti')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">🖨 Print</button>
                     <button onClick={() => shareDayPdf('patti')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">📤 Share</button>
-                  </div>
-                </div>
-                <div className="border-t border-[var(--border-light)] px-2 py-1.5">
-                  <p className="text-xs font-semibold text-[var(--text-secondary)]">Simple Bills (1 per page)</p>
-                  <div className="mt-1 flex gap-1">
-                    <button onClick={() => printDayPdf('simple')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">🖨 Print</button>
-                    <button onClick={() => shareDayPdf('simple')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">📤 Share</button>
-                  </div>
-                </div>
-                <div className="border-t border-[var(--border-light)] px-2 py-1.5">
-                  <p className="text-xs font-semibold text-[var(--text-secondary)]">Itemized Bills (1 per page)</p>
-                  <div className="mt-1 flex gap-1">
-                    <button onClick={() => printDayPdf('itemized')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">🖨 Print</button>
-                    <button onClick={() => shareDayPdf('itemized')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">📤 Share</button>
                   </div>
                 </div>
               </span>
