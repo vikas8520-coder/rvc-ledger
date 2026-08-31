@@ -235,10 +235,13 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
       const shareText = `${shopSettings.shopName || 'RVC'} — ${displayName}`;
       const file = new File([blob], filename, { type: 'application/pdf' });
 
-      // Mobile: use native share sheet (WhatsApp appears as option)
-      const isMobile = /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(navigator.userAgent)
-        || (navigator.maxTouchPoints > 0 && window.innerWidth < 1024);
-      if (isMobile && navigator.share && navigator.canShare?.({ files: [file] })) {
+      // Use native share sheet on mobile AND Windows desktop
+      // Windows 11 shows WhatsApp in the share menu and supports file attachment
+      // macOS doesn't show WhatsApp in the share menu, so we use link approach
+      const isMac = /Mac/i.test(navigator.userAgent) && !/Mobile|iPhone|iPad/i.test(navigator.userAgent);
+      const canShareFiles = typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] });
+
+      if (canShareFiles && !isMac) {
         setLedgerStatus('sharing');
         navigator.share({ files: [file], title: filename, text: shareText })
           .then(() => setLedgerStatus('idle'))
@@ -246,7 +249,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
         return;
       }
 
-      // Desktop: upload PDF to server, get shareable link, open WhatsApp desktop app
+      // macOS desktop fallback: upload PDF, open WhatsApp desktop app with link
       setLedgerStatus('sharing');
       const formData = new FormData();
       formData.append('pdf', file);
@@ -256,7 +259,6 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
       if (!res.ok) throw new Error('Failed to upload PDF');
       const { id } = await res.json();
 
-      // Build the shareable URL
       const baseUrl = window.location.origin;
       const pdfLink = `${baseUrl}/pdf/${id}`;
       const waText = `${shareText}\n\nView PDF: ${pdfLink}`;
