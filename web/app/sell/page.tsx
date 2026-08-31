@@ -76,12 +76,7 @@ export default function SellPage() {
       .then((d) => {
         const list: CustomerOption[] = d.customers || [];
         setCustomers(list);
-        // Auto-select CASH SALES if it exists
-        const cash = list.find((c) => c.name === 'CASH SALES');
-        if (cash) {
-          setCustomerId(cash.id);
-          setCustomerName(cash.name);
-        }
+        // Don't auto-select — always ask the user to pick a customer
       })
       .catch(() => {});
     fetch('/api/catalog')
