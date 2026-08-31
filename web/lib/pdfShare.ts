@@ -103,7 +103,8 @@ export function generateCreditLedgerPdf(
 }
 
 /**
- * Generate outstanding list PDF (table with names, billed, paid, due).
+ * Generate Dues Summary PDF (table with names, billed, paid, due).
+ * Uses alternating row shading and horizontal lines for clear separation.
  */
 export function generateOutstandingListPdf(
   customers: Customer[],
@@ -122,7 +123,7 @@ export function generateOutstandingListPdf(
   doc.text((shop.shopName || 'RVC').toUpperCase(), pageW / 2, y, { align: 'center' });
   y += 8;
   doc.setFontSize(12);
-  doc.text('CUSTOMER OUTSTANDING LIST', pageW / 2, y, { align: 'center' });
+  doc.text('DUES SUMMARY', pageW / 2, y, { align: 'center' });
   y += 6;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
@@ -130,56 +131,61 @@ export function generateOutstandingListPdf(
   y += 5;
   doc.setLineWidth(0.5);
   doc.line(margin, y, pageW - margin, y);
-  y += 10;
+  y += 9;
 
   const dueCustomers = customers.filter((c) => c.due > 0).sort((a, b) => b.due - a.due);
 
-  // Column positions — wider gaps for readability
+  // Column positions
   const colNo = margin;
   const colName = margin + 12;
-  const colBilled = pageW - margin - 60;
-  const colPaid = pageW - margin - 32;
+  const colBilled = pageW - margin - 62;
+  const colPaid = pageW - margin - 33;
   const colDue = pageW - margin;
+  const tableW = pageW - margin * 2;
 
-  // Table header
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text('#', colNo, y);
-  doc.text('Customer Name', colName, y);
-  doc.text('Billed', colBilled, y, { align: 'right' });
-  doc.text('Paid', colPaid, y, { align: 'right' });
-  doc.text('Due', colDue, y, { align: 'right' });
-  y += 4;
-  doc.setLineWidth(0.3);
-  doc.line(margin, y, pageW - margin, y);
-  y += 8;
+  // Helper: draw table header row
+  const drawTableHeader = () => {
+    // Header background
+    doc.setFillColor(240, 235, 225);
+    doc.rect(margin, y - 5, tableW, 8, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text('#', colNo, y);
+    doc.text('Customer Name', colName, y);
+    doc.text('Billed', colBilled, y, { align: 'right' });
+    doc.text('Paid', colPaid, y, { align: 'right' });
+    doc.text('Due', colDue, y, { align: 'right' });
+    y += 5;
+    doc.setLineWidth(0.4);
+    doc.line(margin, y, pageW - margin, y);
+    y += 7;
+  };
 
-  // Rows — generous line height for neat appearance
-  const rowH = 7;
+  drawTableHeader();
+
+  // Rows with alternating shading and line separators
+  const rowH = 8;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   for (let i = 0; i < dueCustomers.length; i++) {
     const c = dueCustomers[i];
+
     if (y > pageH - 30) {
       doc.addPage();
       y = margin + 4;
-      // Repeat header
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.text('#', colNo, y);
-      doc.text('Customer Name', colName, y);
-      doc.text('Billed', colBilled, y, { align: 'right' });
-      doc.text('Paid', colPaid, y, { align: 'right' });
-      doc.text('Due', colDue, y, { align: 'right' });
-      y += 4;
-      doc.setLineWidth(0.3);
-      doc.line(margin, y, pageW - margin, y);
-      y += 8;
+      drawTableHeader();
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(10);
     }
+
+    // Alternating row background (light shading for even rows)
+    if (i % 2 === 1) {
+      doc.setFillColor(248, 246, 242);
+      doc.rect(margin, y - 5, tableW, rowH, 'F');
+    }
+
     const name = formatCustomerName(c, uiLang);
-    const displayName = name.length > 36 ? name.slice(0, 36) + '…' : name;
+    const displayName = name.length > 34 ? name.slice(0, 34) + '…' : name;
     doc.text(String(i + 1), colNo, y);
     doc.text(displayName, colName, y);
     doc.text(fmt(c.billed), colBilled, y, { align: 'right' });
@@ -187,23 +193,35 @@ export function generateOutstandingListPdf(
     doc.setFont('helvetica', 'bold');
     doc.text(fmt(c.due), colDue, y, { align: 'right' });
     doc.setFont('helvetica', 'normal');
+
     y += rowH;
+    // Light separator line between rows
+    doc.setLineWidth(0.1);
+    doc.setDrawColor(210, 205, 195);
+    doc.line(margin, y - 1, pageW - margin, y - 1);
   }
 
-  // Total
-  y += 3;
+  // Total section
+  y += 2;
+  doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.5);
   doc.line(margin, y, pageW - margin, y);
   y += 8;
+  // Total background
+  doc.setFillColor(240, 235, 225);
+  doc.rect(margin, y - 6, tableW, 9, 'F');
   const totalDue = dueCustomers.reduce((s, c) => s + c.due, 0);
   const totalBilled = dueCustomers.reduce((s, c) => s + c.billed, 0);
   const totalPaid = dueCustomers.reduce((s, c) => s + c.paid, 0);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
-  doc.text(`Customers: ${dueCustomers.length}`, colName, y);
+  doc.text(`Total (${dueCustomers.length} customers)`, colName, y);
   doc.text(fmt(totalBilled), colBilled, y, { align: 'right' });
   doc.text(fmt(totalPaid), colPaid, y, { align: 'right' });
   doc.text(fmt(totalDue), colDue, y, { align: 'right' });
+  y += 5;
+  doc.setLineWidth(0.5);
+  doc.line(margin, y, pageW - margin, y);
 
   // Footer
   doc.setFont('helvetica', 'normal');
@@ -597,17 +615,19 @@ export function generateItemizedBillPdf(bill: BillPrintData, shop: ShopProfile):
 }
 
 /**
- * Generate patti PDF (6 bills per A4 page, 2 columns x 3 rows).
+ * Generate Compact Bills PDF (6 bills per A4 page, 2 columns x 3 rows).
+ * All text is carefully padded inside borders to prevent overlap.
  */
 export function generatePattiPdf(bills: BillPrintData[], shop: ShopProfile): Blob {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const pageW = 210;
   const pageH = 297;
-  const margin = 6;
-  const colGap = 2;
-  const rowGap = 2;
+  const margin = 8;
+  const colGap = 3;
+  const rowGap = 3;
   const colW = (pageW - margin * 2 - colGap) / 2;
   const rowH = (pageH - margin * 2 - rowGap * 2) / 3;
+  const pad = 5; // inner padding from border
 
   // Group bills into pages of 6
   for (let page = 0; page < Math.ceil(bills.length / 6); page++) {
@@ -619,6 +639,9 @@ export function generatePattiPdf(bills: BillPrintData[], shop: ShopProfile): Blo
       const row = Math.floor(i / 2);
       const x = margin + col * (colW + colGap);
       const y0 = margin + row * (rowH + rowGap);
+      const innerLeft = x + pad;
+      const innerRight = x + colW - pad;
+      const innerW = colW - pad * 2;
 
       // Draw border
       doc.setLineWidth(0.3);
@@ -630,67 +653,73 @@ export function generatePattiPdf(bills: BillPrintData[], shop: ShopProfile): Blo
       const items = bill.items.filter((it) => it.kind !== 'charge');
       const charges = bill.items.filter((it) => it.kind === 'charge');
       const goodsSum = goodsTotal(bill.items);
-      const pad = 4;
-      let cy = y0 + 5;
+
+      // Start content well below the top border
+      let cy = y0 + 7;
 
       // Shop name
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(10);
       const shopName = shop.shopName || 'RVC Vegetable Shop';
-      doc.text(shopName.length > 28 ? shopName.slice(0, 28) : shopName, x + colW / 2, cy, { align: 'center' });
-      cy += 4;
+      doc.text(shopName.length > 26 ? shopName.slice(0, 26) : shopName, x + colW / 2, cy, { align: 'center' });
+      cy += 4.5;
+
+      // Address
       if (shop.shopAddress) {
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(7);
-        const addr = shop.shopAddress.length > 36 ? shop.shopAddress.slice(0, 36) : shop.shopAddress;
+        const addr = shop.shopAddress.length > 34 ? shop.shopAddress.slice(0, 34) : shop.shopAddress;
         doc.text(addr, x + colW / 2, cy, { align: 'center' });
-        cy += 3;
+        cy += 3.5;
       }
 
-      // Separator after header
-      cy += 1;
+      // Separator line after header
+      cy += 1.5;
       doc.setLineWidth(0.2);
-      doc.line(x + pad, cy, x + colW - pad, cy);
-      cy += 4;
+      doc.line(innerLeft, cy, innerRight, cy);
+      cy += 5;
 
-      // Meta
+      // Meta: bill no and date
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
-      doc.text(`No: ${bill.billNo || '-'}`, x + pad, cy);
-      doc.text(fmtDate(bill.date), x + colW - pad, cy, { align: 'right' });
-      cy += 4;
+      doc.text(`No: ${bill.billNo || '-'}`, innerLeft, cy);
+      doc.text(fmtDate(bill.date), innerRight, cy, { align: 'right' });
+      cy += 4.5;
 
-      // Customer
+      // Customer name
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(9);
-      const custName = bill.customerName.length > 32 ? bill.customerName.slice(0, 32) + '…' : bill.customerName;
-      doc.text(custName, x + pad, cy);
-      cy += 4;
+      const custName = bill.customerName.length > 30 ? bill.customerName.slice(0, 30) + '…' : bill.customerName;
+      doc.text(custName, innerLeft, cy);
+      cy += 4.5;
 
-      // Table header
+      // Table header with line below
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(7);
       doc.setLineWidth(0.15);
-      doc.line(x + pad, cy - 1.5, x + colW - pad, cy - 1.5);
-      doc.text('Item', x + pad, cy);
-      doc.text('Qty', x + colW - 28, cy, { align: 'right' });
-      doc.text('Rate', x + colW - 15, cy, { align: 'right' });
-      doc.text('Amt', x + colW - pad, cy, { align: 'right' });
-      cy += 3.5;
+      doc.line(innerLeft, cy - 2, innerRight, cy - 2);
+      doc.text('Item', innerLeft, cy);
+      doc.text('Qty', innerRight - 22, cy, { align: 'right' });
+      doc.text('Rate', innerRight - 11, cy, { align: 'right' });
+      doc.text('Amt', innerRight, cy, { align: 'right' });
+      cy += 2;
+      doc.line(innerLeft, cy, innerRight, cy);
+      cy += 4.5;
 
-      // Items (max 10 to fit with better spacing)
+      // Items (max 8 to fit with comfortable spacing)
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
-      const maxItems = 10;
+      const maxItems = 8;
       const showItems = items.slice(0, maxItems);
-      const itemH = 4;
+      const itemH = 4.5;
+      const bottomLimit = y0 + rowH - 22; // leave room for total + signature
       for (const it of showItems) {
-        if (cy > y0 + rowH - 18) break;
-        const name = it.name.length > 18 ? it.name.slice(0, 18) : it.name;
-        doc.text(name, x + pad, cy);
-        doc.text(it.qty || '', x + colW - 28, cy, { align: 'right' });
-        doc.text(it.rate || '', x + colW - 15, cy, { align: 'right' });
-        doc.text(money(it.amount), x + colW - pad, cy, { align: 'right' });
+        if (cy > bottomLimit) break;
+        const name = it.name.length > 16 ? it.name.slice(0, 16) : it.name;
+        doc.text(name, innerLeft, cy);
+        doc.text(it.qty || '', innerRight - 22, cy, { align: 'right' });
+        doc.text(it.rate || '', innerRight - 11, cy, { align: 'right' });
+        doc.text(money(it.amount), innerRight, cy, { align: 'right' });
         cy += itemH;
       }
       if (items.length > maxItems) {
@@ -698,44 +727,44 @@ export function generatePattiPdf(bills: BillPrintData[], shop: ShopProfile): Blo
         doc.setTextColor(120, 120, 120);
         doc.text(`+ ${items.length - maxItems} more items`, x + colW / 2, cy, { align: 'center' });
         doc.setTextColor(0, 0, 0);
-        cy += 3.5;
+        cy += 4;
         doc.setFontSize(8);
       }
 
       // Charges
-      if (charges.length > 0 && cy < y0 + rowH - 16) {
+      if (charges.length > 0 && cy < bottomLimit) {
         cy += 1;
         for (const it of charges) {
-          if (cy > y0 + rowH - 16) break;
+          if (cy > bottomLimit) break;
           doc.setFontSize(7);
-          doc.text(it.name, x + pad, cy);
-          doc.text(money(it.amount), x + colW - pad, cy, { align: 'right' });
-          cy += 3.5;
+          doc.text(it.name, innerLeft, cy);
+          doc.text(money(it.amount), innerRight, cy, { align: 'right' });
+          cy += 4;
         }
         if (charges.length > 0) {
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(7);
-          doc.text('Goods', x + pad, cy);
-          doc.text(money(goodsSum), x + colW - pad, cy, { align: 'right' });
-          cy += 3.5;
+          doc.text('Goods', innerLeft, cy);
+          doc.text(money(goodsSum), innerRight, cy, { align: 'right' });
+          cy += 4;
           doc.setFont('helvetica', 'normal');
         }
       }
 
-      // Total — anchored at bottom with enough space
-      const totalY = y0 + rowH - 8;
+      // Total — anchored at bottom with clear space from border
+      const totalY = y0 + rowH - 10;
       doc.setLineWidth(0.3);
-      doc.line(x + pad, totalY - 3, x + colW - pad, totalY - 3);
+      doc.line(innerLeft, totalY - 4, innerRight, totalY - 4);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
-      doc.text('TOTAL', x + pad, totalY);
-      doc.text(money(bill.total), x + colW - pad, totalY, { align: 'right' });
+      doc.text('TOTAL', innerLeft, totalY);
+      doc.text(money(bill.total), innerRight, totalY, { align: 'right' });
 
-      // Signature
+      // Signature — well inside the bottom border
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(6);
       doc.setTextColor(130, 130, 130);
-      doc.text('Authorized Signatory', x + colW / 2, y0 + rowH - 2.5, { align: 'center' });
+      doc.text('Authorized Signatory', x + colW / 2, y0 + rowH - 3.5, { align: 'center' });
       doc.setTextColor(0, 0, 0);
     }
   }

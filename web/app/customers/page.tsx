@@ -242,7 +242,7 @@ export default function CustomersPage() {
           {showLedgerMenu && (
             <span className="absolute left-0 top-9 z-10 w-64 rounded-lg border border-[var(--border-light)] bg-[var(--bg-input)] p-1 shadow-lg">
               <div className="px-2 py-1.5">
-                <p className="text-xs font-semibold text-[var(--text-secondary)]">Credit ledger (dot-matrix)</p>
+                <p className="text-xs font-semibold text-[var(--text-secondary)]">Mandi Ledger</p>
                 <div className="mt-1 flex gap-1">
                   <button onClick={() => printLedgerFormat('creditLedger')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
                     🖨 Print
@@ -253,7 +253,7 @@ export default function CustomersPage() {
                 </div>
               </div>
               <div className="border-t border-[var(--border-light)] px-2 py-1.5">
-                <p className="text-xs font-semibold text-[var(--text-secondary)]">Outstanding list (names + dues)</p>
+                <p className="text-xs font-semibold text-[var(--text-secondary)]">Dues Summary</p>
                 <div className="mt-1 flex gap-1">
                   <button onClick={() => printLedgerFormat('outstanding')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
                     🖨 Print
@@ -264,7 +264,7 @@ export default function CustomersPage() {
                 </div>
               </div>
               <div className="border-t border-[var(--border-light)] px-2 py-1.5">
-                <p className="text-xs font-semibold text-[var(--text-secondary)]">{t('billFormatPatti')} (6 per page)</p>
+                <p className="text-xs font-semibold text-[var(--text-secondary)]">Compact Bills (6 per page)</p>
                 <div className="mt-1 flex gap-1">
                   <button onClick={() => printLedgerFormat('patti')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
                     🖨 Print
