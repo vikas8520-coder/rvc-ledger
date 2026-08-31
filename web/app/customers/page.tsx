@@ -113,15 +113,16 @@ export default function CustomersPage() {
 
   const shareLedgerFormat = async (format: 'outstanding' | 'creditLedger' | 'patti') => {
     setShowLedgerMenu(false);
+    setLedgerStatus('generating');
     try {
       const { blob, filename } = generateLedgerPdf(format);
       const shareText = `${shopSettings.shopName || 'RVC'} — Customer Outstanding List`;
       const file = new File([blob], filename, { type: 'application/pdf' });
 
-      // Use native share sheet on all platforms (mobile + desktop)
-      // On macOS this opens the share sheet with AirDrop, Messages, Mail, etc.
-      // If WhatsApp desktop app is installed, it appears as a share target
-      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+      // Mobile: use native share sheet (WhatsApp appears as option)
+      const isMobile = /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(navigator.userAgent)
+        || (navigator.maxTouchPoints > 0 && window.innerWidth < 1024);
+      if (isMobile && navigator.share && navigator.canShare?.({ files: [file] })) {
         setLedgerStatus('sharing');
         navigator.share({ files: [file], title: filename, text: shareText })
           .then(() => setLedgerStatus('idle'))
@@ -129,7 +130,25 @@ export default function CustomersPage() {
         return;
       }
 
-      // Fallback: download the PDF
+      // Desktop: upload PDF to server, get shareable link, open WhatsApp Web
+      setLedgerStatus('sharing');
+      const formData = new FormData();
+      formData.append('pdf', file);
+      formData.append('title', shareText);
+
+      const res = await fetch('/api/pdf', { method: 'POST', body: formData });
+      if (!res.ok) throw new Error('Failed to upload PDF');
+      const { id } = await res.json();
+
+      // Build the shareable URL
+      const baseUrl = window.location.origin;
+      const pdfLink = `${baseUrl}/pdf/${id}`;
+      const waText = `${shareText}\n\nView PDF: ${pdfLink}`;
+
+      // Open WhatsApp Web with the link
+      window.open(`https://web.whatsapp.com/send?text=${encodeURIComponent(waText)}`, '_blank');
+
+      // Also download as backup
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -138,6 +157,7 @@ export default function CustomersPage() {
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 1000);
+
       setLedgerStatus('idle');
     } catch (err: any) {
       alert(err.message || 'Failed to generate PDF');
