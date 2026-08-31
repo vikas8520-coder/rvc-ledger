@@ -5,6 +5,9 @@ import { useI18n } from '../components/I18nProvider';
 import { fmt } from '@/lib/format';
 import { formatCustomerName, getUiLang } from '@/lib/i18n';
 import CustomerPicker, { CustomerOption } from '../components/CustomerPicker';
+import { generateBillsPdf, printPdfBlob } from '@/lib/pdfShare';
+import { BillPrintData, ShopProfile, txnToBillData } from '@/lib/billPrint';
+import { PrinterIcon } from '../components/Icons';
 
 function today() {
   const d = new Date();
@@ -62,6 +65,11 @@ export default function SellPage() {
   // Day grid state
   const [dayLines, setDayLines] = useState<SaleLine[]>([]);
 
+  // Ledger dropdown
+  const [showLedgerMenu, setShowLedgerMenu] = useState(false);
+  const [ledgerStatus, setLedgerStatus] = useState<'idle' | 'generating' | 'sharing'>('idle');
+  const [shopSettings, setShopSettings] = useState<ShopProfile>({});
+
   // Add customer modal
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState('');
@@ -86,7 +94,19 @@ export default function SellPage() {
         setCatalog(items);
       })
       .catch(() => {});
+    fetch('/api/settings')
+      .then((r) => r.json())
+      .then((d) => setShopSettings(d.settings || {}))
+      .catch(() => {});
   }, []);
+
+  // Close ledger dropdown when clicking outside
+  useEffect(() => {
+    if (!showLedgerMenu) return;
+    const handler = () => setShowLedgerMenu(false);
+    const timer = setTimeout(() => document.addEventListener('click', handler), 0);
+    return () => { clearTimeout(timer); document.removeEventListener('click', handler); };
+  }, [showLedgerMenu]);
 
   // Load day's sales when date changes
   useEffect(() => {
@@ -200,6 +220,122 @@ export default function SellPage() {
   const cashTotal = dayLines.filter((l) => l.customerName === 'CASH SALES').reduce((s, l) => s + l.amount, 0);
   const creditTotal = dayLines.filter((l) => l.customerName !== 'CASH SALES').reduce((s, l) => s + l.amount, 0);
 
+  // Build BillPrintData from dayLines (group by txnId)
+  const dayLinesToBills = (): BillPrintData[] => {
+    const byTxn = new Map<string, SaleLine[]>();
+    for (const l of dayLines) {
+      const key = l.txnId || l.id;
+      const arr = byTxn.get(key) || [];
+      arr.push(l);
+      byTxn.set(key, arr);
+    }
+    const bills: BillPrintData[] = [];
+    for (const [, lines] of byTxn) {
+      const first = lines[0];
+      const displayName = formatCustomerName({
+        name: first.customerName,
+        englishName: first.englishName,
+        teluguName: first.teluguName,
+        hindiName: first.hindiName,
+      }, uiLang);
+      bills.push({
+        customerName: displayName,
+        date: date,
+        billNo: null,
+        items: lines.map((l) => ({
+          name: l.item,
+          qty: l.kgs || null,
+          rate: l.rate || null,
+          amount: l.amount,
+          display: `${l.bags || 0} bags${l.kgs ? `, ${l.kgs} kg` : ''} @ ₹${l.rate}`,
+          kind: 'item' as const,
+          chargeCode: null,
+          bags: l.bags || null,
+        })),
+        total: lines.reduce((s, l) => s + l.amount, 0),
+      });
+    }
+    return bills;
+  };
+
+  const generateDayPdf = (format: 'patti' | 'summary'): { blob: Blob; filename: string } => {
+    const dateStr = date.replace(/-/g, '-');
+    if (format === 'patti') {
+      const bills = dayLinesToBills();
+      if (bills.length === 0) throw new Error('No sales today');
+      return {
+        blob: generateBillsPdf(bills, shopSettings, 'patti'),
+        filename: `day-sales-patti-${dateStr}.pdf`,
+      };
+    } else {
+      // Day sales summary — simple table PDF
+      const bills = dayLinesToBills();
+      if (bills.length === 0) throw new Error('No sales today');
+      return {
+        blob: generateBillsPdf(bills, shopSettings, 'patti'),
+        filename: `day-sales-summary-${dateStr}.pdf`,
+      };
+    }
+  };
+
+  const printDayPdf = (format: 'patti' | 'summary') => {
+    setShowLedgerMenu(false);
+    try {
+      const { blob } = generateDayPdf(format);
+      printPdfBlob(blob);
+    } catch (err: any) {
+      alert(err.message || 'Failed to generate PDF');
+    }
+  };
+
+  const shareDayPdf = async (format: 'patti' | 'summary') => {
+    setShowLedgerMenu(false);
+    setLedgerStatus('generating');
+    try {
+      const { blob, filename } = generateDayPdf(format);
+      const shareText = `${shopSettings.shopName || 'RVC'} — Sales ${date}`;
+      const file = new File([blob], filename, { type: 'application/pdf' });
+
+      const isMac = /Mac/i.test(navigator.userAgent) && !/Mobile|iPhone|iPad/i.test(navigator.userAgent);
+      const canShareFiles = typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] });
+
+      if (canShareFiles && !isMac) {
+        setLedgerStatus('sharing');
+        navigator.share({ files: [file], title: filename, text: shareText })
+          .then(() => setLedgerStatus('idle'))
+          .catch(() => setLedgerStatus('idle'));
+        return;
+      }
+
+      // macOS desktop: upload PDF, open WhatsApp Web with link
+      setLedgerStatus('sharing');
+      const formData = new FormData();
+      formData.append('pdf', file);
+      formData.append('title', shareText);
+      const res = await fetch('/api/pdf', { method: 'POST', body: formData });
+      if (!res.ok) throw new Error('Failed to upload PDF');
+      const { id } = await res.json();
+      const pdfLink = `${window.location.origin}/pdf/${id}`;
+      const waText = `${shareText}\n\nView PDF: ${pdfLink}`;
+      window.open(`https://web.whatsapp.com/send?text=${encodeURIComponent(waText)}`, '_blank');
+
+      // Download as backup
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      setLedgerStatus('idle');
+    } catch (err: any) {
+      alert(err.message || 'Failed to share PDF');
+      setLedgerStatus('idle');
+    }
+  };
+
   const handleAddCustomer = async () => {
     if (!newCustomerName.trim()) return;
     try {
@@ -241,6 +377,30 @@ export default function SellPage() {
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-bold">{t('sell')}</h1>
         <div className="flex items-center gap-2">
+          <span className="relative">
+            <button
+              type="button"
+              onClick={() => setShowLedgerMenu((v) => !v)}
+              disabled={dayLines.length === 0 || ledgerStatus !== 'idle'}
+              className="flex items-center gap-1.5 rounded-lg bg-[var(--bg-primary)] px-3 py-1.5 text-sm font-medium text-[var(--text-on-primary)] disabled:opacity-40"
+            >
+              <PrinterIcon size={14} />
+              {ledgerStatus === 'generating' ? 'Generating…' : ledgerStatus === 'sharing' ? 'Sharing…' : 'Print / Share'}
+              <span className="text-xs">▾</span>
+            </button>
+            {showLedgerMenu && (
+              <span className="absolute right-0 top-9 z-20 w-64 rounded-lg border border-[var(--border-light)] bg-[var(--bg-input)] p-1 shadow-lg">
+                <div className="px-2 py-1.5">
+                  <p className="text-xs font-semibold text-[var(--text-secondary)]">Compact Bills (6 per page)</p>
+                  <p className="text-[10px] text-[var(--text-muted)]">All bills from {date}</p>
+                  <div className="mt-1 flex gap-1">
+                    <button onClick={() => printDayPdf('patti')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">🖨 Print</button>
+                    <button onClick={() => shareDayPdf('patti')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">📤 Share</button>
+                  </div>
+                </div>
+              </span>
+            )}
+          </span>
           <label className="text-xs text-[var(--text-muted)]">{t('date')}</label>
           <input
             type="date"
