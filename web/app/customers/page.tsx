@@ -12,7 +12,7 @@ import { fmt } from '@/lib/format';
 import { computeAging, customersCsv, downloadCsv, reminderText, statementText, waLink } from '@/lib/statement';
 import { printCreditLedger, CreditLedgerEntry, ShopProfile } from '@/lib/billPrint';
 import { OverdueCustomer } from '@/lib/types';
-import { generateOutstandingListPdf, generateCreditLedgerPdf, generateBillsPdf, sharePdfViaWhatsApp, printPdfBlob } from '@/lib/pdfShare';
+import { generateOutstandingListPdf, generateCreditLedgerPdf, generateBillsPdf, printPdfBlob } from '@/lib/pdfShare';
 import { txnToBillData } from '@/lib/billPrint';
 
 export default function CustomersPage() {
@@ -111,19 +111,48 @@ export default function CustomersPage() {
     }
   };
 
-  const shareLedgerFormat = async (format: 'outstanding' | 'creditLedger' | 'patti') => {
+  const shareLedgerFormat = (format: 'outstanding' | 'creditLedger' | 'patti') => {
     setShowLedgerMenu(false);
-    setLedgerStatus('generating');
     try {
       const { blob, filename } = generateLedgerPdf(format);
-      setLedgerStatus('sharing');
-      const result = await sharePdfViaWhatsApp(blob, filename, `${shopSettings.shopName || 'RVC'} — Customer Outstanding List`);
-      if (result === 'downloaded') {
-        alert('PDF downloaded. WhatsApp Web is opening — please attach the downloaded PDF to your message.');
+      const shareText = `${shopSettings.shopName || 'RVC'} — Customer Outstanding List`;
+      const file = new File([blob], filename, { type: 'application/pdf' });
+
+      // Mobile: use Web Share API (opens native share sheet with WhatsApp)
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        setLedgerStatus('sharing');
+        navigator.share({ files: [file], title: filename, text: shareText })
+          .then(() => setLedgerStatus('idle'))
+          .catch(() => setLedgerStatus('idle'));
+        return;
+      }
+
+      // Desktop: open WhatsApp Web FIRST (synchronously in click handler
+      // to avoid popup blocker), then download the PDF
+      const waUrl = `https://web.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
+      const waWin = window.open(waUrl, '_blank');
+
+      // Download the PDF
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      if (!waWin || waWin.closed) {
+        alert(
+          `WhatsApp Web was blocked by popup blocker.\n\n` +
+          `PDF downloaded: ${filename}\n\n` +
+          `Open WhatsApp Web manually: https://web.whatsapp.com`
+        );
+      } else {
+        alert(`PDF downloaded. WhatsApp Web opened in a new tab — please attach "${filename}" to your message.`);
       }
     } catch (err: any) {
       alert(err.message || 'Failed to generate PDF');
-    } finally {
       setLedgerStatus('idle');
     }
   };
@@ -248,7 +277,7 @@ export default function CustomersPage() {
                     🖨 Print
                   </button>
                   <button onClick={() => shareLedgerFormat('creditLedger')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
-                    📤 Share
+                    📤 WhatsApp
                   </button>
                 </div>
               </div>
@@ -259,7 +288,7 @@ export default function CustomersPage() {
                     🖨 Print
                   </button>
                   <button onClick={() => shareLedgerFormat('outstanding')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
-                    📤 Share
+                    📤 WhatsApp
                   </button>
                 </div>
               </div>
@@ -270,7 +299,7 @@ export default function CustomersPage() {
                     🖨 Print
                   </button>
                   <button onClick={() => shareLedgerFormat('patti')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
-                    📤 Share
+                    📤 WhatsApp
                   </button>
                 </div>
               </div>

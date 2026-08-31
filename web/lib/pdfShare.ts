@@ -804,8 +804,8 @@ export function generateBillsPdf(
 
 /**
  * Share a PDF blob via WhatsApp using the Web Share API (mobile).
- * On desktop: downloads the PDF AND opens WhatsApp Web so the user
- * can attach the file manually.
+ * On desktop: opens WhatsApp Web FIRST (synchronously to avoid popup
+ * blocker), then downloads the PDF for manual attachment.
  */
 export async function sharePdfViaWhatsApp(
   blob: Blob,
@@ -829,8 +829,12 @@ export async function sharePdfViaWhatsApp(
     }
   }
 
-  // Desktop fallback: download the PDF, then open WhatsApp Web
-  // with a pre-filled message so the user can attach the file
+  // Desktop fallback: open WhatsApp Web FIRST (synchronously, before
+  // any async operations, so popup blockers don't block it)
+  const text = encodeURIComponent(fallbackText || filename);
+  const waWin = window.open(`https://web.whatsapp.com/send?text=${text}`, '_blank');
+
+  // Then download the PDF
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -840,9 +844,15 @@ export async function sharePdfViaWhatsApp(
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-  // Open WhatsApp Web with the message text (user attaches PDF manually)
-  const text = encodeURIComponent(fallbackText || filename);
-  window.open(`https://web.whatsapp.com/send?text=${text}`, '_blank');
+  // If popup was blocked, show a clickable link
+  if (!waWin || waWin.closed) {
+    alert(
+      `WhatsApp Web was blocked by your browser popup blocker.\n\n` +
+      `The PDF has been downloaded.\n\n` +
+      `Please open WhatsApp Web manually: https://web.whatsapp.com\n` +
+      `Then attach the downloaded file: ${filename}`
+    );
+  }
 
   return 'downloaded';
 }
