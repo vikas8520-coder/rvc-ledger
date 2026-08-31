@@ -27,6 +27,7 @@ export default function CustomersPage() {
   const [batchLoading, setBatchLoading] = useState(false);
   const [showLedgerMenu, setShowLedgerMenu] = useState(false);
   const [ledgerStatus, setLedgerStatus] = useState<'idle' | 'generating' | 'sharing'>('idle');
+  const [openCustomerMenu, setOpenCustomerMenu] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/settings')
@@ -34,6 +35,14 @@ export default function CustomersPage() {
       .then((d) => setShopSettings(d.settings || {}))
       .catch(() => {});
   }, []);
+
+  // Close customer dropdown when clicking outside
+  useEffect(() => {
+    if (!openCustomerMenu) return;
+    const handler = () => setOpenCustomerMenu(null);
+    const timer = setTimeout(() => document.addEventListener('click', handler), 0);
+    return () => { clearTimeout(timer); document.removeEventListener('click', handler); };
+  }, [openCustomerMenu]);
 
   const loadOverdue = () => {
     setBatchLoading(true);
@@ -91,6 +100,87 @@ export default function CustomersPage() {
       // Fallback: just send text via wa.me
       window.open(waLink(msg, c.phone), '_blank');
     }
+  };
+
+  // Per-customer PDF generation (statement, credit ledger, bills)
+  const generateCustomerPdf = (c: typeof customers[number], format: 'statement' | 'creditLedger' | 'patti'): { blob: Blob; filename: string } => {
+    const dn = formatCustomerName(c, uiLang);
+    const dateStr = new Date().toLocaleDateString('en-IN').replace(/\//g, '-');
+    if (format === 'statement') {
+      return {
+        blob: generateStatementPdf(c, shopSettings as any, dn),
+        filename: `${dn.replace(/\s+/g, '-')}-statement-${dateStr}.pdf`,
+      };
+    } else if (format === 'creditLedger') {
+      const entries: CreditLedgerEntry[] = [{
+        code: '1',
+        name: dn,
+        phone: c.phone || undefined,
+        amount: Math.round(c.due),
+        isCredit: false,
+      }];
+      return {
+        blob: generateCreditLedgerPdf(entries, shopSettings as any, dateStr, dn),
+        filename: `${dn.replace(/\s+/g, '-')}-credit-ledger-${dateStr}.pdf`,
+      };
+    } else {
+      const bills = c.txns.filter((tx) => tx.type === 'bill');
+      if (bills.length === 0) throw new Error('No bills found for this customer');
+      const billData = bills.map((b) => txnToBillData(b, dn));
+      return {
+        blob: generateBillsPdf(billData, shopSettings as any, 'patti'),
+        filename: `${dn.replace(/\s+/g, '-')}-bills-${dateStr}.pdf`,
+      };
+    }
+  };
+
+  const printCustomerPdf = (c: typeof customers[number], format: 'statement' | 'creditLedger' | 'patti') => {
+    setOpenCustomerMenu(null);
+    try {
+      const { blob } = generateCustomerPdf(c, format);
+      printPdfBlob(blob);
+    } catch (err: any) {
+      alert(err.message || 'Failed to generate PDF');
+    }
+  };
+
+  const shareCustomerPdf = async (c: typeof customers[number], format: 'statement' | 'creditLedger' | 'patti') => {
+    setOpenCustomerMenu(null);
+    try {
+      const { blob, filename } = generateCustomerPdf(c, format);
+      const dn = formatCustomerName(c, uiLang);
+      const shareText = `${shopSettings.shopName || 'RVC'} — ${dn}`;
+      const file = new File([blob], filename, { type: 'application/pdf' });
+
+      // Windows + mobile: native share sheet with file attachment
+      const isMac = /Mac/i.test(navigator.userAgent) && !/Mobile|iPhone|iPad/i.test(navigator.userAgent);
+      const canShareFiles = typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] });
+
+      if (canShareFiles && !isMac) {
+        navigator.share({ files: [file], title: filename, text: shareText }).catch(() => {});
+        return;
+      }
+
+      // macOS: upload PDF, open WhatsApp Web with link
+      const formData = new FormData();
+      formData.append('pdf', file);
+      formData.append('title', shareText);
+      const res = await fetch('/api/pdf', { method: 'POST', body: formData });
+      if (!res.ok) throw new Error('Upload failed');
+      const { id } = await res.json();
+      const pdfLink = `${window.location.origin}/pdf/${id}`;
+      const waText = `${shareText}\n\nView PDF: ${pdfLink}`;
+      window.open(`https://web.whatsapp.com/send?text=${encodeURIComponent(waText)}`, '_blank');
+    } catch (err: any) {
+      alert(err.message || 'Failed to share PDF');
+    }
+  };
+
+  const sendCustomerReminder = (c: typeof customers[number]) => {
+    setOpenCustomerMenu(null);
+    const dn = formatCustomerName(c, uiLang);
+    const msg = reminderText(c, shopSettings.shopName || 'RVC', dn);
+    window.open(waLink(msg, c.phone), '_blank');
   };
 
   // Generate the PDF blob for a given format (used by both print and share)
@@ -427,14 +517,48 @@ export default function CustomersPage() {
                     </p>
                     {c.due > 0 && <p className="text-[10px] text-[var(--text-faint)]">{t('due')}</p>}
                   </div>
-                  <button
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); shareStatement(c); }}
-                    title={t('shareStatement')}
-                    className="shrink-0 rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-primary)] hover:text-[var(--text-on-primary)] transition-colors"
-                    aria-label={t('shareStatement')}
-                  >
-                    <MessageIcon size={16} />
-                  </button>
+                  <span className="relative shrink-0">
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpenCustomerMenu(openCustomerMenu === c.id ? null : c.id); }}
+                      title="Print & Share"
+                      className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-primary)] hover:text-[var(--text-on-primary)] transition-colors"
+                      aria-label="Print & Share"
+                    >
+                      <MessageIcon size={16} />
+                    </button>
+                    {openCustomerMenu === c.id && (
+                      <span className="absolute right-0 top-9 z-20 w-56 rounded-lg border border-[var(--border-light)] bg-[var(--bg-input)] p-1 shadow-lg">
+                        <div className="px-2 py-1.5">
+                          <p className="text-xs font-semibold text-[var(--text-secondary)]">Statement</p>
+                          <div className="mt-1 flex gap-1">
+                            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); printCustomerPdf(c, 'statement'); }} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">🖨 Print</button>
+                            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); shareCustomerPdf(c, 'statement'); }} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">📤 Share</button>
+                          </div>
+                        </div>
+                        {c.due > 0 && (
+                          <div className="border-t border-[var(--border-light)] px-2 py-1.5">
+                            <p className="text-xs font-semibold text-[var(--text-secondary)]">Mandi Ledger</p>
+                            <div className="mt-1 flex gap-1">
+                              <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); printCustomerPdf(c, 'creditLedger'); }} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">🖨 Print</button>
+                              <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); shareCustomerPdf(c, 'creditLedger'); }} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">📤 Share</button>
+                            </div>
+                          </div>
+                        )}
+                        <div className="border-t border-[var(--border-light)] px-2 py-1.5">
+                          <p className="text-xs font-semibold text-[var(--text-secondary)]">Compact Bills</p>
+                          <div className="mt-1 flex gap-1">
+                            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); printCustomerPdf(c, 'patti'); }} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">🖨 Print</button>
+                            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); shareCustomerPdf(c, 'patti'); }} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">📤 Share</button>
+                          </div>
+                        </div>
+                        {c.due > 0 && (
+                          <div className="border-t border-[var(--border-light)] px-2 py-1.5">
+                            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); sendCustomerReminder(c); }} className="w-full rounded-md bg-[var(--bg-success)] px-2 py-1.5 text-[11px] font-medium text-[var(--text-on-primary)] hover:bg-[var(--bg-success-hover)]">💬 Send Reminder</button>
+                          </div>
+                        )}
+                      </span>
+                    )}
+                  </span>
                 </div>
               </li>
             ))}
