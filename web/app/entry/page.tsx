@@ -21,6 +21,50 @@ function num(s: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+type RateUnit = 'per_kg' | 'per_10kg';
+type CalcField = 'bags' | 'weight' | 'kgBag' | 'rate' | 'amount';
+
+function round2(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
+/** 220 on /10kg is ₹22 per kg. */
+function toPerKg(entered: string, unit: RateUnit): number {
+  const r = num(entered);
+  if (r <= 0) return 0;
+  return unit === 'per_10kg' ? r / 10 : r;
+}
+
+function fillLine(line: Line, patch: Partial<Line>, kgBagDefault: number, unit: RateUnit, changed: CalcField): Line {
+  const next: Line = { ...line, ...patch };
+  if (changed === 'amount') return next;
+
+  let bags = num(next.bags);
+  let weight = num(next.weightKg);
+  const kgBag = kgBagDefault;
+
+  if (changed === 'bags' || changed === 'kgBag') {
+    if (bags > 0 && kgBag > 0) weight = round2(bags * kgBag);
+    else if (bags > 0 && weight > 0 && kgBag <= 0) {
+      /* keep weight; kg/bag is implied in the hint */
+    }
+  } else if (changed === 'weight') {
+    if (bags > 0 && weight > 0) {
+      /* implied kg/bag shown in hint */
+    } else if (weight > 0 && kgBag > 0 && bags <= 0) {
+      bags = round2(weight / kgBag);
+    }
+  }
+
+  if (bags > 0) next.bags = String(bags);
+  if (weight > 0) next.weightKg = String(weight);
+
+  const perKg = toPerKg(next.pricePerKg, unit);
+  const w = num(next.weightKg);
+  if (w > 0 && perKg > 0) next.amount = String(Math.round(w * perKg));
+  return next;
+}
+
 interface Line {
   id: string;
   commodity: string;
@@ -63,6 +107,7 @@ export default function EntryPage() {
   const [farmerName, setFarmerName] = useState('');
   const [kgPerBag, setKgPerBag] = useState('');
   const [bagsReceived, setBagsReceived] = useState('');
+  const [rateUnit, setRateUnit] = useState<RateUnit>('per_10kg');
   const [hundekari, setHundekari] = useState('');
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
 
@@ -126,22 +171,40 @@ export default function EntryPage() {
   const exp = comm + hamali + num(bardan) + num(freight) + num(advance) + num(packing) + num(other);
   const nett = gross - exp;
   const leftover = num(bagsReceived) > 0 ? num(bagsReceived) - totalBagsSold : 0;
+  const stockKg = num(bagsReceived) > 0 && num(kgPerBag) > 0 ? round2(num(bagsReceived) * num(kgPerBag)) : 0;
 
-  const updateLine = (id: string, patch: Partial<Line>) => {
-    setLines((prev) =>
-      prev.map((l) => {
-        if (l.id !== id) return l;
-        const next = { ...l, ...patch };
-        if (patch.bags !== undefined && num(kgPerBag) > 0 && !patch.weightKg) {
-          next.weightKg = String(Math.round(num(next.bags) * num(kgPerBag) * 100) / 100);
-        }
-        if (patch.bags !== undefined || patch.weightKg !== undefined || patch.pricePerKg !== undefined) {
-          const amt = num(next.weightKg) * num(next.pricePerKg);
-          next.amount = amt > 0 ? String(Math.round(amt)) : next.amount;
-        }
-        return next;
-      }),
-    );
+  const updateLine = (id: string, patch: Partial<Line>, changed: CalcField = 'rate') => {
+    setLines((prev) => prev.map((l) => (l.id === id ? fillLine(l, patch, num(kgPerBag), rateUnit, changed) : l)));
+  };
+
+  const setKgPerBagAndFill = (v: string) => {
+    setKgPerBag(v);
+    const k = num(v);
+    setLines((prev) => prev.map((l) => fillLine(l, {}, k, rateUnit, 'kgBag')));
+  };
+
+  const setRateUnitAndFill = (u: RateUnit) => {
+    setRateUnit(u);
+    setLines((prev) => prev.map((l) => fillLine(l, {}, num(kgPerBag), u, 'rate')));
+  };
+
+  const lineHint = (l: Line) => {
+    const b = num(l.bags);
+    const w = num(l.weightKg);
+    const k = b > 0 && w > 0 ? round2(w / b) : num(kgPerBag);
+    const pk = toPerKg(l.pricePerKg, rateUnit);
+    const bits: string[] = [];
+    if (b > 0 && k > 0) bits.push(`${b} bags × ${k} kg`);
+    if (w > 0) bits.push(`= ${w} kg`);
+    if (pk > 0 && l.pricePerKg) {
+      bits.push(
+        rateUnit === 'per_10kg'
+          ? `@ ₹${l.pricePerKg}/10kg = ₹${round2(pk)}/kg`
+          : `@ ₹${l.pricePerKg}/kg`,
+      );
+    }
+    if (num(l.amount) > 0) bits.push(`→ ${fmt(num(l.amount))}`);
+    return bits.join(' · ');
   };
 
   const setCustomerOnLine = (id: string, name: string) => {
@@ -242,9 +305,9 @@ export default function EntryPage() {
             raw_text: sale.commodity,
             confirmed_name: sale.commodity,
             qty: sale.weightKg || null,
-            rate: sale.pricePerKg || null,
+            rate: toPerKg(sale.pricePerKg, rateUnit) ? String(round2(toPerKg(sale.pricePerKg, rateUnit))) : sale.pricePerKg || null,
             amount: num(sale.amount),
-            display: `${sale.bags || 0} bags${sale.weightKg ? `, ${sale.weightKg} kg` : ''} @ ₹${sale.pricePerKg}/kg`,
+            display: `${sale.bags || 0} bags${sale.weightKg ? `, ${sale.weightKg} kg` : ''} @ ₹${sale.pricePerKg}/${rateUnit === 'per_10kg' ? '10kg' : 'kg'}`,
             kind: 'item' as const,
             chargeCode: null,
             farmer: farmerName.trim(),
@@ -361,8 +424,8 @@ export default function EntryPage() {
             <Autocomplete options={farmers} value={farmerName} onChange={setFarmerName} placeholder="LOCAL, RSB…" />
           </div>
           <div>
-            <label className="text-xs text-[var(--text-muted)]">kg / bag</label>
-            <input type="number" inputMode="decimal" value={kgPerBag} onChange={(e) => setKgPerBag(e.target.value)} placeholder="20" className={inputCls} />
+            <label className="text-xs text-[var(--text-muted)]">{t('kgPerBag')}</label>
+            <input type="number" inputMode="decimal" value={kgPerBag} onChange={(e) => setKgPerBagAndFill(e.target.value)} placeholder="20" className={inputCls} />
           </div>
           <div>
             <label className="text-xs text-[var(--text-muted)]">{t('bags')} in</label>
@@ -373,6 +436,37 @@ export default function EntryPage() {
             <input value={hundekari} onChange={(e) => setHundekari(e.target.value)} className={inputCls} />
           </div>
         </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-[var(--text-muted)]">{t('rate')}</span>
+          <button
+            type="button"
+            onClick={() => setRateUnitAndFill('per_10kg')}
+            className={`min-h-11 rounded-md px-3 text-sm font-medium ${
+              rateUnit === 'per_10kg'
+                ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'
+                : 'border border-[var(--border-input)] text-[var(--text-muted)]'
+            }`}
+          >
+            {t('ratePer10kg')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setRateUnitAndFill('per_kg')}
+            className={`min-h-11 rounded-md px-3 text-sm font-medium ${
+              rateUnit === 'per_kg'
+                ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'
+                : 'border border-[var(--border-input)] text-[var(--text-muted)]'
+            }`}
+          >
+            {t('ratePerKg')}
+          </button>
+          <span className="text-xs text-[var(--text-muted)]">{t('wholesaleHint')}</span>
+        </div>
+        {stockKg > 0 && (
+          <p className="mt-2 text-xs text-[var(--text-muted)]">
+            {bagsReceived} bags × {kgPerBag} kg = <span className="font-semibold text-[var(--text-primary)]">{stockKg} kg</span> in
+          </p>
+        )}
         <button type="button" onClick={() => setShowAddFarmer((v) => !v)} className="mt-2 text-xs text-[var(--text-muted)] underline">
           + {t('farmer')}
         </button>
@@ -431,7 +525,7 @@ export default function EntryPage() {
                     type="number"
                     inputMode="numeric"
                     value={line.bags}
-                    onChange={(e) => updateLine(line.id, { bags: e.target.value })}
+                    onChange={(e) => updateLine(line.id, { bags: e.target.value }, 'bags')}
                     placeholder="0"
                     className={inputCls}
                   />
@@ -441,18 +535,18 @@ export default function EntryPage() {
                     type="number"
                     inputMode="decimal"
                     value={line.weightKg}
-                    onChange={(e) => updateLine(line.id, { weightKg: e.target.value })}
+                    onChange={(e) => updateLine(line.id, { weightKg: e.target.value }, 'weight')}
                     placeholder="0"
                     className={inputCls}
                   />
                 </Field>
-                <Field label={t('ratePerKg')} className="w-24 shrink-0">
+                <Field label={rateUnit === 'per_10kg' ? t('ratePer10kg') : t('ratePerKg')} className="w-28 shrink-0">
                   <input
                     type="number"
                     inputMode="decimal"
                     value={line.pricePerKg}
-                    onChange={(e) => updateLine(line.id, { pricePerKg: e.target.value })}
-                    placeholder="0"
+                    onChange={(e) => updateLine(line.id, { pricePerKg: e.target.value }, 'rate')}
+                    placeholder={rateUnit === 'per_10kg' ? '220' : '22'}
                     className={inputCls}
                   />
                 </Field>
@@ -461,7 +555,7 @@ export default function EntryPage() {
                     type="number"
                     inputMode="numeric"
                     value={line.amount}
-                    onChange={(e) => updateLine(line.id, { amount: e.target.value })}
+                    onChange={(e) => updateLine(line.id, { amount: e.target.value }, 'amount')}
                     className={`${inputCls} font-semibold`}
                   />
                 </Field>
@@ -481,11 +575,14 @@ export default function EntryPage() {
                     type="number"
                     inputMode="decimal"
                     value={line.hamali}
-                    onChange={(e) => updateLine(line.id, { hamali: e.target.value })}
+                    onChange={(e) => updateLine(line.id, { hamali: e.target.value }, 'amount')}
                     className={inputCls}
                   />
                 </Field>
               </div>
+              {lineHint(line) && (
+                <p className="mt-2 text-xs text-[var(--text-muted)]">{lineHint(line)}</p>
+              )}
             </div>
           ))}
         </div>
