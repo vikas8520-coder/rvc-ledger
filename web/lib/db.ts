@@ -448,11 +448,10 @@ export async function getFYSummary(shopId: string, fyStartYear: number): Promise
   const [totalsResult, customersResult] = await Promise.all([
     sql`
       SELECT
-        COALESCE(SUM(CASE WHEN c.name != 'CASH SALES' THEN t.bill_amount ELSE 0 END), 0) as credit_sales,
-        COALESCE(SUM(CASE WHEN c.name = 'CASH SALES' THEN t.bill_amount ELSE 0 END), 0) as cash_sales,
-        COALESCE(SUM(t.amount_paid), 0) as payments
+        COALESCE(SUM(CASE WHEN t.bill_amount > 0 AND t.amount_paid >= t.bill_amount THEN t.bill_amount ELSE 0 END), 0) as cash_sales,
+        COALESCE(SUM(CASE WHEN t.bill_amount > 0 AND t.amount_paid < t.bill_amount THEN t.bill_amount ELSE 0 END), 0) as credit_sales,
+        COALESCE(SUM(CASE WHEN t.bill_amount = 0 AND t.amount_paid > 0 THEN t.amount_paid ELSE 0 END), 0) as payments
       FROM transactions t
-      JOIN customers c ON c.id = t.customer_id
       WHERE t.shop_id = ${shopId} AND t.date >= ${from} AND t.date <= ${to}
     `,
     sql`
@@ -1199,15 +1198,25 @@ export async function getCustomers(shopId: string, fyStartYear?: number): Promis
 
     let balance = openingBalance;
     const txnViews: TxnView[] = customerTxns.map((t) => {
-      const amount = Number(t.amount_paid > 0 ? t.amount_paid : t.bill_amount);
-      const type: 'bill' | 'payment' = Number(t.amount_paid) > 0 ? 'payment' : 'bill';
-      const title =
-        Number(t.amount_paid) > 0
+      const billAmount = Number(t.bill_amount);
+      const paidAmount = Number(t.amount_paid);
+      // Cash sale: bill_amount > 0 AND amount_paid >= bill_amount (immediately settled)
+      // Payment: bill_amount = 0 AND amount_paid > 0
+      // Credit bill: bill_amount > 0 AND amount_paid < bill_amount
+      const isCashSale = billAmount > 0 && paidAmount >= billAmount;
+      const isPayment = billAmount === 0 && paidAmount > 0;
+      const type: 'bill' | 'payment' = isPayment ? 'payment' : 'bill';
+      const amount = isPayment ? paidAmount : billAmount;
+      const title = isCashSale
+        ? 'Cash Sale'
+        : isPayment
           ? 'Payment received'
           : t.bill_no
             ? `Bill No. ${t.bill_no}`
             : 'Bill';
-      balance += type === 'bill' ? Number(t.bill_amount) : -Number(t.amount_paid);
+      // Cash sales don't affect the running balance (settled immediately)
+      if (type === 'bill' && !isCashSale) balance += billAmount;
+      else if (isPayment) balance -= paidAmount;
 
       const txnItems = (itemsByTxn.get(t.id as string) || []).map((it) => {
         let detail = it.display || '';
@@ -1293,9 +1302,14 @@ export async function saveBill(shopId: string, bill: BillData): Promise<void> {
 
   const notes = bill.market ? encodeMarketNotes(bill.market) : null;
 
+  // Cash sales: settle immediately (amount_paid = total, so due = 0)
+  // Credit sales: amount_paid = 0 (customer owes the amount)
+  const isCash = bill.paymentType === 'cash';
+  const amountPaid = isCash ? bill.total : 0;
+
   const [transaction] = await sql`
-    INSERT INTO transactions (customer_id, date, bill_no, bill_amount, amount_paid, notes, image_path, shop_id)
-    VALUES (${customer.id}, ${bill.date}, ${bill.billNo}, ${bill.total}, 0, ${notes}, ${bill.imagePath || null}, ${shopId})
+    INSERT INTO transactions (customer_id, date, bill_no, bill_amount, amount_paid, notes, image_path, shop_id, payment_method)
+    VALUES (${customer.id}, ${bill.date}, ${bill.billNo}, ${bill.total}, ${amountPaid}, ${notes}, ${bill.imagePath || null}, ${shopId}, ${isCash ? 'cash' : 'credit'})
     RETURNING id
   `;
 
@@ -1364,6 +1378,7 @@ export async function getDaySales(shopId: string, date: string): Promise<any[]> 
     SELECT
       t.id as txn_id,
       t.bill_amount,
+      t.amount_paid,
       t.customer_id,
       c.name as customer_name,
       c.english_name,
@@ -1400,6 +1415,7 @@ export async function getDaySales(shopId: string, date: string): Promise<any[]> 
     rate: r.rate,
     amount: Number(r.amount || r.bill_amount || 0),
     hamali: r.hamali,
+    isCash: Number(r.amount_paid) > 0 && Number(r.amount_paid) >= Number(r.bill_amount),
   }));
 }
 

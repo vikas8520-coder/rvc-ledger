@@ -30,6 +30,7 @@ export interface BillData {
   items: BillItem[];
   imagePath?: string;
   market?: MarketMeta;
+  paymentType?: 'cash' | 'credit';
 }
 
 export interface PurchaseItem {

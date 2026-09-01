@@ -39,6 +39,7 @@ interface SaleLine {
   amount: number;
   saved: boolean; // already in DB
   txnId?: string; // transaction ID if saved
+  isCash?: boolean; // cash sale (immediately settled) or credit
 }
 
 let idCounter = 0;
@@ -62,6 +63,7 @@ export default function SellPage() {
   const [rate, setRate] = useState('');
   const [hamaliEnabled, setHamaliEnabled] = useState(false);
   const [hamali, setHamali] = useState('');
+  const [paymentType, setPaymentType] = useState<'cash' | 'credit'>('credit');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -143,6 +145,7 @@ export default function SellPage() {
           amount: num(l.amount),
           saved: true,
           txnId: l.txnId,
+          isCash: l.isCash || false,
         })));
       })
       .catch(() => {});
@@ -188,6 +191,7 @@ export default function SellPage() {
           billNo: null,
           total: computedAmount,
           items,
+          paymentType,
         }),
       });
       const data = await res.json();
@@ -211,10 +215,12 @@ export default function SellPage() {
         hamali: hamaliEnabled ? hamali : '',
         amount: computedAmount,
         saved: true,
+        isCash: paymentType === 'cash',
       }]);
 
       // Reset form for next entry
       setBags(''); setKgs(''); setRate(''); setHamali(''); setHamaliEnabled(false);
+      setPaymentType('credit');
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
     } catch (err: any) {
@@ -235,6 +241,7 @@ export default function SellPage() {
     setRate(line.rate);
     setHamaliEnabled(line.hamaliEnabled);
     setHamali(line.hamali);
+    setPaymentType(line.isCash ? 'cash' : 'credit');
     setEditingId(line.txnId || line.id);
     setSaveError('');
     setSaveSuccess(false);
@@ -278,6 +285,7 @@ export default function SellPage() {
           billNo: null,
           total: computedAmount,
           items,
+          paymentType,
         }),
       });
       const data = await res.json();
@@ -303,6 +311,7 @@ export default function SellPage() {
             hamali: hamaliEnabled ? hamali : '',
             amount: computedAmount,
             saved: true,
+            isCash: paymentType === 'cash',
           };
         }
         return l;
@@ -311,6 +320,7 @@ export default function SellPage() {
       // Reset form
       setItem(''); setFarmer(''); setCustomerId(null); setCustomerName('');
       setBags(''); setKgs(''); setRate(''); setHamali(''); setHamaliEnabled(false);
+      setPaymentType('credit');
       setEditingId(null);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
@@ -324,6 +334,7 @@ export default function SellPage() {
   const handleCancelEdit = () => {
     setItem(''); setFarmer(''); setCustomerId(null); setCustomerName('');
     setBags(''); setKgs(''); setRate(''); setHamali(''); setHamaliEnabled(false);
+    setPaymentType('credit');
     setEditingId(null);
     setSaveError('');
   };
@@ -351,8 +362,8 @@ export default function SellPage() {
   const totalKgs = dayLines.reduce((s, l) => s + num(l.kgs), 0);
   const totalAmount = dayLines.reduce((s, l) => s + l.amount, 0);
   const totalHamali = dayLines.reduce((s, l) => s + (l.hamaliEnabled ? num(l.hamali) : 0), 0);
-  const cashTotal = dayLines.filter((l) => l.customerName === 'CASH SALES').reduce((s, l) => s + l.amount, 0);
-  const creditTotal = dayLines.filter((l) => l.customerName !== 'CASH SALES').reduce((s, l) => s + l.amount, 0);
+  const cashTotal = dayLines.filter((l) => l.isCash).reduce((s, l) => s + l.amount, 0);
+  const creditTotal = dayLines.filter((l) => !l.isCash).reduce((s, l) => s + l.amount, 0);
 
   // Build BillPrintData from dayLines (group by txnId)
   const dayLinesToBills = (): BillPrintData[] => {
@@ -678,6 +689,35 @@ export default function SellPage() {
           </div>
         </div>
 
+        {/* Payment type toggle */}
+        <div>
+          <label className="text-xs text-[var(--text-muted)]">Payment Type</label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setPaymentType('credit')}
+              className={`flex-1 rounded-lg border py-2 text-sm font-medium transition-colors ${
+                paymentType === 'credit'
+                  ? 'border-[var(--bg-primary)] bg-[var(--bg-primary)] text-[var(--text-on-primary)]'
+                  : 'border-[var(--border-input)] bg-[var(--bg-base)] text-[var(--text-secondary)] hover:bg-[var(--bg-card-hover)]'
+              }`}
+            >
+              Credit (उधार)
+            </button>
+            <button
+              type="button"
+              onClick={() => setPaymentType('cash')}
+              className={`flex-1 rounded-lg border py-2 text-sm font-medium transition-colors ${
+                paymentType === 'cash'
+                  ? 'border-[var(--bg-success)] bg-[var(--bg-success)] text-[var(--text-on-primary)]'
+                  : 'border-[var(--border-input)] bg-[var(--bg-base)] text-[var(--text-secondary)] hover:bg-[var(--bg-card-hover)]'
+              }`}
+            >
+              Cash (नकद)
+            </button>
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           <div>
             <label className="text-xs text-[var(--text-muted)]">{t('bags')}</label>
@@ -802,7 +842,7 @@ export default function SellPage() {
               </thead>
               <tbody>
                 {dayLines.map((l, i) => {
-                  const isCash = l.customerName === 'CASH SALES';
+                  const isCash = l.isCash;
                   const displayName = formatCustomerName({
                     name: l.customerName,
                     englishName: l.englishName,
@@ -814,7 +854,12 @@ export default function SellPage() {
                     <tr key={l.id} className={`border-l-4 ${isEditing ? 'border-l-[var(--bg-warning)]' : isCash ? 'border-l-[var(--bg-success)]' : 'border-l-[var(--bg-primary)]'} border-b border-[var(--border-light)] ${isEditing ? 'bg-[var(--bg-warning)] bg-opacity-10' : ''}`}>
                       <td className="py-1.5 pr-2 text-xs text-[var(--text-muted)]">{i + 1}</td>
                       <td className="py-1.5 pr-2 font-medium">{l.item}</td>
-                      <td className="py-1.5 pr-2">{displayName}</td>
+                      <td className="py-1.5 pr-2">
+                        {displayName}
+                        <span className={`ml-1 rounded px-1 py-0.5 text-[10px] font-medium ${isCash ? 'bg-[var(--bg-success)] text-[var(--text-on-primary)]' : 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'}`}>
+                          {isCash ? 'Cash' : 'Credit'}
+                        </span>
+                      </td>
                       <td className="py-1.5 pr-2 text-right">{l.bags || '—'}</td>
                       <td className="py-1.5 pr-2 text-right">{l.kgs || '—'}</td>
                       <td className="py-1.5 pr-2 text-right">{l.rate}</td>
