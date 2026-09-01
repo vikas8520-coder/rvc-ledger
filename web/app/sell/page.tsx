@@ -90,6 +90,8 @@ export default function SellPage() {
   const [newCustomerEnglishName, setNewCustomerEnglishName] = useState('');
   const [newCustomerTeluguName, setNewCustomerTeluguName] = useState('');
   const [newCustomerHindiName, setNewCustomerHindiName] = useState('');
+  const [addingCustomer, setAddingCustomer] = useState(false);
+  const [addCustomerError, setAddCustomerError] = useState('');
 
   // Add farmer inline
   const [showAddFarmer, setShowAddFarmer] = useState(false);
@@ -709,6 +711,8 @@ export default function SellPage() {
 
   const handleAddCustomer = async () => {
     if (!newCustomerName.trim()) return;
+    setAddingCustomer(true);
+    setAddCustomerError('');
     try {
       const res = await fetch('/api/customers', {
         method: 'POST',
@@ -721,24 +725,25 @@ export default function SellPage() {
           phone: newCustomerPhone.trim() || null,
         }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        const newC: CustomerOption = {
-          id: data.id,
-          name: newCustomerName.trim(),
-          englishName: newCustomerEnglishName.trim() || null,
-          teluguName: newCustomerTeluguName.trim() || null,
-          hindiName: newCustomerHindiName.trim() || null,
-          phone: newCustomerPhone.trim() || null,
-        };
-        setCustomers(prev => [...prev, newC]);
-        setCustomerId(newC.id);
-        setCustomerName(newC.name);
-        setShowAddCustomer(false);
-        setNewCustomerName(''); setNewCustomerEnglishName(''); setNewCustomerTeluguName(''); setNewCustomerHindiName(''); setNewCustomerPhone('');
-      }
-    } catch (e) {
-      console.error('Failed to add customer:', e);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to add customer');
+      const newC: CustomerOption = {
+        id: data.id,
+        name: newCustomerName.trim(),
+        englishName: newCustomerEnglishName.trim() || null,
+        teluguName: newCustomerTeluguName.trim() || null,
+        hindiName: newCustomerHindiName.trim() || null,
+        phone: newCustomerPhone.trim() || null,
+      };
+      setCustomers(prev => [...prev, newC]);
+      setCustomerId(newC.id);
+      setCustomerName(newC.name);
+      setShowAddCustomer(false);
+      setNewCustomerName(''); setNewCustomerEnglishName(''); setNewCustomerTeluguName(''); setNewCustomerHindiName(''); setNewCustomerPhone('');
+    } catch (e: any) {
+      setAddCustomerError(e.message || 'Failed to add customer');
+    } finally {
+      setAddingCustomer(false);
     }
   };
 
@@ -877,7 +882,7 @@ export default function SellPage() {
                 setCustomerId(cid);
                 setCustomerName(cname);
               }}
-              onAddNew={() => setShowAddCustomer(true)}
+              onAddNew={() => { setShowAddCustomer(true); setAddCustomerError(''); }}
               placeholder={t('selectCustomer')}
             />
           </div>
@@ -1272,14 +1277,19 @@ export default function SellPage() {
                 </div>
               </div>
             </div>
+            {addCustomerError && (
+              <p className="rounded-lg bg-[var(--bg-error)] px-3 py-2 text-xs text-[var(--text-on-primary)]">
+                {addCustomerError}
+              </p>
+            )}
             <div className="flex gap-2 pt-2">
-              <button onClick={() => setShowAddCustomer(false)}
+              <button onClick={() => { setShowAddCustomer(false); setAddCustomerError(''); }}
                 className="flex-1 rounded-lg border border-[var(--border-input)] py-2 text-sm text-[var(--text-primary)]">
                 {t('cancel')}
               </button>
-              <button onClick={handleAddCustomer}
-                className="flex-1 rounded-lg bg-[var(--bg-primary)] py-2 text-sm font-medium text-[var(--text-on-primary)]">
-                {t('save')}
+              <button onClick={handleAddCustomer} disabled={addingCustomer || !newCustomerName.trim()}
+                className="flex-1 rounded-lg bg-[var(--bg-primary)] py-2 text-sm font-medium text-[var(--text-on-primary)] disabled:opacity-50">
+                {addingCustomer ? 'Saving…' : t('save')}
               </button>
             </div>
           </div>
