@@ -2,18 +2,35 @@ import { SignIn } from '@clerk/nextjs';
 
 export default function SignInPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[var(--bg-base)] px-4">
-      <SignIn appearance={{
-        elements: {
-          rootBox: 'mx-auto',
-          card: 'bg-[var(--bg-input)] shadow-lg rounded-xl border border-[var(--border-light)]',
-          headerTitle: 'text-[var(--bg-primary)]',
-          headerSubtitle: 'text-[var(--text-muted)]',
-          socialButtonsBlockButton: 'border-[var(--border-light)]',
-          formButtonPrimary: 'bg-[var(--bg-primary)] hover:bg-[var(--bg-primary-hover)] text-[var(--text-on-primary)]',
-          footerActionLink: 'text-[var(--bg-primary)] hover:text-[var(--bg-primary-hover)]',
-        },
-      }} />
+    <div className="flex min-h-screen items-center justify-center bg-[var(--bg-base)] px-4 py-8">
+      <div className="w-full max-w-sm">
+        {/* Shop login header — distinct from admin login */}
+        <div className="mb-6 text-center">
+          <div className="inline-flex items-center gap-2 rounded-full bg-[var(--bg-primary)] px-3 py-1 mb-3">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-on-primary)]">Shop Ledger</span>
+          </div>
+          <h1 className="text-2xl font-bold text-[var(--bg-primary)]">RVC Ledger</h1>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Sign in to access your shop</p>
+        </div>
+
+        <SignIn appearance={{
+          elements: {
+            rootBox: 'mx-auto w-full',
+            card: 'bg-[var(--bg-input)] shadow-lg rounded-xl border border-[var(--border-light)]',
+            headerTitle: 'text-[var(--bg-primary)]',
+            headerSubtitle: 'text-[var(--text-muted)]',
+            socialButtonsBlockButton: 'border-[var(--border-light)]',
+            formButtonPrimary: 'bg-[var(--bg-primary)] hover:bg-[var(--bg-primary-hover)] text-[var(--text-on-primary)]',
+            footerActionLink: 'text-[var(--bg-primary)] hover:text-[var(--bg-primary-hover)]',
+          },
+        }} />
+
+        {/* Clear separation — link to admin login */}
+        <p className="mt-6 text-center text-[11px] text-[var(--text-faint)]">
+          Are you the superadmin?{' '}
+          <a href="/admin/login" className="font-medium text-[var(--text-muted)] underline">Admin login →</a>
+        </p>
+      </div>
     </div>
   );
 }

@@ -247,11 +247,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--bg-base)] gap-6 px-4">
         <div className="flex flex-col items-center gap-3">
+          <div className="inline-flex items-center gap-2 rounded-full bg-[var(--bg-primary)] px-3 py-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-on-primary)]">Shop Ledger</span>
+          </div>
           <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--bg-primary)] text-lg font-bold text-[var(--text-on-primary)]">
             RVC
           </span>
           <h1 className="text-2xl font-bold text-[var(--bg-primary)]">RVC Ledger</h1>
-          <p className="text-sm text-[var(--text-muted)]">Sign in to access your shop ledger</p>
+          <p className="text-sm text-[var(--text-muted)]">Sign in to access your shop</p>
         </div>
         <div className="flex flex-wrap justify-center gap-3">
           <Link href="/sign-in" className="rounded-lg bg-[var(--bg-primary)] px-5 py-2.5 text-sm font-semibold text-[var(--text-on-primary)] hover:bg-[var(--bg-primary-hover)]">
@@ -261,6 +264,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             Sign up
           </Link>
         </div>
+        <p className="text-center text-[11px] text-[var(--text-faint)]">
+          Are you the superadmin?{' '}
+          <Link href="/admin/login" className="font-medium text-[var(--text-muted)] underline">Admin login →</Link>
+        </p>
       </div>
     );
   }
