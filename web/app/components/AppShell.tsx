@@ -63,7 +63,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const isAuthPage = path === '/sign-in' || path === '/sign-up' || path === '/onboarding';
 
   useEffect(() => {
-    if (!CLERK_CONFIGURED || !CLERK_PRODUCTION || !isLoaded || !user || isAuthPage) return;
+    if (!CLERK_CONFIGURED || !isLoaded || !user || isAuthPage) return;
     fetch('/api/me')
       .then((r) => r.json())
       .then((d) => {
@@ -81,7 +81,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     setMenuOpen(false);
   }, [path]);
 
-  if (isAuthPage && CLERK_PRODUCTION) {
+  if (isAuthPage && CLERK_CONFIGURED) {
     return <>{children}</>;
   }
 
@@ -161,7 +161,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             >
               {menuOpen ? <XIcon size={18} /> : <MenuIcon size={18} />}
             </button>
-            {CLERK_PRODUCTION && <UserButton />}
+            {CLERK_CONFIGURED && <UserButton />}
           </div>
         </div>
 
@@ -225,8 +225,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     </div>
   );
 
-  // If Clerk production is not configured, show the app without auth
-  if (!CLERK_PRODUCTION) {
+  // If Clerk is not configured, show the app without auth
+  if (!CLERK_CONFIGURED) {
     return <Shell>{children}</Shell>;
   }
 
