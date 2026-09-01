@@ -24,11 +24,6 @@ export default function SignUpPage() {
             footerActionLink: 'text-[var(--bg-primary)] hover:text-[var(--bg-primary-hover)]',
           },
         }} />
-
-        <p className="mt-6 text-center text-[11px] text-[var(--text-faint)]">
-          Are you the superadmin?{' '}
-          <a href="/admin/login" className="font-medium text-[var(--text-muted)] underline">Admin login →</a>
-        </p>
       </div>
     </div>
   );

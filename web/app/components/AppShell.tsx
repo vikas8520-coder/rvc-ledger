@@ -55,13 +55,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const router = useRouter();
   const { isLoaded, user, signOut } = useClerkSafe();
-  const [authState, setAuthState] = useState<{ role: string; shopId: string | null } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
   const isAuthPage = path === '/sign-in' || path === '/sign-up' || path === '/onboarding' || path === '/user-profile';
+  const isAdminPage = path === '/admin' || path.startsWith('/admin/');
 
   useEffect(() => {
-    if (!CLERK_CONFIGURED || !isLoaded || !user || isAuthPage) return;
+    if (!CLERK_CONFIGURED || !isLoaded || !user || isAuthPage || isAdminPage) return;
     fetch('/api/me')
       .then((r) => r.json())
       .then((d) => {
@@ -69,7 +69,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         if (!d.shopId && d.role !== 'superadmin') {
           router.push('/onboarding');
         }
-        setAuthState({ role: d.role, shopId: d.shopId });
       })
       .catch(() => {});
   }, [isLoaded, user, isAuthPage, path, router]);
@@ -79,7 +78,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     setMenuOpen(false);
   }, [path]);
 
-  if (isAuthPage && CLERK_CONFIGURED) {
+  if (isAdminPage || (isAuthPage && CLERK_CONFIGURED)) {
     return <>{children}</>;
   }
 
@@ -90,8 +89,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       : 'text-[var(--text-secondary)] hover:bg-[var(--bg-card)]';
   };
 
-  const isAdmin = authState?.role === 'superadmin';
-  const allNav = [...PRIMARY_NAV, ...SECONDARY_NAV];
+
 
   const renderNav = (items: NavItem[], isPrimary: boolean) => (
     items.map((item) => {
@@ -178,12 +176,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <div className="hidden lg:block border-t border-[var(--border-light)]">
           <div className="mx-auto flex max-w-6xl items-center gap-0.5 px-3 py-1 sm:px-5">
             {renderNav(SECONDARY_NAV, false)}
-            {isAdmin && (
-              <Link href="/admin" className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm ${tabClass('/admin')}`}>
-                <SettingsIcon size={15} />
-                Admin
-              </Link>
-            )}
           </div>
         </div>
 
@@ -195,12 +187,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               {renderNav(PRIMARY_NAV, true)}
               <p className="text-[10px] uppercase tracking-wide text-[var(--text-faint)] px-2.5 py-1 pt-3">More</p>
               {renderNav(SECONDARY_NAV, false)}
-              {isAdmin && (
-                <Link href="/admin" className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm ${tabClass('/admin')}`}>
-                  <SettingsIcon size={15} />
-                  Admin
-                </Link>
-              )}
             </div>
           </div>
         )}
@@ -273,10 +259,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             Sign up
           </Link>
         </div>
-        <p className="text-center text-[11px] text-[var(--text-faint)]">
-          Are you the superadmin?{' '}
-          <Link href="/admin/login" className="font-medium text-[var(--text-muted)] underline">Admin login →</Link>
-        </p>
+
       </div>
     );
   }
