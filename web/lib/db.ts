@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { neon, NeonQueryFunction } from '@neondatabase/serverless';
 import { Customer, BillData, BillItem, TxnView, PurchaseData, PurchaseView, Supplier, WastageEntry, CatalogItem, StockLevel, ExpenseEntry, DailySummary, ItemRateHistory, ItemRateEntry, OverdueCustomer } from './types';
 import { decodeMarketNotes, encodeMarketNotes, detectCharge, parseDisplay, type ChargeKind } from './market';
@@ -528,7 +529,14 @@ export async function getFarmerSummary(shopId: string, fyStartYear: number): Pro
       bi.farmer,
       COALESCE(SUM(bi.amount), 0) as total_sales,
       COALESCE(SUM(COALESCE(bi.bags, 0)), 0) as total_bags,
-      COALESCE(SUM(CASE WHEN bi.qty ~ '^[0-9]+\.?[0-9]*$' THEN bi.qty::numeric ELSE 0 END), 0) as total_kgs,
+      COALESCE(SUM(
+        CASE
+          WHEN bi.qty ~ '^[0-9]+\.?[0-9]*$' THEN bi.qty::numeric
+          WHEN substring(bi.qty from '[0-9]+[.]?[0-9]*') IS NOT NULL
+            THEN substring(bi.qty from '[0-9]+[.]?[0-9]*')::numeric
+          ELSE 0
+        END
+      ), 0) as total_kgs,
       COALESCE(SUM(COALESCE(bi.hamali, 0)), 0) as total_hamali,
       COUNT(*) as line_count
     FROM bill_items bi
@@ -568,6 +576,15 @@ function toDateOnly(value: unknown): string {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+/** Store kg as a bare number so farmer totals can SUM(qty). */
+export function numericQty(qty: string | null | undefined): string | null {
+  if (qty == null) return null;
+  const s = String(qty).trim();
+  if (!s) return null;
+  const m = s.match(/-?\d+(?:\.\d+)?/);
+  return m ? m[0] : null;
 }
 
 function inferItemKind(it: BillItem & { charge_code?: string | null; kind?: ChargeKind | null }): {
@@ -1319,7 +1336,7 @@ export async function saveBill(shopId: string, bill: BillData): Promise<void> {
     const inferred = inferItemKind(it);
     await sql`
       INSERT INTO bill_items (transaction_id, raw_text, confirmed_name, qty, rate, amount, display, kind, charge_code, shop_id, farmer, hamali, bags)
-      VALUES (${transaction.id}, ${it.raw_text}, ${it.confirmed_name}, ${it.qty}, ${it.rate}, ${it.amount}, ${it.display}, ${inferred.kind}, ${inferred.chargeCode}, ${shopId}, ${it.farmer || null}, ${it.hamali || null}, ${it.bags || null})
+      VALUES (${transaction.id}, ${it.raw_text}, ${it.confirmed_name}, ${numericQty(it.qty)}, ${it.rate}, ${it.amount}, ${it.display}, ${inferred.kind}, ${inferred.chargeCode}, ${shopId}, ${it.farmer || null}, ${it.hamali || null}, ${it.bags || null})
     `;
   }
 
@@ -1485,6 +1502,120 @@ export async function savePurchase(shopId: string, purchase: PurchaseData): Prom
       INSERT INTO purchase_items (purchase_id, name, qty, rate, amount, kind, charge_code, shop_id)
       VALUES (${row.id}, ${it.name}, ${it.qty}, ${it.rate}, ${it.amount}, ${kind}, ${code}, ${shopId})
     `;
+  }
+}
+
+/**
+ * Save a full patti (N customer bills + optional farmer purchase) in one Postgres transaction.
+ * If any write fails, nothing is committed.
+ */
+export async function saveEntryBatch(
+  shopId: string,
+  bills: BillData[],
+  purchase: PurchaseData | null,
+): Promise<void> {
+  if (!bills.length) throw new Error('No sales to save');
+  await ensureSchema();
+  const sql = getSql();
+
+  const resolved = new Map<string, string>();
+  const newCustomers: { id: string; name: string }[] = [];
+
+  for (const bill of bills) {
+    const name = (bill.customerName || '').trim();
+    if (!name && !bill.customerId) throw new Error('Each sale needs a customer');
+    const mapKey = (bill.customerId || name).toLowerCase();
+    if (resolved.has(mapKey) || (name && resolved.has(name.toLowerCase()))) continue;
+
+    let row: { id: string } | undefined;
+    if (bill.customerId) {
+      const found = await sql`SELECT id FROM customers WHERE id = ${bill.customerId} AND shop_id = ${shopId} LIMIT 1`;
+      row = found[0] as { id: string } | undefined;
+    }
+    if (!row && name) {
+      const found = await sql`SELECT id FROM customers WHERE name = ${name} AND shop_id = ${shopId} LIMIT 1`;
+      row = found[0] as { id: string } | undefined;
+    }
+    if (row) {
+      resolved.set(mapKey, row.id);
+      if (name) resolved.set(name.toLowerCase(), row.id);
+    } else {
+      const id = randomUUID();
+      newCustomers.push({ id, name: name || 'Customer' });
+      resolved.set(mapKey, id);
+      if (name) resolved.set(name.toLowerCase(), id);
+    }
+  }
+
+  let supplierId: string | null = null;
+  let newSupplier: { id: string; name: string } | null = null;
+  if (purchase?.supplier?.trim()) {
+    const sname = purchase.supplier.trim();
+    const found = await sql`SELECT id FROM suppliers WHERE name = ${sname} AND shop_id = ${shopId} LIMIT 1`;
+    const sup = found[0] as { id: string } | undefined;
+    if (sup) {
+      supplierId = sup.id;
+    } else {
+      newSupplier = { id: randomUUID(), name: sname };
+      supplierId = newSupplier.id;
+    }
+  }
+
+  await sql.transaction((txn) => {
+    const q: ReturnType<typeof txn>[] = [];
+    for (const c of newCustomers) {
+      q.push(txn`INSERT INTO customers (id, name, shop_id) VALUES (${c.id}, ${c.name}, ${shopId})`);
+    }
+    if (newSupplier) {
+      q.push(txn`INSERT INTO suppliers (id, name, shop_id) VALUES (${newSupplier.id}, ${newSupplier.name}, ${shopId})`);
+    }
+    for (const bill of bills) {
+      const name = (bill.customerName || '').trim();
+      const customerId = resolved.get((bill.customerId || name).toLowerCase()) || resolved.get(name.toLowerCase());
+      if (!customerId) throw new Error(`Could not resolve customer ${name}`);
+      const txnId = randomUUID();
+      const isCash = bill.paymentType === 'cash';
+      const amountPaid = isCash ? bill.total : 0;
+      const notes = bill.market ? encodeMarketNotes(bill.market) : null;
+      q.push(txn`
+        INSERT INTO transactions (id, customer_id, date, bill_no, bill_amount, amount_paid, notes, image_path, shop_id, payment_method)
+        VALUES (${txnId}, ${customerId}, ${bill.date}, ${bill.billNo}, ${bill.total}, ${amountPaid}, ${notes}, ${bill.imagePath || null}, ${shopId}, ${isCash ? 'cash' : 'credit'})
+      `);
+      for (const it of bill.items) {
+        const inferred = inferItemKind(it);
+        q.push(txn`
+          INSERT INTO bill_items (transaction_id, raw_text, confirmed_name, qty, rate, amount, display, kind, charge_code, shop_id, farmer, hamali, bags)
+          VALUES (${txnId}, ${it.raw_text}, ${it.confirmed_name}, ${numericQty(it.qty)}, ${it.rate}, ${it.amount}, ${it.display}, ${inferred.kind}, ${inferred.chargeCode}, ${shopId}, ${it.farmer || null}, ${it.hamali || null}, ${it.bags || null})
+        `);
+      }
+    }
+    if (purchase && purchase.items.length > 0) {
+      const purchaseId = randomUUID();
+      const notes = purchase.market ? encodeMarketNotes(purchase.market) : null;
+      q.push(txn`
+        INSERT INTO purchases (id, date, supplier, bill_no, total, notes, supplier_id, shop_id)
+        VALUES (${purchaseId}, ${purchase.date}, ${purchase.supplier || null}, ${purchase.billNo || null}, ${purchase.total}, ${notes}, ${supplierId}, ${shopId})
+      `);
+      for (const it of purchase.items) {
+        const hit = it.kind ? null : detectCharge(it.name || '');
+        const kind = it.kind || (hit ? 'charge' : 'item');
+        const code = it.chargeCode ?? (hit ? hit.code : null);
+        q.push(txn`
+          INSERT INTO purchase_items (purchase_id, name, qty, rate, amount, kind, charge_code, shop_id)
+          VALUES (${purchaseId}, ${it.name}, ${it.qty}, ${it.rate}, ${it.amount}, ${kind}, ${code}, ${shopId})
+        `);
+      }
+    }
+    return q;
+  });
+
+  const billFY = currentFYStartYear(new Date(bills[0].date + 'T00:00:00'));
+  const currentFY = currentFYStartYear();
+  if (billFY < currentFY) {
+    const [closed] = await sql`SELECT 1 FROM fy_opening_balances WHERE shop_id = ${shopId} AND fy_start_year > ${billFY} LIMIT 1`;
+    if (closed) {
+      await recalcFYBalances(shopId, billFY);
+    }
   }
 }
 

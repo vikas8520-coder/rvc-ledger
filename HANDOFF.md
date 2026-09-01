@@ -54,7 +54,7 @@ The old desktop app had a 5-item menu:
 | `web/lib/i18n.ts` | English, Telugu, Hindi translations |
 | `web/data/vegetable-catalog.json` | 40 vegetables with codes, Telugu/Hindi names, aliases |
 | `web/proxy.ts` | Next.js 16 proxy — `clerkMiddleware` wraps admin cookie auth for `/admin/*`, Clerk handles shop routes |
-| `web/public/sw.js` | Service worker, cache version `v5`, network-first for all assets |
+| `web/public/sw.js` | Service worker, cache version `v6`, network-first for all assets |
 
 ## Current navigation
 
@@ -88,7 +88,9 @@ Overview + Customers stay in the top nav. Reports + Settings remain in the secon
 - ✅ Payment page: existing, unchanged
 - ✅ Clerk authentication with Google login + email/password + change password
 - ✅ Admin login separate from shop login
-- ✅ Service worker fixed (v5, network-first for all assets including static)
+- ✅ Service worker fixed (v6, network-first for all assets including static)
+- ✅ Patti save is one DB transaction (`POST /api/entry`) — no half-saved patti
+- ✅ Bill qty stored as a number so farmer kg totals work
 - ✅ Vegetable catalog with 40 items, 3-letter codes, Telugu/Hindi names
 - ✅ Deployed to https://rvc-ledger-web.vercel.app
 - ✅ Multilingual (English, Telugu, Hindi) with transliteration
@@ -223,7 +225,7 @@ Telangana APMC Act 2017 rates: Market Fee 1%, Cess 0.5%, Commission 5-8%, Hamali
 - **OCR**: Tesseract.js (local, free) → Gemini API (server-side only, key in env).
 - **Deployment**: Vercel, production alias `https://rvc-ledger-web.vercel.app`.
 - **GitHub**: `https://github.com/vikas8520-coder/rvc-ledger.git`, branch `main`.
-- **Service worker**: `web/public/sw.js`, cache version `v5`, network-first for all assets.
+- **Service worker**: `web/public/sw.js`, cache version `v6`, network-first for all assets.
 - **Testing**: Playwright (`npm test` = `playwright test`). No Vitest. Test file: `tests/full-flow.spec.ts`.
 - **Knowledge graph**: Use `code-review-graph` MCP tools before Grep/Glob/Read for codebase exploration.
 

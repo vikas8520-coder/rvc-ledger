@@ -230,12 +230,18 @@ export default function EntryPage() {
     setSaving(true);
     setSaveError('');
     try {
-      for (const sale of validLines) {
-        const items = [
+      const bills = validLines.map((sale) => ({
+        customerName: sale.customerName.trim(),
+        customerId: sale.customerId,
+        date,
+        billNo: null,
+        total: num(sale.amount),
+        paymentType: sale.cash ? 'cash' as const : 'credit' as const,
+        items: [
           {
             raw_text: sale.commodity,
             confirmed_name: sale.commodity,
-            qty: sale.weightKg ? `${sale.weightKg} kg` : sale.bags ? `${sale.bags} bags` : '',
+            qty: sale.weightKg || null,
             rate: sale.pricePerKg || null,
             amount: num(sale.amount),
             display: `${sale.bags || 0} bags${sale.weightKg ? `, ${sale.weightKg} kg` : ''} @ ₹${sale.pricePerKg}/kg`,
@@ -245,25 +251,8 @@ export default function EntryPage() {
             hamali: num(sale.hamali) || null,
             bags: num(sale.bags) || null,
           },
-        ];
-        const res = await fetch('/api/bills', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            customerName: sale.customerName.trim(),
-            customerId: sale.customerId,
-            date,
-            billNo: null,
-            total: num(sale.amount),
-            items,
-            paymentType: sale.cash ? 'cash' : 'credit',
-          }),
-        });
-        if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error || `Failed to save ${sale.customerName}`);
-        }
-      }
+        ],
+      }));
 
       const byCommodity = new Map<string, { kg: number; bags: number; amount: number; rate: string }>();
       for (const sale of validLines) {
@@ -276,31 +265,28 @@ export default function EntryPage() {
       }
       const purchaseItems = [...byCommodity.entries()].map(([name, v]) => ({
         name,
-        qty: v.kg > 0 ? `${v.kg} kg` : `${v.bags} bags`,
+        qty: v.kg > 0 ? String(v.kg) : String(v.bags),
         rate: v.rate || null,
         amount: v.amount,
         kind: 'item' as const,
         chargeCode: null,
       }));
-      if (purchaseItems.length > 0) {
-        const pr = await fetch('/api/purchases', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            date,
-            supplier: farmerName.trim(),
-            total: gross,
-            items: purchaseItems,
-          }),
-        });
-        if (!pr.ok) {
-          const data = await pr.json();
-          throw new Error(data.error || 'Saved sales, but farmer stock failed');
-        }
-      }
+
+      const res = await fetch('/api/entry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bills,
+          purchase: purchaseItems.length
+            ? { date, supplier: farmerName.trim(), total: gross, items: purchaseItems }
+            : null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Save failed — nothing was written');
       setSaved(toPatti());
     } catch (err: unknown) {
-      setSaveError(err instanceof Error ? err.message : 'Save failed');
+      setSaveError(err instanceof Error ? err.message : 'Save failed — nothing was written');
     } finally {
       setSaving(false);
     }
