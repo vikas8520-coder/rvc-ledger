@@ -86,6 +86,17 @@ export default function AdminLoginPage() {
         <p className="text-center text-[11px] text-[var(--text-faint)]">
           Forgot password? Update ADMIN_PASSWORD in your environment variables.
         </p>
+
+        <div className="rounded-lg bg-[var(--bg-secondary)] px-3 py-2 text-center">
+          <p className="text-[11px] text-[var(--text-on-secondary)]">
+            This is the <strong>admin panel</strong> for managing all shops.
+          </p>
+          <p className="mt-1 text-[11px] text-[var(--text-on-secondary)]">
+            Shop staff? Go to the{' '}
+            <a href="/" className="font-semibold underline">main app</a>
+            {' '}to access your shop ledger.
+          </p>
+        </div>
       </div>
     </div>
   );

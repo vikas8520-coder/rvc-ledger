@@ -1510,6 +1510,21 @@ export async function deleteTransaction(shopId: string, id: string): Promise<voi
 
 /* ---- Suppliers ---- */
 
+export async function createSupplier(shopId: string, name: string, phone?: string): Promise<Supplier> {
+  await ensureSchema();
+  const sql = getSql();
+  const trimmedName = name.trim();
+  if (!trimmedName) throw new Error('Supplier name is required');
+  // Check if already exists
+  const [existing] = await sql`SELECT id, name, phone FROM suppliers WHERE name = ${trimmedName} AND shop_id = ${shopId} LIMIT 1`;
+  if (existing) return existing as Supplier;
+  const [row] = await sql`
+    INSERT INTO suppliers (name, phone, shop_id) VALUES (${trimmedName}, ${phone || null}, ${shopId})
+    RETURNING id, name, phone
+  `;
+  return row as Supplier;
+}
+
 export async function getSuppliers(shopId: string): Promise<Supplier[]> {
   if (!isDbConfigured()) return [];
   await ensureSchema();

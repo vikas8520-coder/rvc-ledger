@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 type Shop = {
   id: string;
@@ -107,13 +108,21 @@ export default function AdminPage() {
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
         <div className="rounded-xl bg-[var(--bg-card)] p-6 text-center shadow-sm">
           <h2 className="text-base font-semibold text-[var(--text-primary)]">Admin Access Required</h2>
-          <p className="mt-2 text-sm text-[var(--text-faint)]">You need to log in as an administrator to view this page.</p>
-          <button
-            onClick={() => router.push('/admin/login')}
-            className="mt-4 rounded-lg bg-[var(--bg-primary)] px-6 py-2.5 text-sm font-semibold text-[var(--text-on-primary)] hover:bg-[var(--bg-primary-hover)]"
-          >
-            Login as Admin
-          </button>
+          <p className="mt-2 text-sm text-[var(--text-faint)]">This is the admin panel for managing all shops.</p>
+          <div className="mt-4 flex flex-col gap-2">
+            <button
+              onClick={() => router.push('/admin/login')}
+              className="rounded-lg bg-[var(--bg-primary)] px-6 py-2.5 text-sm font-semibold text-[var(--text-on-primary)] hover:bg-[var(--bg-primary-hover)]"
+            >
+              Login as Admin
+            </button>
+            <Link
+              href="/"
+              className="rounded-lg border border-[var(--border-input)] px-6 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-card-hover)]"
+            >
+              Go to Shop Ledger →
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -408,6 +417,19 @@ function ShopsTab({ shops, plans, onReload, fmtINR }: {
                 >
                   View data
                 </a>
+                <button
+                  onClick={() => {
+                    const url = typeof window !== 'undefined' ? window.location.origin : 'https://rvc-ledger-web.vercel.app';
+                    navigator.clipboard?.writeText(url).then(() => {
+                      alert(`Shop link copied: ${url}\n\nShare this with shop staff. They will sign in at this URL — NOT the /admin/login URL.`);
+                    }).catch(() => {
+                      prompt('Copy this link to share with shop staff:', url);
+                    });
+                  }}
+                  className="rounded-md bg-[var(--bg-success)] px-3 py-1 text-xs font-medium text-[var(--text-on-success)] hover:bg-[var(--bg-success-hover)]"
+                >
+                  Copy shop link
+                </button>
               </div>
 
               {/* Manage panel: extend, suspend, trial */}

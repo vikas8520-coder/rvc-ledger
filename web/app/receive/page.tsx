@@ -37,11 +37,39 @@ export default function ReceivePage() {
 
   const [catalog, setCatalog] = useState<string[]>([]);
   const [farmers, setFarmers] = useState<string[]>([]);
+  const [showAddFarmer, setShowAddFarmer] = useState(false);
+  const [newFarmerName, setNewFarmerName] = useState('');
+  const [newFarmerPhone, setNewFarmerPhone] = useState('');
+  const [addingFarmer, setAddingFarmer] = useState(false);
 
   useEffect(() => {
     fetch('/api/catalog').then((r) => r.json()).then((d) => setCatalog((d.items || []).map((i: any) => i.name))).catch(() => {});
     fetch('/api/suppliers').then((r) => r.json()).then((d) => setFarmers((d.suppliers || []).map((s: any) => s.name))).catch(() => {});
   }, []);
+
+  const handleAddFarmer = async () => {
+    if (!newFarmerName.trim()) return;
+    setAddingFarmer(true);
+    try {
+      const r = await fetch('/api/suppliers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create', name: newFarmerName.trim(), phone: newFarmerPhone.trim() || undefined }),
+      });
+      const d = await r.json();
+      if (d.error) throw new Error(d.error);
+      // Add to local list and select it
+      setFarmers(prev => [...prev, newFarmerName.trim()].sort());
+      setFarmerName(newFarmerName.trim());
+      setShowAddFarmer(false);
+      setNewFarmerName('');
+      setNewFarmerPhone('');
+    } catch (err: any) {
+      setSaveError(err.message || 'Failed to add farmer');
+    } finally {
+      setAddingFarmer(false);
+    }
+  };
 
   const totalBagsReceived = num(bagsCovers) + num(bigbags);
   const stockWeight = bagGroups.reduce((s, g) => s + num(g.weightKg) * num(g.numBags), 0);
@@ -202,13 +230,50 @@ export default function ReceivePage() {
         </div>
 
         <div>
-          <label className="text-sm text-[var(--text-muted)]">Farmer / Supplier *</label>
-          <Autocomplete
-            options={farmers}
-            value={farmerName}
-            onChange={setFarmerName}
-            placeholder="Farmer name"
-          />
+          <label className="text-sm text-[var(--text-muted)] flex items-center justify-between">
+            <span>Farmer / Supplier *</span>
+            <button
+              type="button"
+              onClick={() => setShowAddFarmer(!showAddFarmer)}
+              className="text-xs text-[var(--bg-primary)] hover:underline"
+            >
+              {showAddFarmer ? 'Cancel' : '+ Add new farmer'}
+            </button>
+          </label>
+          {showAddFarmer ? (
+            <div className="flex flex-wrap gap-2">
+              <input
+                type="text"
+                value={newFarmerName}
+                onChange={(e) => setNewFarmerName(e.target.value)}
+                placeholder="Farmer name"
+                className="flex-1 rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm"
+              />
+              <input
+                type="tel"
+                value={newFarmerPhone}
+                onChange={(e) => setNewFarmerPhone(e.target.value)}
+                placeholder="Phone (optional)"
+                inputMode="tel"
+                className="w-36 rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm"
+              />
+              <button
+                type="button"
+                onClick={handleAddFarmer}
+                disabled={!newFarmerName.trim() || addingFarmer}
+                className="rounded-lg bg-[var(--bg-primary)] px-4 py-2 text-sm font-medium text-[var(--text-on-primary)] disabled:opacity-50"
+              >
+                {addingFarmer ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          ) : (
+            <Autocomplete
+              options={farmers}
+              value={farmerName}
+              onChange={setFarmerName}
+              placeholder="Farmer name"
+            />
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-3">

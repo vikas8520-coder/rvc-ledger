@@ -114,6 +114,14 @@ export default function SellPage() {
         setFarmers(names);
       })
       .catch(() => {});
+    // Also fetch suppliers (farmers added via receive page) and merge
+    fetch('/api/suppliers')
+      .then((r) => r.json())
+      .then((d) => {
+        const supplierNames = (d.suppliers || []).map((s: any) => s.name).filter(Boolean);
+        setFarmers(prev => Array.from(new Set([...prev, ...supplierNames])).sort());
+      })
+      .catch(() => {});
     fetch('/api/settings')
       .then((r) => r.json())
       .then((d) => setShopSettings(d.settings || {}))

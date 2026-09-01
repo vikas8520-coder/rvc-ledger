@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSuppliers, recordSupplierPayment } from '@/lib/db';
+import { getSuppliers, recordSupplierPayment, createSupplier } from '@/lib/db';
 import { requireShopAuth, AuthError } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
@@ -19,7 +19,19 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const auth = await requireShopAuth();
-    const { supplierName, date, amount, notes } = await request.json();
+    const body = await request.json();
+
+    // Create a new supplier/farmer
+    if (body.action === 'create') {
+      if (!body.name) {
+        return NextResponse.json({ error: 'Missing supplier name' }, { status: 400 });
+      }
+      const supplier = await createSupplier(auth.shopId!, body.name, body.phone);
+      return NextResponse.json({ supplier });
+    }
+
+    // Record a payment (default action)
+    const { supplierName, date, amount, notes } = body;
     if (!supplierName || !date || !amount) {
       return NextResponse.json({ error: 'Missing supplierName, date, or amount' }, { status: 400 });
     }
@@ -27,7 +39,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     if (err instanceof AuthError) return NextResponse.json({ error: err.message }, { status: err.status });
-    console.error('Supplier payment error:', err);
+    console.error('Supplier action error:', err);
     return NextResponse.json({ error: err.message || 'Unknown error' }, { status: 500 });
   }
 }
