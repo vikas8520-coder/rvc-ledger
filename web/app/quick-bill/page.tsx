@@ -7,6 +7,7 @@ import { useI18n } from '../components/I18nProvider';
 import { fmt } from '@/lib/format';
 import { CatalogItem, StockLevel } from '@/lib/types';
 import { printBill, ShopProfile } from '@/lib/billPrint';
+import Autocomplete from '../components/Autocomplete';
 
 function today() {
   const d = new Date();
@@ -217,16 +218,12 @@ export default function QuickBillPage() {
           <section className="grid gap-2 sm:grid-cols-3">
             <div>
               <label className="text-xs text-[var(--text-muted)]">{t('customer')}</label>
-              <input
-                list="customer-list"
+              <Autocomplete
+                options={customers}
                 value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
+                onChange={setCustomerName}
                 placeholder={t('selectCustomer')}
-                className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm"
               />
-              <datalist id="customer-list">
-                {customers.map((c) => <option key={c} value={c} />)}
-              </datalist>
             </div>
             <div>
               <label className="text-xs text-[var(--text-muted)]">{t('date')}</label>

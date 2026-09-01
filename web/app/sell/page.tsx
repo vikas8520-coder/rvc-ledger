@@ -5,6 +5,7 @@ import { useI18n } from '../components/I18nProvider';
 import { fmt } from '@/lib/format';
 import { formatCustomerName, getUiLang } from '@/lib/i18n';
 import CustomerPicker, { CustomerOption } from '../components/CustomerPicker';
+import Autocomplete from '../components/Autocomplete';
 import { usePersistentState } from '../components/usePersistentState';
 import { generateBillsPdf, generateCreditLedgerPdf, generateOutstandingListPdf, printPdfBlob } from '@/lib/pdfShare';
 import { BillPrintData, CreditLedgerEntry, ShopProfile } from '@/lib/billPrint';
@@ -49,6 +50,7 @@ export default function SellPage() {
   const [date, setDate] = usePersistentState('sell-date', today());
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [catalog, setCatalog] = useState<string[]>([]);
+  const [farmers, setFarmers] = useState<string[]>([]);
 
   // Entry form state
   const [item, setItem] = useState('');
@@ -94,6 +96,13 @@ export default function SellPage() {
       .then((d) => {
         const items = (d.items || []).map((i: any) => i.name).filter(Boolean);
         setCatalog(items);
+      })
+      .catch(() => {});
+    fetch('/api/farmers')
+      .then((r) => r.json())
+      .then((d) => {
+        const names = (d.farmers || []).map((f: any) => f.farmer).filter(Boolean);
+        setFarmers(names);
       })
       .catch(() => {});
     fetch('/api/settings')
@@ -511,28 +520,22 @@ export default function SellPage() {
           {/* Item */}
           <div>
             <label className="text-xs text-[var(--text-muted)]">{t('item')}</label>
-            <input
-              type="text"
-              list="item-list"
+            <Autocomplete
+              options={catalog}
               value={item}
-              onChange={(e) => setItem(e.target.value)}
+              onChange={setItem}
               placeholder="e.g. W.MIRCHI, BEANS"
-              className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm"
             />
-            <datalist id="item-list">
-              {catalog.map((c) => <option key={c} value={c} />)}
-            </datalist>
           </div>
 
           {/* Farmer */}
           <div>
             <label className="text-xs text-[var(--text-muted)]">{t('farmer')}</label>
-            <input
-              type="text"
+            <Autocomplete
+              options={farmers}
               value={farmer}
-              onChange={(e) => setFarmer(e.target.value)}
+              onChange={setFarmer}
               placeholder="e.g. SK 170"
-              className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm"
             />
           </div>
 

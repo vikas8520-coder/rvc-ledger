@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { usePersistentState } from '../components/usePersistentState';
 import { useI18n } from '../components/I18nProvider';
 import { fmt } from '@/lib/format';
+import Autocomplete from '../components/Autocomplete';
 
 function today() {
   const d = new Date();
@@ -312,22 +313,22 @@ export default function EntryPage() {
 
             <div>
               <label className="text-sm text-[var(--text-muted)]">Product *</label>
-              <input type="text" value={productName} onChange={(e) => setProductName(e.target.value)}
-                list="product-list" placeholder="e.g. Mirchi, Tomato, Onion"
-                className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
-              <datalist id="product-list">
-                {catalog.map((c) => <option key={c} value={c} />)}
-              </datalist>
+              <Autocomplete
+                options={catalog}
+                value={productName}
+                onChange={setProductName}
+                placeholder="e.g. Mirchi, Tomato, Onion"
+              />
             </div>
 
             <div>
               <label className="text-sm text-[var(--text-muted)]">Farmer / Supplier</label>
-              <input type="text" value={farmerName} onChange={(e) => setFarmerName(e.target.value)}
-                list="farmer-list" placeholder="Farmer name (optional)"
-                className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
-              <datalist id="farmer-list">
-                {farmers.map((f) => <option key={f} value={f} />)}
-              </datalist>
+              <Autocomplete
+                options={farmers}
+                value={farmerName}
+                onChange={setFarmerName}
+                placeholder="Farmer name (optional)"
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -428,9 +429,12 @@ export default function EntryPage() {
 
                 <div>
                   <label className="text-xs text-[var(--text-muted)]">Customer name</label>
-                  <input type="text" value={s.customerName} onChange={(e) => updateSale(s.id, 'customerName', e.target.value)}
-                    list="customer-list" placeholder="e.g. Mangal Singh"
-                    className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
+                  <Autocomplete
+                    options={customers}
+                    value={s.customerName}
+                    onChange={(v) => updateSale(s.id, 'customerName', v)}
+                    placeholder="e.g. Mangal Singh"
+                  />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
@@ -464,10 +468,6 @@ export default function EntryPage() {
                 </div>
               </div>
             ))}
-
-            <datalist id="customer-list">
-              {customers.map((c) => <option key={c} value={c} />)}
-            </datalist>
 
             <button onClick={addSale}
               className="w-full rounded-lg border border-dashed border-[var(--border-input)] py-2 text-sm text-[var(--text-muted)]">

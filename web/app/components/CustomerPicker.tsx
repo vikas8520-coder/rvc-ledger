@@ -43,14 +43,18 @@ export default function CustomerPicker({ customers, value, onChange, onAddNew, p
   }, [customers, query, uiLang]);
 
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
+    function handleClickOutside(e: MouseEvent | TouchEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false);
         setQuery('');
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
   }, []);
 
   const displayLabel = selected ? formatCustomerName(selected, uiLang) : '';
@@ -105,7 +109,14 @@ export default function CustomerPicker({ customers, value, onChange, onAddNew, p
               <button
                 key={c.id}
                 type="button"
-                onClick={() => {
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onChange(c.id, formatCustomerName(c, uiLang));
+                  setOpen(false);
+                  setQuery('');
+                }}
+                onTouchStart={(e) => {
+                  e.preventDefault();
                   onChange(c.id, formatCustomerName(c, uiLang));
                   setOpen(false);
                   setQuery('');
@@ -129,7 +140,14 @@ export default function CustomerPicker({ customers, value, onChange, onAddNew, p
           {onAddNew && (
             <button
               type="button"
-              onClick={() => {
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setOpen(false);
+                setQuery('');
+                onAddNew();
+              }}
+              onTouchStart={(e) => {
+                e.preventDefault();
                 setOpen(false);
                 setQuery('');
                 onAddNew();

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { usePersistentState } from '../components/usePersistentState';
 import { useI18n } from '../components/I18nProvider';
 import { fmt } from '@/lib/format';
+import Autocomplete from '../components/Autocomplete';
 
 function today() {
   const d = new Date();
@@ -192,18 +193,22 @@ export default function ReceivePage() {
 
         <div>
           <label className="text-sm text-[var(--text-muted)]">Product *</label>
-          <input type="text" value={productName} onChange={(e) => setProductName(e.target.value)}
-            list="product-list" placeholder="e.g. Mirchi, Tomato, Onion"
-            className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
-          <datalist id="product-list">{catalog.map((c) => <option key={c} value={c} />)}</datalist>
+          <Autocomplete
+            options={catalog}
+            value={productName}
+            onChange={setProductName}
+            placeholder="e.g. Mirchi, Tomato, Onion"
+          />
         </div>
 
         <div>
           <label className="text-sm text-[var(--text-muted)]">Farmer / Supplier *</label>
-          <input type="text" value={farmerName} onChange={(e) => setFarmerName(e.target.value)}
-            list="farmer-list" placeholder="Farmer name"
-            className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
-          <datalist id="farmer-list">{farmers.map((f) => <option key={f} value={f} />)}</datalist>
+          <Autocomplete
+            options={farmers}
+            value={farmerName}
+            onChange={setFarmerName}
+            placeholder="Farmer name"
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-3">

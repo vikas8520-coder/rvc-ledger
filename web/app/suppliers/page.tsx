@@ -8,6 +8,7 @@ import { Card, SectionHeader, StatCard, Button, EmptyState, ListSkeleton, PageHe
 import { StoreIcon, SearchIcon, DownloadIcon, DollarIcon, XIcon, CheckIcon } from '../components/Icons';
 import { fmt } from '@/lib/format';
 import { downloadCsv, suppliersCsv } from '@/lib/statement';
+import Autocomplete from '../components/Autocomplete';
 import { Supplier } from '@/lib/types';
 
 function today() {
@@ -124,16 +125,12 @@ export default function SuppliersPage() {
           <div className="grid gap-3 sm:grid-cols-3">
             <div>
               <label className="text-xs text-[var(--text-muted)]">{t('supplier')}</label>
-              <input
-                list="supplier-list"
+              <Autocomplete
+                options={suppliers.map((s) => s.name)}
                 value={paySupplier}
-                onChange={(e) => setPaySupplier(e.target.value)}
+                onChange={setPaySupplier}
                 placeholder={t('selectSupplier')}
-                className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2 text-sm"
               />
-              <datalist id="supplier-list">
-                {suppliers.map((s) => <option key={s.id} value={s.name} />)}
-              </datalist>
             </div>
             <div>
               <label className="text-xs text-[var(--text-muted)]">{t('amountReceived')}</label>
