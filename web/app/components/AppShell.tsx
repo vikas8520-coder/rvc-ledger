@@ -60,7 +60,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [authState, setAuthState] = useState<{ role: string; shopId: string | null } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const isAuthPage = path === '/sign-in' || path === '/sign-up' || path === '/onboarding';
+  const isAuthPage = path === '/sign-in' || path === '/sign-up' || path === '/onboarding' || path === '/user-profile';
 
   useEffect(() => {
     if (!CLERK_CONFIGURED || !isLoaded || !user || isAuthPage) return;
@@ -161,7 +161,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             >
               {menuOpen ? <XIcon size={18} /> : <MenuIcon size={18} />}
             </button>
-            {CLERK_CONFIGURED && <UserButton />}
+            {CLERK_CONFIGURED && (
+              <UserButton>
+                <UserButton.MenuItems>
+                  <UserButton.Link
+                    href="/user-profile"
+                    label="Change Password"
+                    labelIcon={<SettingsIcon size={16} />}
+                  />
+                  <UserButton.Action label="manageAccount" />
+                  <UserButton.Action label="signOut" />
+                </UserButton.MenuItems>
+              </UserButton>
+            )}
           </div>
         </div>
 
