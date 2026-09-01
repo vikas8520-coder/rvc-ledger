@@ -179,6 +179,7 @@ export default function ReportsPage() {
         {months.length === 0 ? (
           <EmptyState icon={<ChartIcon size={40} />} title={t('noData')} />
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm tabular-nums">
             <thead>
               <tr className="text-left text-[11px] text-[var(--text-muted)]">
@@ -199,6 +200,7 @@ export default function ReportsPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </Card>
 
@@ -285,6 +287,7 @@ export default function ReportsPage() {
         {top.length === 0 ? (
           <EmptyState icon={<DollarIcon size={40} />} title={t('noData')} />
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm tabular-nums">
             <tbody>
               {top.map((c) => (
@@ -296,6 +299,7 @@ export default function ReportsPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </Card>
     </div>

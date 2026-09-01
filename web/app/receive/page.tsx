@@ -244,7 +244,7 @@ export default function ReceivePage() {
         </div>
 
         {bagGroups.map((g, i) => (
-          <div key={g.id} className="flex items-end gap-2">
+          <div key={g.id} className="flex flex-wrap items-end gap-2">
             <div className="flex-1">
               <label className="text-xs text-[var(--text-muted)]">Weight (kg)</label>
               <input type="number" value={g.weightKg} onChange={(e) => updateBagGroup(g.id, 'weightKg', e.target.value)}
@@ -303,7 +303,7 @@ export default function ReceivePage() {
                   <span className="text-xs font-medium">{c.label}</span>
                   <button onClick={() => removeCharge(c.id)} className="text-xs text-[var(--text-primary)]">Remove</button>
                 </div>
-                <div className="flex items-end gap-2">
+                <div className="flex flex-wrap items-end gap-2">
                   {c.rateType === 'per_bag' && (
                     <>
                       <div className="flex-1">

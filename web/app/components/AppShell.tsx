@@ -253,7 +253,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <h1 className="text-2xl font-bold text-[var(--bg-primary)]">RVC Ledger</h1>
           <p className="text-sm text-[var(--text-muted)]">Sign in to access your shop ledger</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap justify-center gap-3">
           <Link href="/sign-in" className="rounded-lg bg-[var(--bg-primary)] px-5 py-2.5 text-sm font-semibold text-[var(--text-on-primary)] hover:bg-[var(--bg-primary-hover)]">
             Sign in
           </Link>

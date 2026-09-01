@@ -166,31 +166,31 @@ export default function PurchasesPage() {
 
           <div className="space-y-2">
             {rows.map((r, i) => (
-              <div key={i} className="grid gap-2 sm:grid-cols-12">
+              <div key={i} className="grid grid-cols-1 gap-2 sm:grid-cols-12">
                 <input
                   value={r.name}
                   onChange={(e) => updateRow(i, 'name', e.target.value)}
                   placeholder={t('itemName')}
-                  className="rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm sm:col-span-5"
+                  className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm sm:col-span-5"
                 />
                 <input
                   value={r.qty}
                   onChange={(e) => updateRow(i, 'qty', e.target.value)}
                   placeholder="50 kg"
-                  className="rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm sm:col-span-2"
+                  className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm sm:col-span-2"
                 />
                 <input
                   value={r.rate}
                   onChange={(e) => updateRow(i, 'rate', e.target.value)}
                   placeholder="20"
-                  className="rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm sm:col-span-2"
+                  className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm sm:col-span-2"
                 />
                 <input
                   value={r.amount}
                   onChange={(e) => updateRow(i, 'amount', e.target.value)}
                   placeholder={t('amt')}
                   inputMode="decimal"
-                  className="rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm sm:col-span-2"
+                  className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-2 py-1.5 text-sm sm:col-span-2"
                 />
                 <button
                   onClick={() => setRows(rows.filter((_, x) => x !== i))}
@@ -245,7 +245,8 @@ export default function PurchasesPage() {
               <p className="shrink-0 text-sm font-semibold">{fmt(p.total)}</p>
             </div>
             {p.items.length > 0 && (
-              <table className="mt-1.5 w-full text-[12px] tabular-nums leading-5">
+              <div className="mt-1.5 overflow-x-auto">
+              <table className="w-full text-[12px] tabular-nums leading-5">
                 <tbody>
                   {p.items.map((it, i) => (
                     <tr key={i} className={it.kind === 'charge' ? 'italic text-[#6b5344]' : ''}>
@@ -258,6 +259,7 @@ export default function PurchasesPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
             <div className="mt-1 text-right">
               <button onClick={() => remove(p.id)} className="text-[11px] text-[var(--bg-primary)] hover:underline">

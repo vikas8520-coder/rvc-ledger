@@ -285,7 +285,7 @@ export default function EntryPage() {
   return (
     <div className="space-y-4">
       {/* Step indicator */}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {steps.map((s, i) => (
           <div key={s.num} className="flex items-center gap-2">
             <div className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
@@ -364,7 +364,7 @@ export default function EntryPage() {
             </div>
 
             {bagGroups.map((g, i) => (
-              <div key={g.id} className="flex items-end gap-2">
+              <div key={g.id} className="flex flex-wrap items-end gap-2">
                 <div className="flex-1">
                   <label className="text-xs text-[var(--text-muted)]">Weight (kg)</label>
                   <input type="number" value={g.weightKg} onChange={(e) => updateBagGroup(g.id, 'weightKg', e.target.value)}
@@ -500,17 +500,17 @@ export default function EntryPage() {
           {/* Stock vs Sold */}
           <div className="rounded-2xl bg-[var(--bg-card)] p-4 space-y-3">
             <p className="text-sm font-medium">Stock Summary — {productName}</p>
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <div className="rounded-lg bg-[var(--bg-secondary)] p-3">
-                <p className="text-2xl font-bold">{totalBagsReceived}</p>
+            <div className="grid grid-cols-3 gap-2 text-center sm:gap-3">
+              <div className="rounded-lg bg-[var(--bg-secondary)] p-2 sm:p-3">
+                <p className="text-xl font-bold sm:text-2xl">{totalBagsReceived}</p>
                 <p className="text-xs text-[var(--text-muted)]">Bags Received</p>
               </div>
-              <div className="rounded-lg bg-[var(--bg-secondary)] p-3">
-                <p className="text-2xl font-bold">{totalBagsSold}</p>
+              <div className="rounded-lg bg-[var(--bg-secondary)] p-2 sm:p-3">
+                <p className="text-xl font-bold sm:text-2xl">{totalBagsSold}</p>
                 <p className="text-xs text-[var(--text-muted)]">Bags Sold</p>
               </div>
-              <div className={`rounded-lg p-3 ${leftoverBags < 0 ? 'bg-[var(--bg-error)]' : 'bg-[var(--bg-secondary)]'}`}>
-                <p className="text-2xl font-bold">{leftoverBags}</p>
+              <div className={`rounded-lg p-2 sm:p-3 ${leftoverBags < 0 ? 'bg-[var(--bg-error)]' : 'bg-[var(--bg-secondary)]'}`}>
+                <p className="text-xl font-bold sm:text-2xl">{leftoverBags}</p>
                 <p className="text-xs text-[var(--text-muted)]">Leftover</p>
               </div>
             </div>

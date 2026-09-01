@@ -595,9 +595,9 @@ export default function SellPage() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-bold">{t('sell')}</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="relative">
             <button
               type="button"
@@ -894,7 +894,7 @@ export default function SellPage() {
           </div>
 
           {/* Footer totals */}
-          <div className="mt-3 grid grid-cols-3 gap-3 border-t border-[var(--border-light)] pt-3">
+          <div className="mt-3 grid grid-cols-3 gap-2 border-t border-[var(--border-light)] pt-3 sm:gap-3">
             <div className="text-center">
               <p className="text-xs text-[var(--text-muted)]">{t('totalBags')}</p>
               <p className="text-lg font-bold">{totalBags}</p>
@@ -942,7 +942,7 @@ export default function SellPage() {
                   placeholder={t('phone')}
                   className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <div>
                   <label className="text-xs text-[var(--text-muted)]">English</label>
                   <input type="text" value={newCustomerEnglishName} onChange={(e) => setNewCustomerEnglishName(e.target.value)}

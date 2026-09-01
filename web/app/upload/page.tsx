@@ -369,7 +369,7 @@ export default function UploadPage() {
       <h1 className="text-xl font-bold">{t('uploadBill')}</h1>
 
       {step === 'idle' && (
-        <label className="block cursor-pointer rounded-2xl border-2 border-dashed border-[var(--border-input)] bg-[var(--bg-card)] p-10 text-center">
+        <label className="block cursor-pointer rounded-2xl border-2 border-dashed border-[var(--border-input)] bg-[var(--bg-card)] p-6 text-center sm:p-10">
           <input type="file" accept="image/*" className="hidden" onChange={handleFile} />
           <p className="text-lg font-medium">{t('tapToChooseBill')}</p>
           <p className="text-sm text-[var(--text-faint)]">{t('pngOrJpg')}</p>
@@ -412,17 +412,17 @@ export default function UploadPage() {
               <p className="mb-2 text-sm font-medium">
                 Today's Stock Summary{dailySummary.product_name ? ` — ${dailySummary.product_name}` : ''}
               </p>
-              <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="grid grid-cols-3 gap-2 text-center sm:gap-3">
                 <div>
-                  <p className="text-2xl font-bold">{dailySummary.bags_covers ?? '?'}</p>
+                  <p className="text-xl font-bold sm:text-2xl">{dailySummary.bags_covers ?? '?'}</p>
                   <p className="text-xs text-[var(--text-muted)]">Bags / Covers</p>
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{dailySummary.bigbags ?? '?'}</p>
+                  <p className="text-xl font-bold sm:text-2xl">{dailySummary.bigbags ?? '?'}</p>
                   <p className="text-xs text-[var(--text-muted)]">Big Bags / Bastas</p>
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{dailySummary.total_bags ?? '?'}</p>
+                  <p className="text-xl font-bold sm:text-2xl">{dailySummary.total_bags ?? '?'}</p>
                   <p className="text-xs text-[var(--text-muted)]">Total</p>
                 </div>
               </div>
@@ -542,7 +542,7 @@ export default function UploadPage() {
             </div>
             <div className="mt-3 text-right">
               <p className="text-sm text-[var(--text-muted)]">{t('goods')}: {fmt(goods)} · {t('charges')}: {fmt(chargesSum)}</p>
-              <p className="text-2xl font-bold">{t('total')}: {fmt(total)}</p>
+              <p className="text-lg font-bold sm:text-2xl">{t('total')}: {fmt(total)}</p>
             </div>
           </section>
 
@@ -553,18 +553,18 @@ export default function UploadPage() {
                 const rawLower = it.raw.trim().toLowerCase();
                 const alreadyLearned = learnedAliases[rawLower] === (it.confirmed.match(/\(([^)]+)\)$/)?.[1]?.trim() || it.confirmed.trim());
                 return (
-                <div key={idx} className="grid gap-2 rounded-xl bg-[var(--bg-base)] p-3 sm:grid-cols-12">
+                <div key={idx} className="grid grid-cols-1 gap-2 rounded-xl bg-[var(--bg-base)] p-3 sm:grid-cols-12">
                   <input
                     value={it.raw}
                     onChange={(e) => updateItem(idx, 'raw', e.target.value)}
-                    className="col-span-3 rounded border border-[var(--border-light)] bg-[var(--bg-input)] p-2 text-sm"
+                    className="w-full rounded border border-[var(--border-light)] bg-[var(--bg-input)] p-2 text-sm sm:col-span-3"
                     placeholder={t('rawName')}
                   />
-                  <div className="col-span-4 flex gap-1">
+                  <div className="flex gap-1 sm:col-span-4">
                     <input
                       value={it.confirmed}
                       onChange={(e) => updateItem(idx, 'confirmed', e.target.value)}
-                      className={`flex-1 rounded border bg-[var(--bg-input)] p-2 text-sm ${it.kind === 'charge' ? 'border-[#c4a574] italic' : 'border-[var(--border-light)]'}`}
+                      className={`w-full flex-1 rounded border bg-[var(--bg-input)] p-2 text-sm ${it.kind === 'charge' ? 'border-[#c4a574] italic' : 'border-[var(--border-light)]'}`}
                       placeholder={t('confirmedName')}
                     />
                     {alreadyLearned && it.kind !== 'charge' && (
@@ -574,25 +574,25 @@ export default function UploadPage() {
                   <input
                     value={it.qty}
                     onChange={(e) => updateItem(idx, 'qty', e.target.value)}
-                    className="col-span-2 rounded border border-[var(--border-light)] bg-[var(--bg-input)] p-2 text-sm"
+                    className="w-full rounded border border-[var(--border-light)] bg-[var(--bg-input)] p-2 text-sm sm:col-span-2"
                     placeholder={t('qty')}
                   />
                   <input
                     value={it.rate}
                     onChange={(e) => updateItem(idx, 'rate', e.target.value)}
-                    className="col-span-1 rounded border border-[var(--border-light)] bg-[var(--bg-input)] p-2 text-sm"
+                    className="w-full rounded border border-[var(--border-light)] bg-[var(--bg-input)] p-2 text-sm sm:col-span-1"
                     placeholder={t('rate')}
                   />
                   <input
                     type="number"
                     value={it.amount}
                     onChange={(e) => updateItem(idx, 'amount', e.target.value)}
-                    className="col-span-1 rounded border border-[var(--border-light)] bg-[var(--bg-input)] p-2 text-sm"
+                    className="w-full rounded border border-[var(--border-light)] bg-[var(--bg-input)] p-2 text-sm sm:col-span-1"
                     placeholder={t('amt')}
                   />
                   <button
                     onClick={() => removeItem(idx)}
-                    className="col-span-1 rounded bg-[var(--bg-primary)] text-sm text-[var(--text-on-primary)]"
+                    className="w-full rounded bg-[var(--bg-primary)] text-sm text-[var(--text-on-primary)] sm:col-span-1"
                   >
                     ×
                   </button>
@@ -648,22 +648,22 @@ export default function UploadPage() {
                 </button>
               </div>
               <p className="mb-2 text-sm text-[var(--text-muted)]">{t('addManualItem')}</p>
-              <div className="grid gap-2 sm:grid-cols-12">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-12">
                 <input
                   value={manualName}
                   onChange={(e) => setManualName(e.target.value)}
-                  className="col-span-4 rounded border border-[var(--border-light)] bg-[var(--bg-input)] p-2 text-sm"
+                  className="w-full rounded border border-[var(--border-light)] bg-[var(--bg-input)] p-2 text-sm sm:col-span-4"
                   placeholder={t('itemName')}
                 />
                 <input
                   value={manualLine}
                   onChange={(e) => setManualLine(e.target.value)}
-                  className="col-span-6 rounded border border-[var(--border-light)] bg-[var(--bg-input)] p-2 text-sm"
+                  className="w-full rounded border border-[var(--border-light)] bg-[var(--bg-input)] p-2 text-sm sm:col-span-6"
                   placeholder={t('qtyRateAmount')}
                 />
                 <button
                   onClick={addUnparsed}
-                  className="col-span-2 rounded bg-[var(--bg-success)] text-sm text-[var(--text-on-primary)]"
+                  className="w-full rounded bg-[var(--bg-success)] text-sm text-[var(--text-on-primary)] sm:col-span-2"
                 >
                   {t('add')}
                 </button>

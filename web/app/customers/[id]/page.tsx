@@ -300,7 +300,7 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
         </p>
       </div>
 
-      <section className="grid grid-cols-3 gap-2">
+      <section className="grid grid-cols-3 gap-2 sm:gap-3">
         <StatCard label={t('billed')} value={fmt(customer.billed)} />
         <StatCard label={t('paid')} value={fmt(customer.paid)} accent="success" />
         <StatCard label={t('due')} value={fmt(customer.due)} accent="primary" />

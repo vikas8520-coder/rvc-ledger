@@ -291,12 +291,12 @@ function CustomersTab({ customers, transactions, fmtINR, uiLang, tr, manage }: {
         <div key={c.id} className="rounded-lg border border-[var(--border-light)] bg-[var(--bg-card)] p-3">
           {editing === c.id ? (
             <div className="space-y-2">
-              <div className="grid grid-cols-2 gap-2">
-                <input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} placeholder="Name" className="rounded border border-[var(--border-light)] bg-[var(--bg-primary)] px-2 py-1 text-xs text-[var(--text-primary)]" />
-                <input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} placeholder="Phone" className="rounded border border-[var(--border-light)] bg-[var(--bg-primary)] px-2 py-1 text-xs text-[var(--text-primary)]" />
-                <input value={editForm.englishName} onChange={(e) => setEditForm({ ...editForm, englishName: e.target.value })} placeholder="English name" className="rounded border border-[var(--border-light)] bg-[var(--bg-primary)] px-2 py-1 text-xs text-[var(--text-primary)]" />
-                <input value={editForm.teluguName} onChange={(e) => setEditForm({ ...editForm, teluguName: e.target.value })} placeholder="Telugu name" className="rounded border border-[var(--border-light)] bg-[var(--bg-primary)] px-2 py-1 text-xs text-[var(--text-primary)]" />
-                <input value={editForm.hindiName} onChange={(e) => setEditForm({ ...editForm, hindiName: e.target.value })} placeholder="Hindi name" className="rounded border border-[var(--border-light)] bg-[var(--bg-primary)] px-2 py-1 text-xs text-[var(--text-primary)]" />
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} placeholder="Name" className="w-full rounded border border-[var(--border-light)] bg-[var(--bg-primary)] px-2 py-1 text-xs text-[var(--text-primary)]" />
+                <input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} placeholder="Phone" className="w-full rounded border border-[var(--border-light)] bg-[var(--bg-primary)] px-2 py-1 text-xs text-[var(--text-primary)]" />
+                <input value={editForm.englishName} onChange={(e) => setEditForm({ ...editForm, englishName: e.target.value })} placeholder="English name" className="w-full rounded border border-[var(--border-light)] bg-[var(--bg-primary)] px-2 py-1 text-xs text-[var(--text-primary)]" />
+                <input value={editForm.teluguName} onChange={(e) => setEditForm({ ...editForm, teluguName: e.target.value })} placeholder="Telugu name" className="w-full rounded border border-[var(--border-light)] bg-[var(--bg-primary)] px-2 py-1 text-xs text-[var(--text-primary)]" />
+                <input value={editForm.hindiName} onChange={(e) => setEditForm({ ...editForm, hindiName: e.target.value })} placeholder="Hindi name" className="w-full rounded border border-[var(--border-light)] bg-[var(--bg-primary)] px-2 py-1 text-xs text-[var(--text-primary)]" />
               </div>
               <div className="flex gap-2">
                 <button onClick={() => saveEdit(c.id)} className="rounded bg-[var(--bg-primary)] px-3 py-1 text-xs font-medium text-[var(--text-on-primary)]">Save</button>
@@ -404,6 +404,7 @@ function TransactionsTab({ transactions, billItems, customers, fmtINR, fmtDate, 
                     </div>
                     {t.notes && <p className="mb-2 text-[11px] text-[var(--text-faint)]">{t.notes}</p>}
                     {items.length > 0 ? (
+                      <div className="overflow-x-auto">
                       <table className="w-full text-[11px]">
                         <thead><tr className="text-left text-[var(--text-faint)]">
                           <th className="p-1">{tr('item')}</th><th className="p-1">{tr('qty')}</th><th className="p-1">{tr('rate')}</th><th className="p-1 text-right">{tr('totalAmount')}</th>
@@ -419,6 +420,7 @@ function TransactionsTab({ transactions, billItems, customers, fmtINR, fmtDate, 
                           ))}
                         </tbody>
                       </table>
+                      </div>
                     ) : <p className="text-[11px] text-[var(--text-faint)]">{tr('noItemizedBillItems')}</p>}
                   </div>
                 )}
@@ -455,7 +457,7 @@ function PurchasesTab({ purchases, purchaseItems, fmtINR, fmtDate, tr, manage, s
               </div>
             </div>
             {items.length > 0 && (
-              <div className="mt-2 border-t border-[var(--border-card)] pt-2">
+              <div className="mt-2 overflow-x-auto border-t border-[var(--border-card)] pt-2">
                 <table className="w-full text-[11px]">
                   <tbody>
                     {items.map((i) => (

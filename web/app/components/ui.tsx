@@ -185,7 +185,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`rounded-lg px-4 py-2.5 text-sm font-medium shadow-lg animate-in fade-in slide-in-from-bottom-2 ${
+            className={`max-w-[min(20rem,90vw)] break-words rounded-lg px-4 py-2.5 text-sm font-medium shadow-lg animate-in fade-in slide-in-from-bottom-2 ${
               t.type === 'success' ? 'bg-[var(--bg-success)] text-white'
               : t.type === 'error' ? 'bg-[var(--bg-primary)] text-white'
               : 'bg-[var(--bg-secondary)] text-white'

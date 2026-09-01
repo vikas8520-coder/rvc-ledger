@@ -88,9 +88,9 @@ export default function RateSheetPage() {
                   className="flex w-full items-center justify-between gap-2 text-left"
                 >
                   <div className="min-w-0">
-                    <p className="flex items-center gap-2 truncate font-medium">
-                      {item.itemName}
-                      <span className={`text-sm font-bold ${TREND_COLORS[item.trend]}`}>
+                    <p className="flex items-center gap-2 min-w-0 font-medium">
+                      <span className="truncate">{item.itemName}</span>
+                      <span className={`shrink-0 text-sm font-bold ${TREND_COLORS[item.trend]}`}>
                         {TREND_LABELS[item.trend]}
                       </span>
                     </p>
@@ -111,7 +111,7 @@ export default function RateSheetPage() {
                 </button>
 
                 {isExpanded && (
-                  <div className="mt-3 border-t border-[var(--border-light)] pt-2">
+                  <div className="mt-3 overflow-x-auto border-t border-[var(--border-light)] pt-2">
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="text-[var(--text-muted)]">

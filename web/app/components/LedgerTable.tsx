@@ -220,7 +220,7 @@ export default function LedgerTable({
                           {t('printBill')}
                         </button>
                         {printMenuTxn === r.txnId && (
-                          <span className="absolute right-0 top-4 z-10 flex flex-col gap-0.5 rounded-md border border-[var(--border-light)] bg-[var(--bg-input)] p-1 shadow-lg">
+                          <span className="absolute right-0 top-4 z-10 flex max-w-[min(12rem,90vw)] flex-col gap-0.5 rounded-md border border-[var(--border-light)] bg-[var(--bg-input)] p-1 shadow-lg">
                             {(['simple', 'itemized', 'market', 'patti'] as BillFormat[]).map((f) => (
                               <button
                                 key={f}

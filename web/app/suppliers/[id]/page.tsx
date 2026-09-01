@@ -120,10 +120,10 @@ export default function SupplierLedgerPage({ params }: { params: Promise<{ id: s
         <Link href="/suppliers" className="text-xs text-[var(--bg-primary)] hover:underline">
           ← {t('allSuppliers')}
         </Link>
-        <h1 className="text-xl font-bold">{supplier.name}</h1>
+        <h1 className="text-lg sm:text-xl font-bold break-words">{supplier.name}</h1>
       </div>
 
-      <section className="grid grid-cols-3 gap-2">
+      <section className="grid grid-cols-3 gap-2 sm:gap-3">
         <div className="rounded-lg bg-[var(--bg-card)] px-3 py-2">
           <p className="text-[10px] uppercase text-[var(--text-muted)]">{t('purchased')}</p>
           <p className="font-bold">{fmt(supplier.purchased)}</p>
@@ -247,7 +247,8 @@ export default function SupplierLedgerPage({ params }: { params: Promise<{ id: s
               </div>
             </div>
             {e.items && e.items.length > 0 && (
-              <table className="mt-1.5 w-full text-[12px] tabular-nums leading-5">
+              <div className="mt-1.5 overflow-x-auto">
+              <table className="w-full text-[12px] tabular-nums leading-5">
                 <tbody>
                   {e.items.map((it, i) => (
                     <tr key={i} className={it.kind === 'charge' ? 'italic text-[#6b5344]' : ''}>
@@ -260,6 +261,7 @@ export default function SupplierLedgerPage({ params }: { params: Promise<{ id: s
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </div>
         ))}

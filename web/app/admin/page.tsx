@@ -165,12 +165,12 @@ export default function AdminPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-[var(--border-light)]">
+      <div className="flex gap-1 overflow-x-auto border-b border-[var(--border-light)]">
         {(['shops', 'payments', 'pricing', 'sourcing'] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium capitalize transition-colors ${
+            className={`whitespace-nowrap px-4 py-2 text-sm font-medium capitalize transition-colors ${
               tab === t
                 ? 'border-b-2 border-[var(--bg-primary)] text-[var(--text-primary)]'
                 : 'text-[var(--text-faint)] hover:text-[var(--text-secondary)]'
@@ -667,7 +667,7 @@ function PaymentsTab({ payments, fmtINR }: {
 }) {
   if (payments.length === 0) {
     return (
-      <div className="rounded-lg bg-[var(--bg-card)] p-8 text-center">
+      <div className="rounded-lg bg-[var(--bg-card)] p-4 text-center sm:p-8">
         <p className="text-sm text-[var(--text-faint)]">No subscription payments recorded yet.</p>
         <p className="text-xs text-[var(--text-faint)] mt-1">Go to the Shops tab to record a payment.</p>
       </div>
@@ -681,7 +681,7 @@ function PaymentsTab({ payments, fmtINR }: {
   return (
     <div className="space-y-3">
       {/* Payment method breakdown */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="rounded-xl bg-[var(--bg-card)] p-3">
           <p className="text-[11px] text-[var(--text-faint)]">Cash</p>
           <p className="text-base font-bold text-[var(--text-primary)]">{fmtINR(totalCash)}</p>
