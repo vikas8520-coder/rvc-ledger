@@ -36,17 +36,15 @@ export default function Autocomplete({
   }, [options, value]);
 
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent | TouchEvent) {
+    function handleClickOutside(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false);
         setHighlightedIdx(-1);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('touchstart', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('touchstart', handleClickOutside);
     };
   }, []);
 
@@ -101,23 +99,16 @@ export default function Autocomplete({
         autoComplete="off"
       />
       {open && filtered.length > 0 && (
-        <div className="absolute z-[100] mt-1 w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] shadow-lg max-h-48 overflow-y-auto">
+        <div className="absolute z-[100] mt-1 w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] shadow-lg max-h-48 overflow-y-auto overscroll-contain">
           {filtered.map((opt, i) => (
             <button
               key={opt}
               type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                selectOption(opt);
-              }}
-              onTouchStart={(e) => {
-                e.preventDefault();
-                selectOption(opt);
-              }}
+              onClick={() => selectOption(opt)}
               className={`flex w-full items-center px-3 py-2 text-left text-sm ${
                 i === highlightedIdx
                   ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'
-                  : 'hover:bg-[var(--bg-base)]'
+                  : 'hover:bg-[var(--bg-base)] active:bg-[var(--bg-base)]'
               } ${opt === value ? 'font-semibold' : ''}`}
             >
               {opt}

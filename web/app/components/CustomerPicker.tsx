@@ -43,17 +43,15 @@ export default function CustomerPicker({ customers, value, onChange, onAddNew, p
   }, [customers, query, uiLang]);
 
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent | TouchEvent) {
+    function handleClickOutside(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false);
         setQuery('');
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('touchstart', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('touchstart', handleClickOutside);
     };
   }, []);
 
@@ -101,7 +99,7 @@ export default function CustomerPicker({ customers, value, onChange, onAddNew, p
           </div>
 
           {/* Customer list */}
-          <div className="overflow-y-auto flex-1">
+          <div className="overflow-y-auto flex-1 overscroll-contain">
             {filtered.length === 0 && (
               <p className="p-3 text-sm text-[var(--text-muted)]">—</p>
             )}
@@ -109,19 +107,12 @@ export default function CustomerPicker({ customers, value, onChange, onAddNew, p
               <button
                 key={c.id}
                 type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
+                onClick={() => {
                   onChange(c.id, formatCustomerName(c, uiLang));
                   setOpen(false);
                   setQuery('');
                 }}
-                onTouchStart={(e) => {
-                  e.preventDefault();
-                  onChange(c.id, formatCustomerName(c, uiLang));
-                  setOpen(false);
-                  setQuery('');
-                }}
-                className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--bg-base)] ${
+                className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--bg-base)] active:bg-[var(--bg-base)] ${
                   c.id === value ? 'bg-[var(--bg-base)]' : ''
                 }`}
               >
@@ -140,14 +131,7 @@ export default function CustomerPicker({ customers, value, onChange, onAddNew, p
           {onAddNew && (
             <button
               type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                setOpen(false);
-                setQuery('');
-                onAddNew();
-              }}
-              onTouchStart={(e) => {
-                e.preventDefault();
+              onClick={() => {
                 setOpen(false);
                 setQuery('');
                 onAddNew();

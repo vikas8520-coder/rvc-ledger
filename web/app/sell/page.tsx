@@ -65,6 +65,7 @@ export default function SellPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Day grid state
   const [dayLines, setDayLines] = useState<SaleLine[]>([]);
@@ -220,6 +221,128 @@ export default function SellPage() {
       setSaveError(err.message || 'Save failed');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleEdit = (line: SaleLine) => {
+    // Load line data into the form for editing
+    setItem(line.item);
+    setFarmer(line.farmer);
+    setCustomerId(line.customerId);
+    setCustomerName(line.customerName);
+    setBags(line.bags);
+    setKgs(line.kgs);
+    setRate(line.rate);
+    setHamaliEnabled(line.hamaliEnabled);
+    setHamali(line.hamali);
+    setEditingId(line.txnId || line.id);
+    setSaveError('');
+    setSaveSuccess(false);
+    // Scroll to form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingId) return;
+    setSaving(true);
+    setSaveError('');
+    try {
+      // Delete old transaction
+      const delRes = await fetch(`/api/transactions/${editingId}`, { method: 'DELETE' });
+      if (!delRes.ok) {
+        const d = await delRes.json();
+        throw new Error(d.error || 'Failed to delete old entry');
+      }
+
+      // Save new transaction
+      const items = [{
+        raw_text: item.trim(),
+        confirmed_name: item.trim(),
+        qty: kgs || null,
+        rate: rate,
+        amount: computedAmount,
+        display: `${bags || 0} bags${kgs ? `, ${kgs} kg` : ''} @ ₹${rate}`,
+        kind: 'item',
+        chargeCode: null,
+        farmer: farmer.trim() || null,
+        hamali: hamaliEnabled ? num(hamali) : null,
+        bags: num(bags) || null,
+      }];
+      const res = await fetch('/api/bills', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerName: customerName.trim(),
+          customerId,
+          date,
+          billNo: null,
+          total: computedAmount,
+          items,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Save failed');
+
+      // Update day grid: replace the edited line
+      const selectedCustomer = customers.find((c) => c.id === customerId);
+      setDayLines(prev => prev.map(l => {
+        if ((l.txnId || l.id) === editingId) {
+          return {
+            ...l,
+            item: item.trim(),
+            farmer: farmer.trim(),
+            customerId,
+            customerName: customerName.trim(),
+            englishName: selectedCustomer?.englishName || null,
+            teluguName: selectedCustomer?.teluguName || null,
+            hindiName: selectedCustomer?.hindiName || null,
+            bags,
+            kgs,
+            rate,
+            hamaliEnabled,
+            hamali: hamaliEnabled ? hamali : '',
+            amount: computedAmount,
+            saved: true,
+          };
+        }
+        return l;
+      }));
+
+      // Reset form
+      setItem(''); setFarmer(''); setCustomerId(null); setCustomerName('');
+      setBags(''); setKgs(''); setRate(''); setHamali(''); setHamaliEnabled(false);
+      setEditingId(null);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+    } catch (err: any) {
+      setSaveError(err.message || 'Edit failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setItem(''); setFarmer(''); setCustomerId(null); setCustomerName('');
+    setBags(''); setKgs(''); setRate(''); setHamali(''); setHamaliEnabled(false);
+    setEditingId(null);
+    setSaveError('');
+  };
+
+  const handleDelete = async (line: SaleLine) => {
+    const txnId = line.txnId || line.id;
+    if (!confirm(`Delete this entry?\n${line.item} — ${line.customerName} — ₹${line.amount}`)) return;
+    try {
+      const res = await fetch(`/api/transactions/${txnId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || 'Delete failed');
+      }
+      // Remove from day grid
+      setDayLines(prev => prev.filter(l => (l.txnId || l.id) !== txnId));
+      // If editing this line, cancel edit
+      if (editingId === txnId) handleCancelEdit();
+    } catch (err: any) {
+      setSaveError(err.message || 'Delete failed');
     }
   };
 
@@ -620,14 +743,40 @@ export default function SellPage() {
         {saveError && <p className="text-sm text-[var(--bg-primary)]">{saveError}</p>}
         {saveSuccess && <p className="text-sm text-[var(--bg-success)]">✓ {t('saved')}</p>}
 
-        <button
-          onClick={handleSave}
-          disabled={!canSave || saving}
-          className="w-full rounded-lg bg-[var(--bg-primary)] py-2.5 text-sm font-medium text-[var(--text-on-primary)] disabled:opacity-40"
-        >
-          {saving ? t('saving') : t('saveLine')}
-        </button>
+        {editingId ? (
+          <div className="flex gap-2">
+            <button
+              onClick={handleSaveEdit}
+              disabled={!canSave || saving}
+              className="flex-1 rounded-lg bg-[var(--bg-primary)] py-2.5 text-sm font-medium text-[var(--text-on-primary)] disabled:opacity-40"
+            >
+              {saving ? t('saving') : 'Update Entry'}
+            </button>
+            <button
+              onClick={handleCancelEdit}
+              disabled={saving}
+              className="rounded-lg bg-[var(--bg-card)] px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-card-hover)] disabled:opacity-40"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={handleSave}
+            disabled={!canSave || saving}
+            className="w-full rounded-lg bg-[var(--bg-primary)] py-2.5 text-sm font-medium text-[var(--text-on-primary)] disabled:opacity-40"
+          >
+            {saving ? t('saving') : t('saveLine')}
+          </button>
+        )}
       </section>
+
+      {/* Edit mode indicator */}
+      {editingId && (
+        <div className="rounded-lg bg-[var(--bg-warning)] bg-opacity-20 px-4 py-2 text-sm text-[var(--text-primary)]">
+          ✎ Editing an existing entry. Click <span className="font-semibold">Update Entry</span> to save changes, or <span className="font-semibold">Cancel</span> to discard.
+        </div>
+      )}
 
       {/* Day grid */}
       {dayLines.length > 0 && (
@@ -648,6 +797,7 @@ export default function SellPage() {
                   <th className="py-1.5 pr-2 text-right">{t('hamali')}</th>
                   <th className="py-1.5 pr-2 text-right">{t('amount')}</th>
                   <th className="py-1.5 pr-2">{t('farmer')}</th>
+                  <th className="py-1.5 pr-2 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -659,8 +809,9 @@ export default function SellPage() {
                     teluguName: l.teluguName,
                     hindiName: l.hindiName,
                   }, uiLang);
+                  const isEditing = editingId === (l.txnId || l.id);
                   return (
-                    <tr key={l.id} className={`border-l-4 ${isCash ? 'border-l-[var(--bg-success)]' : 'border-l-[var(--bg-primary)]'} border-b border-[var(--border-light)]`}>
+                    <tr key={l.id} className={`border-l-4 ${isEditing ? 'border-l-[var(--bg-warning)]' : isCash ? 'border-l-[var(--bg-success)]' : 'border-l-[var(--bg-primary)]'} border-b border-[var(--border-light)] ${isEditing ? 'bg-[var(--bg-warning)] bg-opacity-10' : ''}`}>
                       <td className="py-1.5 pr-2 text-xs text-[var(--text-muted)]">{i + 1}</td>
                       <td className="py-1.5 pr-2 font-medium">{l.item}</td>
                       <td className="py-1.5 pr-2">{displayName}</td>
@@ -670,6 +821,26 @@ export default function SellPage() {
                       <td className="py-1.5 pr-2 text-right">{l.hamaliEnabled ? l.hamali : '—'}</td>
                       <td className="py-1.5 pr-2 text-right font-medium">{fmt(l.amount)}</td>
                       <td className="py-1.5 pr-2 text-xs text-[var(--text-muted)]">{l.farmer || '—'}</td>
+                      <td className="py-1.5 pr-2">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => handleEdit(l)}
+                            disabled={editingId !== null}
+                            className="rounded px-2 py-0.5 text-xs text-[var(--bg-primary)] hover:bg-[var(--bg-base)] disabled:opacity-30"
+                            title="Edit this entry"
+                          >
+                            ✎
+                          </button>
+                          <button
+                            onClick={() => handleDelete(l)}
+                            disabled={editingId !== null}
+                            className="rounded px-2 py-0.5 text-xs text-red-500 hover:bg-red-50 disabled:opacity-30"
+                            title="Delete this entry"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
