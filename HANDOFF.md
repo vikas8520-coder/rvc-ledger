@@ -34,10 +34,12 @@ The old desktop app had a 5-item menu:
 |------|---------|
 | `web/app/receive/page.tsx` | Stock received from farmer (bags, weights, prices, optional charges) |
 | `web/app/sell/page.tsx` | Sales to retailers (customer rows, image upload, day grid, Patti printing, reports) |
-| `web/app/entry/page.tsx` | 3-step wizard (Stock Received → Sales → Summary). **Has a bug: bill items missing `farmer` field (line 178-186).** Not in navigation. |
+| `web/app/entry/page.tsx` | **Patti Book (canonical daily entry).** Farmer header + customer lines + Comm/Hamali/Bardan/Freight/Advance/Packing. Saves `farmer`, `customerId`, cash/credit, hamali. |
+| `web/app/print/page.tsx` | Print hub: farmer patti, customer bills, party ledger, dues, docket |
+| `web/app/misc/page.tsx` | More menu — Receive, Sell, stock, expenses, settings |
 | `web/app/payment/page.tsx` | Payment collection from customers |
 | `web/app/upload/page.tsx` | Old upload page (still exists, not in navigation) |
-| `web/app/components/AppShell.tsx` | Navigation — Receive, Sell, Payment. Mobile bottom bar + desktop header. |
+| `web/app/components/AppShell.tsx` | Navigation — Data Entry, Print, Payment. Mobile bottom bar + desktop header. |
 | `web/app/components/CustomerPicker.tsx` | UUID-based customer picker with search, add-new, multilingual display |
 | `web/app/api/ocr/gemini/route.ts` | Gemini OCR server route (for image upload in Sell) |
 | `web/app/api/bills/route.ts` | POST saves a bill (customer sale). Uses `requireShopAuth()`. |
@@ -56,12 +58,14 @@ The old desktop app had a 5-item menu:
 
 ## Current navigation
 
-**Mobile bottom bar + desktop header — both show:**
-1. 🚚 **Receive** (`/receive`) — stock from farmers
-2. 🏪 **Sell** (`/sell`) — sales to retailers (image upload, day grid, Patti printing, reports)
-3. 💰 **Payment** (`/payment`) — payments received
+**Mobile bottom bar + desktop header actions:**
+1. **Data Entry** (`/entry`) — Patti Book: farmer header, customer sale lines, charges, save + print
+2. **Print** (`/print`) — farmer patti, customer bills, party ledger, dues list, docket
+3. **Payment** (`/payment`) — collections
 
-Old pages (`/upload`, `/quick-bill`, `/entry`) still exist but are NOT in navigation.
+**More** (`/misc`): Receive, Sell (day grid), stock, expenses, settings, upload.
+
+Overview + Customers stay in the top nav. Reports + Settings remain in the secondary row.
 
 ## Authentication (configured 2026-09-01)
 
@@ -75,6 +79,9 @@ Old pages (`/upload`, `/quick-bill`, `/entry`) still exist but are NOT in naviga
 
 ## What's done and working
 
+- ✅ **Patti Book (`/entry`)** — farmer header, customer lines, cash/credit, hamali, charges, leftover, farmer-tagged bills
+- ✅ **Print hub (`/print`)** — farmer patti, customer bills, party ledger, dues, docket/gate pass
+- ✅ **More (`/misc`)** — Receive, Sell day-grid, stock, expenses, settings
 - ✅ Manual entry flow for commission agent business
 - ✅ Receive page: product, farmer, bags/covers, bigbags, bag weight groups, prices, optional charges
 - ✅ Sell page: customer rows with bags, weight, price/kg, amount, hamali, multi-rate auction, day grid, Patti printing, reports, stock display, inline farmer creation, inline customer creation
@@ -86,16 +93,37 @@ Old pages (`/upload`, `/quick-bill`, `/entry`) still exist but are NOT in naviga
 - ✅ Deployed to https://rvc-ledger-web.vercel.app
 - ✅ Multilingual (English, Telugu, Hindi) with transliteration
 
-## Current active plan: Unified Data Entry (Farmer Heading → Customer Lines)
+## Unified Data Entry — shipped 2026-09-01
 
-### The problem
+Daily work is **Patti Book** at `/entry` (matches ADAT Patti Book Entry): farmer on top, one row per customer sale, footer charges, Save + Print.
+
+- Bills save `farmer`, `customerId`, `paymentType` (cash/credit), `hamali`, `bags`.
+- One purchase is written for the farmer from the sold lines.
+- Farmer patti print is farmer-centric (not the old 6-up customer slip).
+- Receive/Sell remain under **More**. Receive shows a banner pointing at Data Entry.
+
+### What we still did not see in the shop screenshots
+
+Printing / Setup / Misc / User Menu **submenus were not in the photos or video**. Print hub is inferred from ADAT/AdatSoft + what already existed in this app:
+
+1. Farmer patti
+2. Customer bills
+3. Party ledger
+4. Dues list
+5. Docket / gate pass
+
+If the shop PC has different print items, send those screens and we match them.
+
+## Previous plan notes (kept for context)
+
+### The original problem
 
 The legacy app had a single "Data Entry" screen where:
 - Farmer is the header (parent)
 - Customer sales are sub-lines under that farmer
 - All calculations happen in one place
 
-The current app splits this into two screens (`/receive` and `/sell`), and the existing `/entry` page (which tried to unify them) has a **broken farmer linkage** — bill items are saved without the `farmer` field, so the dashboard's farmer roll-up doesn't work.
+The app used to split this into `/receive` + `/sell`. The old `/entry` wizard also dropped `farmer` on bill items.
 
 ### What was analyzed
 

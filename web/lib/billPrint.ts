@@ -674,3 +674,148 @@ export function printCreditLedger(
   win.document.write(html);
   win.document.close();
 }
+
+function openHtmlPrint(html: string, blocked: string): void {
+  const win = window.open('', '_blank');
+  if (!win) {
+    alert(blocked);
+    return;
+  }
+  win.document.write(html);
+  win.document.close();
+}
+
+export interface FarmerPattiLine {
+  commodity: string;
+  qty: string;
+  customer: string;
+  weight: string;
+  rate: string;
+  amount: number;
+  cash?: boolean;
+}
+
+export interface FarmerPattiData {
+  farmer: string;
+  date: string;
+  pattiNo?: string;
+  lines: FarmerPattiLine[];
+  comm: number;
+  hamali: number;
+  bardan: number;
+  freight: number;
+  advance: number;
+  packing: number;
+  other: number;
+  hundekari?: string;
+  leftoverBags?: number;
+}
+
+export function printFarmerPatti(data: FarmerPattiData, shop: ShopProfile): void {
+  const gross = data.lines.reduce((s, l) => s + (l.amount || 0), 0);
+  const exp = data.comm + data.hamali + data.bardan + data.freight + data.advance + data.packing + data.other;
+  const nett = gross - exp;
+  const bags = data.lines.reduce((s, l) => s + (parseFloat(l.qty) || 0), 0);
+  const kgs = data.lines.reduce((s, l) => s + (parseFloat(l.weight) || 0), 0);
+  const rows = data.lines.map((l) => `<tr>
+    <td>${esc(l.commodity)}</td>
+    <td class="num">${esc(l.qty)}</td>
+    <td>${esc(l.customer)}${l.cash ? ' <span class="cash">CASH</span>' : ''}</td>
+    <td class="num">${esc(l.weight)}</td>
+    <td class="num">${esc(l.rate)}</td>
+    <td class="num">${money(l.amount)}</td>
+  </tr>`).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Patti - ${esc(data.farmer)}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Courier New', monospace; color: #000; padding: 16px; font-size: 13px; }
+  .sheet { max-width: 720px; margin: 0 auto; border: 2px solid #000; padding: 12px; }
+  h1 { text-align: center; font-size: 18px; }
+  .addr { text-align: center; font-size: 11px; margin-bottom: 8px; }
+  .meta { display: flex; justify-content: space-between; margin: 8px 0; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  th, td { border-bottom: 1px solid #999; padding: 4px 6px; text-align: left; }
+  th { border-bottom: 2px solid #000; font-size: 11px; text-transform: uppercase; }
+  .num { text-align: right; }
+  .cash { font-size: 9px; border: 1px solid #000; padding: 0 3px; }
+  .tot { display: flex; justify-content: space-between; margin-top: 8px; font-weight: bold; }
+  .charges { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; font-size: 12px; }
+  .charges div { border: 1px solid #999; padding: 4px 6px; }
+  .net { display: flex; justify-content: space-between; border-top: 2px solid #000; margin-top: 10px; padding-top: 8px; font-size: 16px; font-weight: bold; }
+  .sign { margin-top: 28px; text-align: right; font-size: 11px; }
+  .print-btn { display: block; margin: 12px auto 0; padding: 8px 20px; background: #333; color: #fff; border: none; cursor: pointer; }
+  @media print { .print-btn { display: none; } body { padding: 0; } }
+</style></head><body>
+<div class="sheet">
+  <h1>${esc(shop.shopName || 'RVC')}</h1>
+  ${shop.shopAddress ? `<div class="addr">${esc(shop.shopAddress)}</div>` : ''}
+  <div class="meta">
+    <span>Patti: ${esc(data.pattiNo || '—')}</span>
+    <span>Farmer: <b>${esc(data.farmer)}</b></span>
+    <span>${esc(fmtDate(data.date))}</span>
+  </div>
+  <table>
+    <thead><tr><th>Commodity</th><th class="num">Qty</th><th>Customer</th><th class="num">Weight</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="tot"><span>${bags} bags · ${kgs} kg</span><span>Gross ${money(gross)}</span></div>
+  <div class="charges">
+    <div>Comm ${money(data.comm)}</div>
+    <div>Hamali ${money(data.hamali)}</div>
+    <div>Bardan ${money(data.bardan)}</div>
+    <div>Freight ${money(data.freight)}</div>
+    <div>Advance ${money(data.advance)}</div>
+    <div>Packing ${money(data.packing)}</div>
+    <div>Other ${money(data.other)}</div>
+    ${data.hundekari ? `<div>Hundekari ${esc(data.hundekari)}</div>` : '<div></div>'}
+  </div>
+  <div class="net"><span>Nett to farmer${data.leftoverBags ? ` · leftover ${data.leftoverBags} bags` : ''}</span><span>${money(nett)}</span></div>
+  <div class="sign">Authorized Signatory</div>
+</div>
+<button class="print-btn" onclick="window.print()">Print Patti</button>
+<script>window.onload=function(){setTimeout(function(){window.print()},300)}</script>
+</body></html>`;
+  openHtmlPrint(html, 'Please allow popups to print the farmer patti');
+}
+
+export interface DocketData {
+  date: string;
+  farmer: string;
+  commodity: string;
+  bags: string;
+  weight: string;
+  vehicleNo: string;
+  destination: string;
+  remark: string;
+}
+
+export function printDocket(data: DocketData, shop: ShopProfile): void {
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Docket</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Courier New', monospace; padding: 16px; }
+  .docket { max-width: 420px; margin: 0 auto; border: 2px dashed #000; padding: 14px; }
+  h1 { text-align: center; font-size: 16px; letter-spacing: 2px; }
+  .row { display: flex; justify-content: space-between; margin: 6px 0; font-size: 13px; border-bottom: 1px dotted #999; padding-bottom: 4px; }
+  .print-btn { display: block; margin: 12px auto 0; padding: 8px 20px; background: #333; color: #fff; border: none; cursor: pointer; }
+  @media print { .print-btn { display: none; } }
+</style></head><body>
+<div class="docket">
+  <h1>DOCKET / GATE PASS</h1>
+  <p style="text-align:center;font-size:12px;margin:4px 0 10px">${esc(shop.shopName || 'RVC')}</p>
+  <div class="row"><span>Date</span><b>${esc(fmtDate(data.date))}</b></div>
+  <div class="row"><span>Farmer</span><b>${esc(data.farmer || '—')}</b></div>
+  <div class="row"><span>Commodity</span><b>${esc(data.commodity || '—')}</b></div>
+  <div class="row"><span>Bags</span><b>${esc(data.bags || '—')}</b></div>
+  <div class="row"><span>Weight</span><b>${esc(data.weight || '—')}</b></div>
+  <div class="row"><span>Vehicle</span><b>${esc(data.vehicleNo || '—')}</b></div>
+  <div class="row"><span>To</span><b>${esc(data.destination || '—')}</b></div>
+  ${data.remark ? `<div class="row"><span>Remark</span><b>${esc(data.remark)}</b></div>` : ''}
+  <p style="margin-top:28px;font-size:11px;text-align:right">Gate / Loading sign</p>
+</div>
+<button class="print-btn" onclick="window.print()">Print Docket</button>
+<script>window.onload=function(){setTimeout(function(){window.print()},300)}</script>
+</body></html>`;
+  openHtmlPrint(html, 'Please allow popups to print the docket');
+}

@@ -1,598 +1,597 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usePersistentState } from '../components/usePersistentState';
 import { useI18n } from '../components/I18nProvider';
 import { fmt } from '@/lib/format';
 import Autocomplete from '../components/Autocomplete';
+import { printFarmerPatti, type FarmerPattiData, type ShopProfile } from '@/lib/billPrint';
 
 function today() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// ─── Types ───────────────────────────────────────────────
-
-interface BagGroup {
-  id: string;
-  weightKg: string;
-  numBags: string;
-  pricePerKg: string;
-}
-
-interface SaleEntry {
-  id: string;
-  customerName: string;
-  bags: string;
-  weightKg: string;
-  pricePerKg: string;
-  amount: string;
-}
-
-// ─── Helpers ─────────────────────────────────────────────
-
 let idCounter = 0;
 function newId() {
-  return `row-${Date.now()}-${idCounter++}`;
+  return `ln-${Date.now()}-${idCounter++}`;
 }
-
 function num(s: string): number {
   const n = parseFloat(s);
   return Number.isFinite(n) ? n : 0;
 }
 
-// ─── Main Component ──────────────────────────────────────
+interface Line {
+  id: string;
+  commodity: string;
+  bags: string;
+  customerName: string;
+  customerId: string | null;
+  weightKg: string;
+  pricePerKg: string;
+  amount: string;
+  cash: boolean;
+  hamali: string;
+}
+
+interface CustomerOpt {
+  id: string;
+  name: string;
+}
+
+function emptyLine(commodity = '', price = ''): Line {
+  return {
+    id: newId(),
+    commodity,
+    bags: '',
+    customerName: '',
+    customerId: null,
+    weightKg: '',
+    pricePerKg: price,
+    amount: '',
+    cash: false,
+    hamali: '',
+  };
+}
+
+const inputCls =
+  'w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-2 py-2 text-sm tabular-nums';
 
 export default function EntryPage() {
   const { t } = useI18n();
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-
-  // Step 1: Stock received
   const [date, setDate] = usePersistentState('entry-date', today());
-  const [productName, setProductName] = useState('');
   const [farmerName, setFarmerName] = useState('');
-  const [bagsCovers, setBagsCovers] = useState('');
-  const [bigbags, setBigbags] = useState('');
-  const [bagGroups, setBagGroups] = useState<BagGroup[]>([
-    { id: newId(), weightKg: '', numBags: '', pricePerKg: '' },
-  ]);
-  const [samePrice, setSamePrice] = useState(true);
+  const [kgPerBag, setKgPerBag] = useState('');
+  const [bagsReceived, setBagsReceived] = useState('');
+  const [hundekari, setHundekari] = useState('');
+  const [lines, setLines] = useState<Line[]>([emptyLine()]);
 
-  // Step 2: Sales
-  const [sales, setSales] = useState<SaleEntry[]>([
-    { id: newId(), customerName: '', bags: '', weightKg: '', pricePerKg: '', amount: '' },
-  ]);
-
-  // Step 3: Summary
   const [commissionPct, setCommissionPct] = useState('10');
+  const [hamaliTotal, setHamaliTotal] = useState('');
+  const [bardan, setBardan] = useState('');
+  const [freight, setFreight] = useState('');
+  const [advance, setAdvance] = useState('');
+  const [packing, setPacking] = useState('');
+  const [other, setOther] = useState('');
+
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState<FarmerPattiData | null>(null);
 
-  // Load existing customers and products for autocomplete
-  const [customers, setCustomers] = useState<string[]>([]);
+  const [customers, setCustomers] = useState<CustomerOpt[]>([]);
   const [catalog, setCatalog] = useState<string[]>([]);
   const [farmers, setFarmers] = useState<string[]>([]);
+  const [shop, setShop] = useState<ShopProfile>({});
+  const [showAddFarmer, setShowAddFarmer] = useState(false);
+  const [newFarmerName, setNewFarmerName] = useState('');
+  const [newFarmerPhone, setNewFarmerPhone] = useState('');
+  const [addingFarmer, setAddingFarmer] = useState(false);
 
   useEffect(() => {
-    fetch('/api/dashboard')
+    fetch('/api/customers')
       .then((r) => r.json())
-      .then((d) => setCustomers((d.customers || []).map((c: any) => c.name)))
+      .then((d) => setCustomers(d.customers || []))
       .catch(() => {});
     fetch('/api/catalog')
       .then((r) => r.json())
-      .then((d) => setCatalog((d.items || []).map((i: any) => i.name)))
+      .then((d) => setCatalog((d.items || []).map((i: { name: string }) => i.name).filter(Boolean)))
       .catch(() => {});
     fetch('/api/suppliers')
       .then((r) => r.json())
-      .then((d) => setFarmers((d.suppliers || []).map((s: any) => s.name)))
+      .then((d) => setFarmers((d.suppliers || []).map((s: { name: string }) => s.name)))
+      .catch(() => {});
+    fetch('/api/settings')
+      .then((r) => r.json())
+      .then((d) => {
+        const s = d.settings || {};
+        setShop({ shopName: s.shopName, shopAddress: s.shopAddress, shopPhone: s.shopPhone });
+        if (s.commissionPct) setCommissionPct(String(s.commissionPct));
+      })
       .catch(() => {});
   }, []);
 
-  // ─── Calculations ────────────────────────────────────────
+  const customerNames = useMemo(() => customers.map((c) => c.name), [customers]);
+  const cashCustomer = useMemo(
+    () => customers.find((c) => c.name.toUpperCase() === 'CASH SALES') || null,
+    [customers],
+  );
 
-  const totalBagsReceived = num(bagsCovers) + num(bigbags);
+  const validLines = lines.filter((l) => l.customerName.trim() && num(l.amount) > 0);
+  const totalBagsSold = validLines.reduce((s, l) => s + num(l.bags), 0);
+  const totalWeightSold = validLines.reduce((s, l) => s + num(l.weightKg), 0);
+  const gross = validLines.reduce((s, l) => s + num(l.amount), 0);
+  const lineHamali = validLines.reduce((s, l) => s + num(l.hamali), 0);
+  const comm = (gross * num(commissionPct)) / 100;
+  const hamali = num(hamaliTotal) || lineHamali;
+  const exp = comm + hamali + num(bardan) + num(freight) + num(advance) + num(packing) + num(other);
+  const nett = gross - exp;
+  const leftover = num(bagsReceived) > 0 ? num(bagsReceived) - totalBagsSold : 0;
 
-  const stockWeight = bagGroups.reduce((s, g) => s + num(g.weightKg) * num(g.numBags), 0);
-  const stockValue = bagGroups.reduce((s, g) => s + num(g.weightKg) * num(g.numBags) * num(g.pricePerKg), 0);
-
-  const totalBagsSold = sales.reduce((s, e) => s + num(e.bags), 0);
-  const totalWeightSold = sales.reduce((s, e) => s + num(e.weightKg), 0);
-  const totalSalesAmount = sales.reduce((s, e) => s + num(e.amount), 0);
-
-  const leftoverBags = totalBagsReceived - totalBagsSold;
-  const leftoverWeight = stockWeight - totalWeightSold;
-
-  const commissionAmount = (totalSalesAmount * num(commissionPct)) / 100;
-  const farmerPayment = totalSalesAmount - commissionAmount;
-
-  // ─── Step 1: Bag Groups ──────────────────────────────────
-
-  const addBagGroup = () => {
-    const lastPrice = samePrice && bagGroups.length > 0 ? bagGroups[0].pricePerKg : '';
-    setBagGroups([...bagGroups, { id: newId(), weightKg: '', numBags: '', pricePerKg: lastPrice }]);
+  const updateLine = (id: string, patch: Partial<Line>) => {
+    setLines((prev) =>
+      prev.map((l) => {
+        if (l.id !== id) return l;
+        const next = { ...l, ...patch };
+        if (patch.bags !== undefined && num(kgPerBag) > 0 && !patch.weightKg) {
+          next.weightKg = String(Math.round(num(next.bags) * num(kgPerBag) * 100) / 100);
+        }
+        if (patch.bags !== undefined || patch.weightKg !== undefined || patch.pricePerKg !== undefined) {
+          const amt = num(next.weightKg) * num(next.pricePerKg);
+          next.amount = amt > 0 ? String(Math.round(amt)) : next.amount;
+        }
+        return next;
+      }),
+    );
   };
 
-  const updateBagGroup = (id: string, field: keyof BagGroup, value: string) => {
-    setBagGroups(bagGroups.map((g) => (g.id === id ? { ...g, [field]: value } : g)));
+  const setCustomerOnLine = (id: string, name: string) => {
+    const match = customers.find((c) => c.name.toLowerCase() === name.trim().toLowerCase());
+    const isCash = name.trim().toUpperCase() === 'CASH SALES' || name.trim().toUpperCase() === 'CASH SALE ACOUNT';
+    updateLine(id, {
+      customerName: name,
+      customerId: match?.id || (isCash ? cashCustomer?.id || null : null),
+      cash: isCash,
+    });
   };
 
-  const removeBagGroup = (id: string) => {
-    setBagGroups(bagGroups.filter((g) => g.id !== id));
+  const markCash = (id: string) => {
+    const name = cashCustomer?.name || 'CASH SALES';
+    updateLine(id, {
+      cash: true,
+      customerName: name,
+      customerId: cashCustomer?.id || null,
+    });
   };
 
-  // When samePrice is on, sync all prices to the first one
-  useEffect(() => {
-    if (samePrice && bagGroups.length > 0) {
-      const firstPrice = bagGroups[0].pricePerKg;
-      setBagGroups(bagGroups.map((g, i) => (i === 0 ? g : { ...g, pricePerKg: firstPrice })));
+  const addLine = () => {
+    const last = lines[lines.length - 1];
+    setLines([...lines, emptyLine(last?.commodity || '', last?.pricePerKg || '')]);
+  };
+
+  const handleAddFarmer = async () => {
+    if (!newFarmerName.trim()) return;
+    setAddingFarmer(true);
+    try {
+      const r = await fetch('/api/suppliers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          name: newFarmerName.trim(),
+          phone: newFarmerPhone.trim() || undefined,
+        }),
+      });
+      const d = await r.json();
+      if (d.error) throw new Error(d.error);
+      setFarmers((prev) => [...prev, newFarmerName.trim()].sort());
+      setFarmerName(newFarmerName.trim());
+      setShowAddFarmer(false);
+      setNewFarmerName('');
+      setNewFarmerPhone('');
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to add farmer');
+    } finally {
+      setAddingFarmer(false);
     }
-  }, [samePrice]);
-
-  // ─── Step 2: Sales ───────────────────────────────────────
-
-  const addSale = () => {
-    const defaultPrice = bagGroups[0]?.pricePerKg || '';
-    setSales([...sales, {
-      id: newId(),
-      customerName: '',
-      bags: '',
-      weightKg: '',
-      pricePerKg: defaultPrice,
-      amount: '',
-    }]);
   };
 
-  const updateSale = (id: string, field: keyof SaleEntry, value: string) => {
-    setSales(sales.map((s) => {
-      if (s.id !== id) return s;
-      const updated = { ...s, [field]: value };
-      // Auto-calculate amount from weight × price
-      if (field === 'weightKg' || field === 'pricePerKg') {
-        const amt = num(updated.weightKg) * num(updated.pricePerKg);
-        updated.amount = amt > 0 ? String(Math.round(amt)) : '';
-      }
-      return updated;
-    }));
-  };
-
-  const removeSale = (id: string) => {
-    setSales(sales.filter((s) => s.id !== id));
-  };
-
-  // ─── Validation ──────────────────────────────────────────
-
-  const step1Valid = productName.trim() && totalBagsReceived > 0;
-  const step2Valid = sales.some((s) => s.customerName.trim() && num(s.amount) > 0);
-
-  // ─── Save ────────────────────────────────────────────────
+  const toPatti = (): FarmerPattiData => ({
+    farmer: farmerName.trim(),
+    date,
+    lines: validLines.map((l) => ({
+      commodity: l.commodity.trim(),
+      qty: l.bags,
+      customer: l.customerName.trim(),
+      weight: l.weightKg,
+      rate: l.pricePerKg,
+      amount: num(l.amount),
+      cash: l.cash,
+    })),
+    comm,
+    hamali,
+    bardan: num(bardan),
+    freight: num(freight),
+    advance: num(advance),
+    packing: num(packing),
+    other: num(other),
+    hundekari: hundekari.trim() || undefined,
+    leftoverBags: leftover || undefined,
+  });
 
   const handleSave = async () => {
+    if (!farmerName.trim()) {
+      setSaveError('Enter the farmer name first.');
+      return;
+    }
+    if (validLines.length === 0) {
+      setSaveError('Add at least one customer sale.');
+      return;
+    }
     setSaving(true);
     setSaveError('');
     try {
-      const validSales = sales.filter((s) => s.customerName.trim() && num(s.amount) > 0);
-
-      // Save each sale as a bill
-      for (const sale of validSales) {
-        const items = [{
-          raw_text: productName,
-          confirmed_name: productName,
-          qty: sale.weightKg ? `${sale.weightKg} kg` : (sale.bags ? `${sale.bags} bags` : ''),
-          rate: sale.pricePerKg || null,
-          amount: num(sale.amount),
-          kind: 'item' as const,
-          chargeCode: null,
-        }];
-
+      for (const sale of validLines) {
+        const items = [
+          {
+            raw_text: sale.commodity,
+            confirmed_name: sale.commodity,
+            qty: sale.weightKg ? `${sale.weightKg} kg` : sale.bags ? `${sale.bags} bags` : '',
+            rate: sale.pricePerKg || null,
+            amount: num(sale.amount),
+            display: `${sale.bags || 0} bags${sale.weightKg ? `, ${sale.weightKg} kg` : ''} @ ₹${sale.pricePerKg}/kg`,
+            kind: 'item' as const,
+            chargeCode: null,
+            farmer: farmerName.trim(),
+            hamali: num(sale.hamali) || null,
+            bags: num(sale.bags) || null,
+          },
+        ];
         const res = await fetch('/api/bills', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             customerName: sale.customerName.trim(),
+            customerId: sale.customerId,
             date,
             billNo: null,
             total: num(sale.amount),
             items,
+            paymentType: sale.cash ? 'cash' : 'credit',
           }),
         });
         if (!res.ok) {
           const data = await res.json();
-          throw new Error(data.error || `Failed to save bill for ${sale.customerName}`);
+          throw new Error(data.error || `Failed to save ${sale.customerName}`);
         }
       }
 
-      // Save purchase (stock received from farmer)
-      if (farmerName.trim() && stockValue > 0) {
-        const purchaseItems = bagGroups
-          .filter((g) => num(g.numBags) > 0)
-          .map((g) => ({
-            name: productName,
-            qty: `${num(g.weightKg) * num(g.numBags)} kg`,
-            rate: g.pricePerKg || null,
-            amount: num(g.weightKg) * num(g.numBags) * num(g.pricePerKg),
-            kind: 'item' as const,
-            chargeCode: null,
-          }));
-
-        if (purchaseItems.length > 0) {
-          await fetch('/api/purchases', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              date,
-              supplier: farmerName.trim(),
-              total: stockValue,
-              items: purchaseItems,
-            }),
-          });
+      const byCommodity = new Map<string, { kg: number; bags: number; amount: number; rate: string }>();
+      for (const sale of validLines) {
+        const key = sale.commodity.trim() || 'Item';
+        const cur = byCommodity.get(key) || { kg: 0, bags: 0, amount: 0, rate: sale.pricePerKg };
+        cur.kg += num(sale.weightKg);
+        cur.bags += num(sale.bags);
+        cur.amount += num(sale.amount);
+        byCommodity.set(key, cur);
+      }
+      const purchaseItems = [...byCommodity.entries()].map(([name, v]) => ({
+        name,
+        qty: v.kg > 0 ? `${v.kg} kg` : `${v.bags} bags`,
+        rate: v.rate || null,
+        amount: v.amount,
+        kind: 'item' as const,
+        chargeCode: null,
+      }));
+      if (purchaseItems.length > 0) {
+        const pr = await fetch('/api/purchases', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            date,
+            supplier: farmerName.trim(),
+            total: gross,
+            items: purchaseItems,
+          }),
+        });
+        if (!pr.ok) {
+          const data = await pr.json();
+          throw new Error(data.error || 'Saved sales, but farmer stock failed');
         }
       }
-
-      setSaved(true);
-    } catch (err: any) {
-      setSaveError(err.message || 'Save failed');
+      setSaved(toPatti());
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : 'Save failed');
     } finally {
       setSaving(false);
     }
   };
 
   const reset = () => {
-    setStep(1);
-    setProductName('');
     setFarmerName('');
-    setBagsCovers('');
-    setBigbags('');
-    setBagGroups([{ id: newId(), weightKg: '', numBags: '', pricePerKg: '' }]);
-    setSales([{ id: newId(), customerName: '', bags: '', weightKg: '', pricePerKg: '', amount: '' }]);
-    setCommissionPct('10');
-    setSaved(false);
+    setKgPerBag('');
+    setBagsReceived('');
+    setHundekari('');
+    setLines([emptyLine()]);
+    setHamaliTotal('');
+    setBardan('');
+    setFreight('');
+    setAdvance('');
+    setPacking('');
+    setOther('');
+    setSaved(null);
     setSaveError('');
   };
 
-  // ─── Success Screen ──────────────────────────────────────
-
   if (saved) {
     return (
-      <div className="space-y-4">
-        <div className="rounded-2xl bg-[var(--bg-success)] p-6 text-center text-[var(--text-on-primary)]">
-          <p className="text-2xl font-bold">✓ Saved</p>
+      <div className="mx-auto max-w-2xl space-y-4">
+        <div className="rounded-xl bg-[var(--bg-success)] p-5 text-center text-[var(--text-on-success)]">
+          <p className="text-xl font-bold">Patti saved</p>
           <p className="mt-1 text-sm opacity-90">
-            {sales.filter((s) => s.customerName.trim()).length} bills saved · {fmt(totalSalesAmount)} total sales
+            {saved.farmer} · {saved.lines.length} sales · {fmt(gross)}
           </p>
-          {farmerName && <p className="text-sm opacity-90">Stock from {farmerName}: {totalBagsReceived} bags</p>}
         </div>
-        <div className="rounded-2xl bg-[var(--bg-card)] p-4 space-y-2 text-sm">
-          <div className="flex justify-between"><span className="text-[var(--text-muted)]">Commission ({commissionPct}%)</span><span className="font-bold">{fmt(commissionAmount)}</span></div>
-          <div className="flex justify-between"><span className="text-[var(--text-muted)]">Farmer payment</span><span className="font-bold">{fmt(farmerPayment)}</span></div>
-          <div className="flex justify-between"><span className="text-[var(--text-muted)]">Leftover stock</span><span className="font-bold">{leftoverBags} bags · {fmt(leftoverWeight)} kg</span></div>
+        <div className="rounded-xl border border-[var(--border-card)] bg-[var(--bg-card)] p-4 space-y-2 text-sm">
+          <div className="flex justify-between"><span className="text-[var(--text-muted)]">{t('grossSale')}</span><span className="font-bold">{fmt(gross)}</span></div>
+          <div className="flex justify-between"><span className="text-[var(--text-muted)]">{t('commission')} {commissionPct}%</span><span>{fmt(comm)}</span></div>
+          <div className="flex justify-between"><span className="text-[var(--text-muted)]">{t('hamali')}</span><span>{fmt(hamali)}</span></div>
+          <div className="flex justify-between border-t border-[var(--border-input)] pt-2"><span className="font-medium">{t('nettSale')}</span><span className="text-lg font-bold">{fmt(nett)}</span></div>
         </div>
-        <button onClick={reset} className="w-full rounded-lg bg-[var(--bg-primary)] py-3 text-sm font-medium text-[var(--text-on-primary)]">
-          New Entry
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => printFarmerPatti(saved, shop)}
+            className="flex-1 rounded-lg bg-[var(--bg-secondary)] py-3 text-sm font-medium text-[var(--text-on-primary)]"
+          >
+            {t('printPatti')}
+          </button>
+          <button
+            type="button"
+            onClick={reset}
+            className="flex-1 rounded-lg bg-[var(--bg-primary)] py-3 text-sm font-medium text-[var(--text-on-primary)]"
+          >
+            {t('newEntry')}
+          </button>
+        </div>
       </div>
     );
   }
 
-  // ─── Step Indicator ──────────────────────────────────────
-
-  const steps = [
-    { num: 1, label: 'Stock Received' },
-    { num: 2, label: 'Sales' },
-    { num: 3, label: 'Summary' },
-  ];
-
   return (
-    <div className="space-y-4">
-      {/* Step indicator */}
-      <div className="flex flex-wrap items-center gap-2">
-        {steps.map((s, i) => (
-          <div key={s.num} className="flex items-center gap-2">
-            <div className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
-              step >= s.num ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]' : 'bg-[var(--bg-secondary)] text-[var(--text-muted)]'
-            }`}>
-              {step > s.num ? '✓' : s.num}
-            </div>
-            <span className={`text-xs ${step >= s.num ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
-              {s.label}
-            </span>
-            {i < steps.length - 1 && <div className={`h-px w-4 ${step > s.num ? 'bg-[var(--bg-primary)]' : 'bg-[var(--border-input)]'}`} />}
-          </div>
-        ))}
+    <div className="space-y-3">
+      <div>
+        <h1 className="text-lg font-bold">{t('dataEntryTitle')}</h1>
+        <p className="text-xs text-[var(--text-muted)]">{t('dataEntryHelp')}</p>
       </div>
 
-      {/* ─── Step 1: Stock Received ─────────────────────── */}
-      {step === 1 && (
-        <div className="space-y-4">
-          <div className="rounded-2xl bg-[var(--bg-card)] p-4 space-y-3">
-            <div>
-              <label className="text-sm text-[var(--text-muted)]">Date</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-                className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
-            </div>
-
-            <div>
-              <label className="text-sm text-[var(--text-muted)]">Product *</label>
-              <Autocomplete
-                options={catalog}
-                value={productName}
-                onChange={setProductName}
-                placeholder="e.g. Mirchi, Tomato, Onion"
-              />
-            </div>
-
-            <div>
-              <label className="text-sm text-[var(--text-muted)]">Farmer / Supplier</label>
-              <Autocomplete
-                options={farmers}
-                value={farmerName}
-                onChange={setFarmerName}
-                placeholder="Farmer name (optional)"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-sm text-[var(--text-muted)]">Bags / Covers</label>
-                <input type="number" value={bagsCovers} onChange={(e) => setBagsCovers(e.target.value)}
-                  placeholder="0" inputMode="numeric"
-                  className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
-              </div>
-              <div>
-                <label className="text-sm text-[var(--text-muted)]">Big Bags / Bastas</label>
-                <input type="number" value={bigbags} onChange={(e) => setBigbags(e.target.value)}
-                  placeholder="0" inputMode="numeric"
-                  className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
-              </div>
-            </div>
-
-            {totalBagsReceived > 0 && (
-              <div className="rounded-lg bg-[var(--bg-secondary)] px-3 py-2 text-sm">
-                Total: <span className="font-bold">{totalBagsReceived} bags</span>
-              </div>
-            )}
+      <section className="rounded-xl border border-[var(--border-card)] bg-[var(--bg-card)] p-3 sm:p-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+          <div>
+            <label className="text-xs text-[var(--text-muted)]">{t('date')}</label>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
           </div>
-
-          {/* Bag weight details */}
-          <div className="rounded-2xl bg-[var(--bg-card)] p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">Bag Details (weight & price)</p>
-              <label className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
-                <input type="checkbox" checked={samePrice} onChange={(e) => setSamePrice(e.target.checked)} />
-                Same price for all
-              </label>
-            </div>
-
-            {bagGroups.map((g, i) => (
-              <div key={g.id} className="flex flex-wrap items-end gap-2">
-                <div className="flex-1">
-                  <label className="text-xs text-[var(--text-muted)]">Weight (kg)</label>
-                  <input type="number" value={g.weightKg} onChange={(e) => updateBagGroup(g.id, 'weightKg', e.target.value)}
-                    placeholder="10" inputMode="decimal"
-                    className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
-                </div>
-                <div className="w-20">
-                  <label className="text-xs text-[var(--text-muted)]">Bags</label>
-                  <input type="number" value={g.numBags} onChange={(e) => updateBagGroup(g.id, 'numBags', e.target.value)}
-                    placeholder="50" inputMode="numeric"
-                    className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
-                </div>
-                <div className="flex-1">
-                  <label className="text-xs text-[var(--text-muted)]">₹/kg</label>
-                  <input type="number" value={g.pricePerKg} onChange={(e) => updateBagGroup(g.id, 'pricePerKg', e.target.value)}
-                    placeholder="30" inputMode="decimal" disabled={samePrice && i > 0}
-                    className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm disabled:opacity-50" />
-                </div>
-                {bagGroups.length > 1 && (
-                  <button onClick={() => removeBagGroup(g.id)}
-                    className="rounded-lg bg-[var(--bg-secondary)] px-2 py-2 text-xs text-[var(--text-primary)]">✕</button>
-                )}
-              </div>
-            ))}
-
-            <button onClick={addBagGroup}
-              className="w-full rounded-lg border border-dashed border-[var(--border-input)] py-2 text-sm text-[var(--text-muted)]">
-              + Add another bag weight
-            </button>
-
-            {stockWeight > 0 && (
-              <div className="rounded-lg bg-[var(--bg-secondary)] px-3 py-2 text-sm">
-                Total: <span className="font-bold">{stockWeight} kg</span>
-                {stockValue > 0 && <span> · ₹{stockValue.toLocaleString('en-IN')}</span>}
-              </div>
-            )}
+          <div className="col-span-2">
+            <label className="text-xs text-[var(--text-muted)]">{t('farmer')} *</label>
+            <Autocomplete options={farmers} value={farmerName} onChange={setFarmerName} placeholder="LOCAL, RSB…" />
           </div>
-
-          <button onClick={() => setStep(2)} disabled={!step1Valid}
-            className="w-full rounded-lg bg-[var(--bg-primary)] py-3 text-sm font-medium text-[var(--text-on-primary)] disabled:opacity-50">
-            Next: Record Sales →
-          </button>
-        </div>
-      )}
-
-      {/* ─── Step 2: Sales ──────────────────────────────── */}
-      {step === 2 && (
-        <div className="space-y-4">
-          <div className="rounded-2xl bg-[var(--bg-card)] p-4 space-y-3">
-            <p className="text-sm font-medium">Customer Sales</p>
-            <p className="text-xs text-[var(--text-muted)]">Add a row for each customer who bought today.</p>
-
-            {sales.map((s, i) => (
-              <div key={s.id} className="rounded-lg border border-[var(--border-input)] p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-[var(--text-muted)]">#{i + 1}</span>
-                  {sales.length > 1 && (
-                    <button onClick={() => removeSale(s.id)}
-                      className="text-xs text-[var(--text-primary)]">Remove</button>
-                  )}
-                </div>
-
-                <div>
-                  <label className="text-xs text-[var(--text-muted)]">Customer name</label>
-                  <Autocomplete
-                    options={customers}
-                    value={s.customerName}
-                    onChange={(v) => updateSale(s.id, 'customerName', v)}
-                    placeholder="e.g. Mangal Singh"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-xs text-[var(--text-muted)]">Bags</label>
-                    <input type="number" value={s.bags} onChange={(e) => updateSale(s.id, 'bags', e.target.value)}
-                      placeholder="0" inputMode="numeric"
-                      className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-[var(--text-muted)]">Weight (kg)</label>
-                    <input type="number" value={s.weightKg} onChange={(e) => updateSale(s.id, 'weightKg', e.target.value)}
-                      placeholder="0" inputMode="decimal"
-                      className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-xs text-[var(--text-muted)]">₹/kg</label>
-                    <input type="number" value={s.pricePerKg} onChange={(e) => updateSale(s.id, 'pricePerKg', e.target.value)}
-                      placeholder="30" inputMode="decimal"
-                      className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-[var(--text-muted)]">Amount (₹)</label>
-                    <input type="number" value={s.amount} onChange={(e) => updateSale(s.id, 'amount', e.target.value)}
-                      placeholder="0" inputMode="numeric"
-                      className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm" />
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            <button onClick={addSale}
-              className="w-full rounded-lg border border-dashed border-[var(--border-input)] py-2 text-sm text-[var(--text-muted)]">
-              + Add customer
-            </button>
-
-            {totalSalesAmount > 0 && (
-              <div className="rounded-lg bg-[var(--bg-secondary)] px-3 py-2 text-sm">
-                Total sold: <span className="font-bold">{totalBagsSold} bags · {totalWeightSold} kg · ₹{totalSalesAmount.toLocaleString('en-IN')}</span>
-              </div>
-            )}
+          <div>
+            <label className="text-xs text-[var(--text-muted)]">kg / bag</label>
+            <input type="number" inputMode="decimal" value={kgPerBag} onChange={(e) => setKgPerBag(e.target.value)} placeholder="20" className={inputCls} />
           </div>
-
-          <div className="flex gap-2">
-            <button onClick={() => setStep(1)}
-              className="flex-1 rounded-lg bg-[var(--bg-secondary)] py-3 text-sm font-medium text-[var(--text-primary)]">
-              ← Back
-            </button>
-            <button onClick={() => setStep(3)} disabled={!step2Valid}
-              className="flex-1 rounded-lg bg-[var(--bg-primary)] py-3 text-sm font-medium text-[var(--text-on-primary)] disabled:opacity-50">
-              Next: Summary →
-            </button>
+          <div>
+            <label className="text-xs text-[var(--text-muted)]">{t('bags')} in</label>
+            <input type="number" inputMode="numeric" value={bagsReceived} onChange={(e) => setBagsReceived(e.target.value)} placeholder="0" className={inputCls} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--text-muted)]">{t('hundekari')}</label>
+            <input value={hundekari} onChange={(e) => setHundekari(e.target.value)} className={inputCls} />
           </div>
         </div>
-      )}
+        <button type="button" onClick={() => setShowAddFarmer((v) => !v)} className="mt-2 text-xs text-[var(--text-muted)] underline">
+          + {t('farmer')}
+        </button>
+        {showAddFarmer && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            <input value={newFarmerName} onChange={(e) => setNewFarmerName(e.target.value)} placeholder={t('farmer')} className={`${inputCls} max-w-xs`} />
+            <input value={newFarmerPhone} onChange={(e) => setNewFarmerPhone(e.target.value)} placeholder={t('phone')} className={`${inputCls} max-w-[10rem]`} />
+            <button type="button" onClick={handleAddFarmer} disabled={addingFarmer} className="rounded-md bg-[var(--bg-primary)] px-3 py-2 text-xs text-[var(--text-on-primary)]">
+              {t('savePhone')}
+            </button>
+          </div>
+        )}
+      </section>
 
-      {/* ─── Step 3: Summary ────────────────────────────── */}
-      {step === 3 && (
-        <div className="space-y-4">
-          {/* Stock vs Sold */}
-          <div className="rounded-2xl bg-[var(--bg-card)] p-4 space-y-3">
-            <p className="text-sm font-medium">Stock Summary — {productName}</p>
-            <div className="grid grid-cols-3 gap-2 text-center sm:gap-3">
-              <div className="rounded-lg bg-[var(--bg-secondary)] p-2 sm:p-3">
-                <p className="text-xl font-bold sm:text-2xl">{totalBagsReceived}</p>
-                <p className="text-xs text-[var(--text-muted)]">Bags Received</p>
+      <section className="overflow-hidden rounded-xl border border-[var(--border-card)] bg-[var(--bg-card)]">
+        <div className="hidden border-b border-[var(--border-input)] bg-[var(--bg-base)] px-3 py-2 text-[10px] uppercase tracking-wide text-[var(--text-muted)] lg:grid lg:grid-cols-[1.3fr_4.5rem_1.4fr_5.5rem_5.5rem_6rem_4.5rem_2.5rem_2rem] lg:gap-2">
+          <span>{t('commodity')}</span>
+          <span>{t('qty')}</span>
+          <span>{t('customer')}</span>
+          <span>{t('weightKg')}</span>
+          <span>{t('ratePerKg')}</span>
+          <span>{t('amt')}</span>
+          <span />
+          <span>{t('hamali')}</span>
+          <span />
+        </div>
+
+        <div className="divide-y divide-[var(--border-input)]">
+          {lines.map((line, i) => (
+            <div key={line.id} className="grid grid-cols-2 gap-2 p-3 lg:grid-cols-[1.3fr_4.5rem_1.4fr_5.5rem_5.5rem_6rem_4.5rem_2.5rem_2rem] lg:items-end lg:gap-2">
+              <div className="col-span-2 lg:col-span-1">
+                <label className="text-[10px] text-[var(--text-muted)] lg:hidden">{t('commodity')}</label>
+                <Autocomplete
+                  options={catalog}
+                  value={line.commodity}
+                  onChange={(v) => updateLine(line.id, { commodity: v })}
+                  placeholder="OSURI, BODA…"
+                />
               </div>
-              <div className="rounded-lg bg-[var(--bg-secondary)] p-2 sm:p-3">
-                <p className="text-xl font-bold sm:text-2xl">{totalBagsSold}</p>
-                <p className="text-xs text-[var(--text-muted)]">Bags Sold</p>
+              <div>
+                <label className="text-[10px] text-[var(--text-muted)] lg:hidden">{t('qty')}</label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={line.bags}
+                  onChange={(e) => updateLine(line.id, { bags: e.target.value })}
+                  placeholder="0"
+                  className={inputCls}
+                />
               </div>
-              <div className={`rounded-lg p-2 sm:p-3 ${leftoverBags < 0 ? 'bg-[var(--bg-error)]' : 'bg-[var(--bg-secondary)]'}`}>
-                <p className="text-xl font-bold sm:text-2xl">{leftoverBags}</p>
-                <p className="text-xs text-[var(--text-muted)]">Leftover</p>
+              <div className="col-span-2 lg:col-span-1">
+                <label className="text-[10px] text-[var(--text-muted)] lg:hidden">{t('customer')}</label>
+                <Autocomplete
+                  options={customerNames}
+                  value={line.customerName}
+                  onChange={(v) => setCustomerOnLine(line.id, v)}
+                  placeholder="Name or CASH SALES"
+                />
               </div>
+              <div>
+                <label className="text-[10px] text-[var(--text-muted)] lg:hidden">{t('weightKg')}</label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={line.weightKg}
+                  onChange={(e) => updateLine(line.id, { weightKg: e.target.value })}
+                  placeholder="0"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-[var(--text-muted)] lg:hidden">{t('ratePerKg')}</label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={line.pricePerKg}
+                  onChange={(e) => updateLine(line.id, { pricePerKg: e.target.value })}
+                  placeholder="0"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-[var(--text-muted)] lg:hidden">{t('amt')}</label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={line.amount}
+                  onChange={(e) => updateLine(line.id, { amount: e.target.value })}
+                  className={`${inputCls} font-semibold`}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => (line.cash ? updateLine(line.id, { cash: false }) : markCash(line.id))}
+                className={`rounded-md px-2 py-2 text-[11px] font-medium ${
+                  line.cash
+                    ? 'bg-[var(--bg-success)] text-[var(--text-on-success)]'
+                    : 'border border-[var(--border-input)] text-[var(--text-muted)]'
+                }`}
+              >
+                {line.cash ? t('cashSale') : t('creditSale')}
+              </button>
+              <div>
+                <label className="text-[10px] text-[var(--text-muted)] lg:hidden">{t('hamali')}</label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={line.hamali}
+                  onChange={(e) => updateLine(line.id, { hamali: e.target.value })}
+                  className={inputCls}
+                />
+              </div>
+              {lines.length > 1 ? (
+                <button type="button" onClick={() => setLines(lines.filter((l) => l.id !== line.id))} className="text-xs text-[var(--text-muted)]" aria-label="Remove line">
+                  ✕
+                </button>
+              ) : (
+                <span className="text-[10px] text-[var(--text-faint)]">{i + 1}</span>
+              )}
             </div>
-            {leftoverBags < 0 && (
-              <p className="text-xs text-[var(--bg-primary)]">⚠ Sold more bags than received — check numbers</p>
+          ))}
+        </div>
+        <button type="button" onClick={addLine} className="w-full border-t border-dashed border-[var(--border-input)] py-2.5 text-sm text-[var(--text-muted)]">
+          + {t('addLine')}
+        </button>
+      </section>
+
+      <section className="rounded-xl border border-[var(--border-card)] bg-[var(--bg-card)] p-3 sm:p-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+          <ChargeBox label={`${t('commission')} %`} value={commissionPct} onChange={setCommissionPct} suffix={`${fmt(comm)}`} />
+          <ChargeBox label={t('hamali')} value={hamaliTotal} onChange={setHamaliTotal} placeholder={lineHamali ? String(lineHamali) : '0'} />
+          <ChargeBox label={t('chargesBardan')} value={bardan} onChange={setBardan} />
+          <ChargeBox label={t('chargesFreight')} value={freight} onChange={setFreight} />
+          <ChargeBox label={t('chargesAdvance')} value={advance} onChange={setAdvance} />
+          <ChargeBox label={t('chargesPacking')} value={packing} onChange={setPacking} />
+          <ChargeBox label={t('chargesOther')} value={other} onChange={setOther} />
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+          <div className="rounded-lg bg-[var(--bg-base)] p-2">
+            <p className="text-[10px] uppercase text-[var(--text-muted)]">{t('grossSale')}</p>
+            <p className="text-lg font-bold">{fmt(gross)}</p>
+            <p className="text-[10px] text-[var(--text-faint)]">{totalBagsSold} bags · {totalWeightSold} kg</p>
+          </div>
+          <div className="rounded-lg bg-[var(--bg-base)] p-2">
+            <p className="text-[10px] uppercase text-[var(--text-muted)]">Exp</p>
+            <p className="text-lg font-bold">{fmt(exp)}</p>
+          </div>
+          <div className="rounded-lg bg-[var(--bg-base)] p-2">
+            <p className="text-[10px] uppercase text-[var(--text-muted)]">{t('nettSale')}</p>
+            <p className="text-lg font-bold text-[var(--bg-success)]">{fmt(nett)}</p>
+            {num(bagsReceived) > 0 && (
+              <p className={`text-[10px] ${leftover < 0 ? 'text-[var(--bg-danger)]' : 'text-[var(--text-faint)]'}`}>
+                {t('leftover')}: {leftover} bags
+              </p>
             )}
-            <div className="grid grid-cols-2 gap-3 text-center text-sm">
-              <div>
-                <span className="text-[var(--text-muted)]">Weight received: </span>
-                <span className="font-bold">{stockWeight} kg</span>
-              </div>
-              <div>
-                <span className="text-[var(--text-muted)]">Weight sold: </span>
-                <span className="font-bold">{totalWeightSold} kg</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Financial summary */}
-          <div className="rounded-2xl bg-[var(--bg-card)] p-4 space-y-3">
-            <p className="text-sm font-medium">Financial Summary</p>
-
-            <div className="flex justify-between text-sm">
-              <span className="text-[var(--text-muted)]">Total sales</span>
-              <span className="font-bold text-lg">{fmt(totalSalesAmount)}</span>
-            </div>
-
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-sm text-[var(--text-muted)]">Commission</span>
-              <div className="flex items-center gap-1">
-                <input type="number" value={commissionPct} onChange={(e) => setCommissionPct(e.target.value)}
-                  inputMode="decimal" className="w-16 rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-1.5 text-sm text-right" />
-                <span className="text-sm">%</span>
-              </div>
-            </div>
-
-            <div className="flex justify-between text-sm">
-              <span className="text-[var(--text-muted)]">Commission amount</span>
-              <span className="font-bold">{fmt(commissionAmount)}</span>
-            </div>
-
-            <div className="border-t border-[var(--border-input)] pt-2">
-              <div className="flex justify-between text-sm">
-                <span className="font-medium">Farmer payment</span>
-                <span className="font-bold text-lg text-[var(--bg-success)]">{fmt(farmerPayment)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Customer breakdown */}
-          <div className="rounded-2xl bg-[var(--bg-card)] p-4 space-y-2">
-            <p className="text-sm font-medium">Customer Breakdown</p>
-            {sales.filter((s) => s.customerName.trim()).map((s, i) => (
-              <div key={s.id} className="flex justify-between text-sm">
-                <span>{i + 1}. {s.customerName}</span>
-                <span className="font-bold">{fmt(num(s.amount))}</span>
-              </div>
-            ))}
-            <div className="border-t border-[var(--border-input)] pt-2 flex justify-between text-sm font-bold">
-              <span>Total</span>
-              <span>{fmt(totalSalesAmount)}</span>
-            </div>
-          </div>
-
-          {saveError && (
-            <div className="rounded-lg bg-[var(--bg-error)] p-3 text-sm text-[var(--text-on-primary)]">
-              {saveError}
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            <button onClick={() => setStep(2)}
-              className="flex-1 rounded-lg bg-[var(--bg-secondary)] py-3 text-sm font-medium text-[var(--text-primary)]">
-              ← Back
-            </button>
-            <button onClick={handleSave} disabled={saving}
-              className="flex-1 rounded-lg bg-[var(--bg-success)] py-3 text-sm font-bold text-[var(--text-on-primary)] disabled:opacity-50">
-              {saving ? 'Saving...' : '✓ Save All'}
-            </button>
           </div>
         </div>
+      </section>
+
+      {saveError && (
+        <p className="rounded-lg bg-[var(--bg-danger)] px-3 py-2 text-sm text-[var(--text-on-primary)]" role="alert">
+          {saveError}
+        </p>
       )}
+
+      <div className="flex gap-2 pb-4">
+        <button
+          type="button"
+          onClick={() => printFarmerPatti(toPatti(), shop)}
+          disabled={validLines.length === 0}
+          className="flex-1 rounded-lg border border-[var(--border-input)] py-3 text-sm font-medium disabled:opacity-40"
+        >
+          {t('printPatti')}
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className="flex-[2] rounded-lg bg-[var(--bg-success)] py-3 text-sm font-bold text-[var(--text-on-success)] disabled:opacity-50"
+        >
+          {saving ? t('saving') : t('savePatti')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ChargeBox({
+  label,
+  value,
+  onChange,
+  suffix,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  suffix?: string;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      <label className="text-[10px] text-[var(--text-muted)]">{label}</label>
+      <input type="number" inputMode="decimal" value={value} placeholder={placeholder || '0'} onChange={(e) => onChange(e.target.value)} className={inputCls} />
+      {suffix && <p className="text-[10px] text-[var(--text-faint)]">{suffix}</p>}
     </div>
   );
 }

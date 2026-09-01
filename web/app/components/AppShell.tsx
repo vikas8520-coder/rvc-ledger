@@ -8,15 +8,12 @@ import LanguageSwitcher from './LanguageSwitcher';
 import ThemeToggle from './ThemeToggle';
 import { useI18n } from './I18nProvider';
 import {
-  HomeIcon, UsersIcon, TruckIcon, StoreIcon, PackageIcon, ChartIcon,
-  SettingsIcon, CalendarIcon, TrendingIcon, CameraIcon, PlusIcon,
-  DollarIcon, MenuIcon, XIcon, FileIcon, BoxIcon, LayersIcon,
+  HomeIcon, UsersIcon, ChartIcon,
+  SettingsIcon, DollarIcon, MenuIcon, XIcon, FileIcon, LayersIcon, PrinterIcon,
 } from './Icons';
 
 // Check if Clerk is configured at all (has publishable key)
 const CLERK_CONFIGURED = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-// Check if Clerk production keys are configured (determined at build time)
-const CLERK_PRODUCTION = (process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || '').startsWith('pk_live_');
 
 // Safe wrapper: provides no-op fallbacks when Clerk isn't configured
 function useClerkSafe() {
@@ -42,13 +39,14 @@ const PRIMARY_NAV: NavItem[] = [
 
 const SECONDARY_NAV: NavItem[] = [
   { href: '/reports', label: 'navReports', icon: ChartIcon },
+  { href: '/misc', label: 'navMisc', icon: LayersIcon },
   { href: '/settings', label: 'settings', icon: SettingsIcon },
 ];
 
-// Mobile bottom bar — 3 core actions
+// Mobile bottom bar — daily work: patti, print, collect
 const MOBILE_ACTIONS: NavItem[] = [
-  { href: '/receive', label: 'receiveStock', icon: TruckIcon },
-  { href: '/sell', label: 'sell', icon: StoreIcon },
+  { href: '/entry', label: 'navDataEntry', icon: FileIcon },
+  { href: '/print', label: 'navPrint', icon: PrinterIcon },
   { href: '/payment', label: 'recordPayment', icon: DollarIcon },
 ];
 
@@ -131,20 +129,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             <LanguageSwitcher />
             <ThemeToggle />
-            {/* Desktop action buttons — same 3 as mobile bottom bar */}
             <Link
-              href="/receive"
-              className="hidden sm:flex items-center gap-1.5 rounded-lg bg-[var(--bg-secondary)] px-3 py-1.5 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-secondary-hover)]"
-            >
-              <TruckIcon size={14} />
-              {t('receiveStock')}
-            </Link>
-            <Link
-              href="/sell"
+              href="/entry"
               className="hidden sm:flex items-center gap-1.5 rounded-lg bg-[var(--bg-primary)] px-3 py-1.5 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-primary-hover)]"
             >
-              <StoreIcon size={14} />
-              {t('sell')}
+              <FileIcon size={14} />
+              {t('navDataEntry')}
+            </Link>
+            <Link
+              href="/print"
+              className="hidden sm:flex items-center gap-1.5 rounded-lg bg-[var(--bg-secondary)] px-3 py-1.5 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-secondary-hover)]"
+            >
+              <PrinterIcon size={14} />
+              {t('navPrint')}
             </Link>
             <Link
               href="/payment"

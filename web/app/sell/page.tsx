@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useI18n } from '../components/I18nProvider';
 import { fmt } from '@/lib/format';
 import { formatCustomerName, getUiLang } from '@/lib/i18n';
@@ -749,6 +750,12 @@ export default function SellPage() {
 
   return (
     <div className="space-y-4">
+      <div className="rounded-xl border border-[var(--border-input)] bg-[var(--bg-base)] px-3 py-2 text-sm">
+        {t('useDataEntry')} →{' '}
+        <Link href="/entry" className="font-semibold text-[var(--bg-primary)] underline">
+          {t('navDataEntry')}
+        </Link>
+      </div>
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-bold">{t('sell')}</h1>

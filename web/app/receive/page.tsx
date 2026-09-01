@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { usePersistentState } from '../components/usePersistentState';
 import { useI18n } from '../components/I18nProvider';
 import { fmt } from '@/lib/format';
@@ -209,6 +210,12 @@ export default function ReceivePage() {
 
   return (
     <div className="space-y-4">
+      <div className="rounded-xl border border-[var(--border-input)] bg-[var(--bg-base)] px-3 py-2 text-sm">
+        {t('useDataEntry')} →{' '}
+        <Link href="/entry" className="font-semibold text-[var(--bg-primary)] underline">
+          {t('navDataEntry')}
+        </Link>
+      </div>
       {/* Stock details */}
       <div className="rounded-2xl bg-[var(--bg-card)] p-4 space-y-3">
         <p className="text-sm font-medium">Receive Stock from Farmer</p>
