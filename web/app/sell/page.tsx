@@ -59,6 +59,7 @@ export default function SellPage() {
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState('');
   const [bags, setBags] = useState('');
+  const [weightPerBag, setWeightPerBag] = useState('');
   const [kgs, setKgs] = useState('');
   const [rate, setRate] = useState('');
   const [hamaliEnabled, setHamaliEnabled] = useState(false);
@@ -151,17 +152,25 @@ export default function SellPage() {
       .catch(() => {});
   }, [date]);
 
+  // Auto-calculate total kgs from bags × weight per bag
+  const autoKgs = (() => {
+    const b = num(bags);
+    const w = num(weightPerBag);
+    return b > 0 && w > 0 ? Math.round(b * w * 100) / 100 : 0;
+  })();
+
+  // Effective kgs: auto-calculated if weightPerBag is set, otherwise manual
+  const effectiveKgs = autoKgs > 0 ? autoKgs : num(kgs);
+
   // Auto-calculate amount
   const computedAmount = (() => {
-    const k = num(kgs);
-    const b = num(bags);
     const r = num(rate);
-    const base = k > 0 ? k * r : b * r;
+    const base = effectiveKgs > 0 ? effectiveKgs * r : num(bags) * r;
     const h = hamaliEnabled ? num(hamali) : 0;
     return Math.round(base + h);
   })();
 
-  const canSave = item.trim() && (customerId || customerName.trim()) && (num(bags) > 0 || num(kgs) > 0) && num(rate) > 0;
+  const canSave = item.trim() && (customerId || customerName.trim()) && (num(bags) > 0 || num(kgs) > 0 || autoKgs > 0) && num(rate) > 0;
 
   const handleSave = async () => {
     setSaving(true);
@@ -171,10 +180,10 @@ export default function SellPage() {
       const items = [{
         raw_text: item.trim(),
         confirmed_name: item.trim(),
-        qty: kgs || null,
+        qty: effectiveKgs > 0 ? String(effectiveKgs) : null,
         rate: rate,
         amount: computedAmount,
-        display: `${bags || 0} bags${kgs ? `, ${kgs} kg` : ''} @ ₹${rate}`,
+        display: `${bags || 0} bags${effectiveKgs > 0 ? `, ${effectiveKgs} kg` : ''} @ ₹${rate}`,
         kind: 'item',
         chargeCode: null,
         farmer: farmer.trim() || null,
@@ -209,7 +218,7 @@ export default function SellPage() {
         teluguName: selectedCustomer?.teluguName || null,
         hindiName: selectedCustomer?.hindiName || null,
         bags,
-        kgs,
+        kgs: effectiveKgs > 0 ? String(effectiveKgs) : kgs,
         rate,
         hamaliEnabled,
         hamali: hamaliEnabled ? hamali : '',
@@ -219,7 +228,7 @@ export default function SellPage() {
       }]);
 
       // Reset form for next entry
-      setBags(''); setKgs(''); setRate(''); setHamali(''); setHamaliEnabled(false);
+      setBags(''); setWeightPerBag(''); setKgs(''); setRate(''); setHamali(''); setHamaliEnabled(false);
       setPaymentType('credit');
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
@@ -237,6 +246,7 @@ export default function SellPage() {
     setCustomerId(line.customerId);
     setCustomerName(line.customerName);
     setBags(line.bags);
+    setWeightPerBag(''); // not stored separately, reset on edit
     setKgs(line.kgs);
     setRate(line.rate);
     setHamaliEnabled(line.hamaliEnabled);
@@ -265,10 +275,10 @@ export default function SellPage() {
       const items = [{
         raw_text: item.trim(),
         confirmed_name: item.trim(),
-        qty: kgs || null,
+        qty: effectiveKgs > 0 ? String(effectiveKgs) : null,
         rate: rate,
         amount: computedAmount,
-        display: `${bags || 0} bags${kgs ? `, ${kgs} kg` : ''} @ ₹${rate}`,
+        display: `${bags || 0} bags${effectiveKgs > 0 ? `, ${effectiveKgs} kg` : ''} @ ₹${rate}`,
         kind: 'item',
         chargeCode: null,
         farmer: farmer.trim() || null,
@@ -305,7 +315,7 @@ export default function SellPage() {
             teluguName: selectedCustomer?.teluguName || null,
             hindiName: selectedCustomer?.hindiName || null,
             bags,
-            kgs,
+            kgs: effectiveKgs > 0 ? String(effectiveKgs) : kgs,
             rate,
             hamaliEnabled,
             hamali: hamaliEnabled ? hamali : '',
@@ -319,7 +329,7 @@ export default function SellPage() {
 
       // Reset form
       setItem(''); setFarmer(''); setCustomerId(null); setCustomerName('');
-      setBags(''); setKgs(''); setRate(''); setHamali(''); setHamaliEnabled(false);
+      setBags(''); setWeightPerBag(''); setKgs(''); setRate(''); setHamali(''); setHamaliEnabled(false);
       setPaymentType('credit');
       setEditingId(null);
       setSaveSuccess(true);
@@ -333,7 +343,7 @@ export default function SellPage() {
 
   const handleCancelEdit = () => {
     setItem(''); setFarmer(''); setCustomerId(null); setCustomerName('');
-    setBags(''); setKgs(''); setRate(''); setHamali(''); setHamaliEnabled(false);
+    setBags(''); setWeightPerBag(''); setKgs(''); setRate(''); setHamali(''); setHamaliEnabled(false);
     setPaymentType('credit');
     setEditingId(null);
     setSaveError('');
@@ -718,7 +728,7 @@ export default function SellPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
           <div>
             <label className="text-xs text-[var(--text-muted)]">{t('bags')}</label>
             <input
@@ -731,15 +741,32 @@ export default function SellPage() {
             />
           </div>
           <div>
-            <label className="text-xs text-[var(--text-muted)]">{t('kgs')}</label>
+            <label className="text-xs text-[var(--text-muted)]">Wt/Bag (kg)</label>
             <input
               type="number"
-              value={kgs}
-              onChange={(e) => setKgs(e.target.value)}
+              value={weightPerBag}
+              onChange={(e) => setWeightPerBag(e.target.value)}
               placeholder="0"
               inputMode="decimal"
               className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm"
             />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--text-muted)]">{t('kgs')}</label>
+            <input
+              type="number"
+              value={autoKgs > 0 ? autoKgs : kgs}
+              onChange={(e) => {
+                setWeightPerBag('');
+                setKgs(e.target.value);
+              }}
+              placeholder="0"
+              inputMode="decimal"
+              className={`w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm ${autoKgs > 0 ? 'bg-[var(--bg-secondary)] font-medium' : ''}`}
+            />
+            {autoKgs > 0 && (
+              <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">{bags} × {weightPerBag} = {autoKgs} kg</p>
+            )}
           </div>
           <div>
             <label className="text-xs text-[var(--text-muted)]">{t('rate')}</label>
