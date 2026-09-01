@@ -62,6 +62,7 @@ export default function SellPage() {
   const [weightPerBag, setWeightPerBag] = useState('');
   const [kgs, setKgs] = useState('');
   const [rate, setRate] = useState('');
+  const [rateUnit, setRateUnit] = useState<'per_kg' | 'per_10kg'>('per_kg');
   const [hamaliEnabled, setHamaliEnabled] = useState(false);
   const [hamali, setHamali] = useState('');
   const [paymentType, setPaymentType] = useState<'cash' | 'credit'>('credit');
@@ -162,10 +163,12 @@ export default function SellPage() {
   // Effective kgs: auto-calculated if weightPerBag is set, otherwise manual
   const effectiveKgs = autoKgs > 0 ? autoKgs : num(kgs);
 
+  // Effective rate per kg (convert per-10kg rate to per-kg)
+  const ratePerKg = rateUnit === 'per_10kg' ? num(rate) / 10 : num(rate);
+
   // Auto-calculate amount
   const computedAmount = (() => {
-    const r = num(rate);
-    const base = effectiveKgs > 0 ? effectiveKgs * r : num(bags) * r;
+    const base = effectiveKgs > 0 ? effectiveKgs * ratePerKg : num(bags) * ratePerKg;
     const h = hamaliEnabled ? num(hamali) : 0;
     return Math.round(base + h);
   })();
@@ -181,9 +184,9 @@ export default function SellPage() {
         raw_text: item.trim(),
         confirmed_name: item.trim(),
         qty: effectiveKgs > 0 ? String(effectiveKgs) : null,
-        rate: rate,
+        rate: String(Math.round(ratePerKg * 100) / 100),
         amount: computedAmount,
-        display: `${bags || 0} bags${effectiveKgs > 0 ? `, ${effectiveKgs} kg` : ''} @ ₹${rate}`,
+        display: `${bags || 0} bags${effectiveKgs > 0 ? `, ${effectiveKgs} kg` : ''} @ ₹${rate}/${rateUnit === 'per_10kg' ? '10kg' : 'kg'}`,
         kind: 'item',
         chargeCode: null,
         farmer: farmer.trim() || null,
@@ -219,7 +222,7 @@ export default function SellPage() {
         hindiName: selectedCustomer?.hindiName || null,
         bags,
         kgs: effectiveKgs > 0 ? String(effectiveKgs) : kgs,
-        rate,
+        rate: String(Math.round(ratePerKg * 100) / 100),
         hamaliEnabled,
         hamali: hamaliEnabled ? hamali : '',
         amount: computedAmount,
@@ -228,7 +231,7 @@ export default function SellPage() {
       }]);
 
       // Reset form for next entry
-      setBags(''); setWeightPerBag(''); setKgs(''); setRate(''); setHamali(''); setHamaliEnabled(false);
+      setBags(''); setWeightPerBag(''); setKgs(''); setRate(''); setRateUnit('per_kg'); setHamali(''); setHamaliEnabled(false);
       setPaymentType('credit');
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
@@ -248,7 +251,8 @@ export default function SellPage() {
     setBags(line.bags);
     setWeightPerBag(''); // not stored separately, reset on edit
     setKgs(line.kgs);
-    setRate(line.rate);
+    setRate(line.rate); // stored as per-kg rate
+    setRateUnit('per_kg'); // saved rate is always per-kg
     setHamaliEnabled(line.hamaliEnabled);
     setHamali(line.hamali);
     setPaymentType(line.isCash ? 'cash' : 'credit');
@@ -276,9 +280,9 @@ export default function SellPage() {
         raw_text: item.trim(),
         confirmed_name: item.trim(),
         qty: effectiveKgs > 0 ? String(effectiveKgs) : null,
-        rate: rate,
+        rate: String(Math.round(ratePerKg * 100) / 100),
         amount: computedAmount,
-        display: `${bags || 0} bags${effectiveKgs > 0 ? `, ${effectiveKgs} kg` : ''} @ ₹${rate}`,
+        display: `${bags || 0} bags${effectiveKgs > 0 ? `, ${effectiveKgs} kg` : ''} @ ₹${rate}/${rateUnit === 'per_10kg' ? '10kg' : 'kg'}`,
         kind: 'item',
         chargeCode: null,
         farmer: farmer.trim() || null,
@@ -316,7 +320,7 @@ export default function SellPage() {
             hindiName: selectedCustomer?.hindiName || null,
             bags,
             kgs: effectiveKgs > 0 ? String(effectiveKgs) : kgs,
-            rate,
+            rate: String(Math.round(ratePerKg * 100) / 100),
             hamaliEnabled,
             hamali: hamaliEnabled ? hamali : '',
             amount: computedAmount,
@@ -329,7 +333,7 @@ export default function SellPage() {
 
       // Reset form
       setItem(''); setFarmer(''); setCustomerId(null); setCustomerName('');
-      setBags(''); setWeightPerBag(''); setKgs(''); setRate(''); setHamali(''); setHamaliEnabled(false);
+      setBags(''); setWeightPerBag(''); setKgs(''); setRate(''); setRateUnit('per_kg'); setHamali(''); setHamaliEnabled(false);
       setPaymentType('credit');
       setEditingId(null);
       setSaveSuccess(true);
@@ -343,7 +347,7 @@ export default function SellPage() {
 
   const handleCancelEdit = () => {
     setItem(''); setFarmer(''); setCustomerId(null); setCustomerName('');
-    setBags(''); setWeightPerBag(''); setKgs(''); setRate(''); setHamali(''); setHamaliEnabled(false);
+    setBags(''); setWeightPerBag(''); setKgs(''); setRate(''); setRateUnit('per_kg'); setHamali(''); setHamaliEnabled(false);
     setPaymentType('credit');
     setEditingId(null);
     setSaveError('');
@@ -778,6 +782,33 @@ export default function SellPage() {
               inputMode="decimal"
               className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm"
             />
+            <div className="mt-1 flex gap-1">
+              <button
+                type="button"
+                onClick={() => setRateUnit('per_kg')}
+                className={`flex-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                  rateUnit === 'per_kg'
+                    ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'
+                    : 'bg-[var(--bg-secondary)] text-[var(--text-muted)]'
+                }`}
+              >
+                per kg
+              </button>
+              <button
+                type="button"
+                onClick={() => setRateUnit('per_10kg')}
+                className={`flex-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                  rateUnit === 'per_10kg'
+                    ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'
+                    : 'bg-[var(--bg-secondary)] text-[var(--text-muted)]'
+                }`}
+              >
+                per 10 kg
+              </button>
+            </div>
+            {rateUnit === 'per_10kg' && num(rate) > 0 && (
+              <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">= ₹{Math.round(ratePerKg * 100) / 100}/kg</p>
+            )}
           </div>
           <div>
             <label className="text-xs text-[var(--text-muted)] flex items-center gap-1">
