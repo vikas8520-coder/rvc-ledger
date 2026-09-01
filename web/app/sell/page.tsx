@@ -702,7 +702,7 @@ export default function SellPage() {
                   : 'border-[var(--border-input)] bg-[var(--bg-base)] text-[var(--text-secondary)] hover:bg-[var(--bg-card-hover)]'
               }`}
             >
-              Credit (उधार)
+              Credit
             </button>
             <button
               type="button"
@@ -713,7 +713,7 @@ export default function SellPage() {
                   : 'border-[var(--border-input)] bg-[var(--bg-base)] text-[var(--text-secondary)] hover:bg-[var(--bg-card-hover)]'
               }`}
             >
-              Cash (नकद)
+              Cash
             </button>
           </div>
         </div>
