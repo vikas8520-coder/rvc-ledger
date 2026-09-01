@@ -2,30 +2,32 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 const ADMIN_COOKIE_NAME = 'rvc_admin_session';
 
-const publicPaths = [
+// Public admin routes that don't require the admin cookie
+const publicAdminPaths = [
   '/admin/login',
   '/api/admin/login',
   '/api/admin/logout',
-  '/api/subscription',
-  '/pdf/', // shared PDF viewer — public by design
-  '/sign-in',
-  '/sign-up',
 ];
 
-function isPublicPath(pathname: string): boolean {
-  return publicPaths.some((p) => pathname === p || pathname.startsWith(p + '/') || pathname.startsWith(p));
+function isPublicAdminPath(pathname: string): boolean {
+  return publicAdminPaths.some((p) => pathname === p || pathname.startsWith(p + '/'));
 }
 
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Allow public routes
-  if (isPublicPath(pathname)) {
+  // Only protect /admin/* and /api/admin/* routes.
+  // Shop pages (/, /sell, /customers, etc.) are public —
+  // authentication is handled client-side by Clerk via AppShell.
+  const isAdminRoute = pathname === '/admin' || pathname.startsWith('/admin/') ||
+                       pathname.startsWith('/api/admin/');
+
+  if (!isAdminRoute) {
     return NextResponse.next();
   }
 
-  // Allow static files and Next.js internals
-  if (pathname.startsWith('/_next') || pathname.includes('.')) {
+  // Allow public admin routes (login, logout endpoints)
+  if (isPublicAdminPath(pathname)) {
     return NextResponse.next();
   }
 
@@ -41,8 +43,8 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
+  // Run proxy on all routes except static files
   matcher: [
     '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    '/(api|trpc)(.*)',
   ],
 };
