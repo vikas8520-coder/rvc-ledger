@@ -99,7 +99,7 @@ function emptyLine(commodity = '', price = ''): Line {
 }
 
 const inputCls =
-  'min-h-11 w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-2 py-2 text-sm tabular-nums';
+  'min-h-11 w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-2 py-2 text-base tabular-nums sm:text-sm';
 
 export default function EntryPage() {
   const { t } = useI18n();
@@ -414,8 +414,8 @@ export default function EntryPage() {
       </div>
 
       <section className="rounded-xl border border-[var(--border-card)] bg-[var(--bg-card)] p-3 sm:p-4">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-          <div>
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-6">
+          <div className="col-span-2 sm:col-span-1">
             <label className="text-xs text-[var(--text-muted)]">{t('date')}</label>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
           </div>
@@ -431,7 +431,7 @@ export default function EntryPage() {
             <label className="text-xs text-[var(--text-muted)]">{t('bags')} in</label>
             <input type="number" inputMode="numeric" value={bagsReceived} onChange={(e) => setBagsReceived(e.target.value)} placeholder="0" className={inputCls} />
           </div>
-          <div>
+          <div className="col-span-2 sm:col-span-1">
             <label className="text-xs text-[var(--text-muted)]">{t('hundekari')}</label>
             <input value={hundekari} onChange={(e) => setHundekari(e.target.value)} className={inputCls} />
           </div>
@@ -460,7 +460,7 @@ export default function EntryPage() {
           >
             {t('ratePerKg')}
           </button>
-          <span className="text-xs text-[var(--text-muted)]">{t('wholesaleHint')}</span>
+          <span className="w-full text-xs leading-snug text-[var(--text-muted)] sm:w-auto">{t('wholesaleHint')}</span>
         </div>
         {stockKg > 0 && (
           <p className="mt-2 text-xs text-[var(--text-muted)]">
@@ -503,8 +503,8 @@ export default function EntryPage() {
                   </button>
                 )}
               </div>
-              <div className="flex flex-wrap items-end gap-2">
-                <Field label={t('commodity')} className="min-w-[10rem] flex-[2]">
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end">
+                <Field label={t('commodity')} className="col-span-2 min-w-0 sm:min-w-[10rem] sm:flex-[2]">
                   <Autocomplete
                     options={catalog}
                     value={line.commodity}
@@ -512,7 +512,7 @@ export default function EntryPage() {
                     placeholder="OSURI, BODA…"
                   />
                 </Field>
-                <Field label={t('customer')} className="min-w-[10rem] flex-[2]">
+                <Field label={t('customer')} className="col-span-2 min-w-0 sm:min-w-[10rem] sm:flex-[2]">
                   <Autocomplete
                     options={customerNames}
                     value={line.customerName}
@@ -520,7 +520,7 @@ export default function EntryPage() {
                     placeholder="Name or CASH SALES"
                   />
                 </Field>
-                <Field label={t('qty')} className="w-20 shrink-0">
+                <Field label={t('qty')} className="min-w-0 sm:w-20 sm:shrink-0">
                   <input
                     type="number"
                     inputMode="numeric"
@@ -530,7 +530,7 @@ export default function EntryPage() {
                     className={inputCls}
                   />
                 </Field>
-                <Field label={t('weightKg')} className="w-24 shrink-0">
+                <Field label={t('weightKg')} className="min-w-0 sm:w-24 sm:shrink-0">
                   <input
                     type="number"
                     inputMode="decimal"
@@ -540,7 +540,7 @@ export default function EntryPage() {
                     className={inputCls}
                   />
                 </Field>
-                <Field label={rateUnit === 'per_10kg' ? t('ratePer10kg') : t('ratePerKg')} className="w-28 shrink-0">
+                <Field label={rateUnit === 'per_10kg' ? t('ratePer10kg') : t('ratePerKg')} className="min-w-0 sm:w-28 sm:shrink-0">
                   <input
                     type="number"
                     inputMode="decimal"
@@ -550,7 +550,7 @@ export default function EntryPage() {
                     className={inputCls}
                   />
                 </Field>
-                <Field label={t('amt')} className="w-28 shrink-0">
+                <Field label={t('amt')} className="min-w-0 sm:w-28 sm:shrink-0">
                   <input
                     type="number"
                     inputMode="numeric"
@@ -562,7 +562,7 @@ export default function EntryPage() {
                 <button
                   type="button"
                   onClick={() => (line.cash ? updateLine(line.id, { cash: false }) : markCash(line.id))}
-                  className={`min-h-11 shrink-0 rounded-md px-3 text-sm font-medium ${
+                  className={`col-span-1 min-h-11 w-full rounded-md px-3 text-sm font-medium sm:w-auto sm:shrink-0 ${
                     line.cash
                       ? 'bg-[var(--bg-success)] text-[var(--text-on-success)]'
                       : 'border border-[var(--border-input)] text-[var(--text-muted)]'
@@ -570,7 +570,7 @@ export default function EntryPage() {
                 >
                   {line.cash ? t('cashSale') : t('creditSale')}
                 </button>
-                <Field label={t('hamali')} className="w-24 shrink-0">
+                <Field label={t('hamali')} className="min-w-0 sm:w-24 sm:shrink-0">
                   <input
                     type="number"
                     inputMode="decimal"
@@ -633,7 +633,7 @@ export default function EntryPage() {
         </p>
       )}
 
-      <div className="sticky bottom-16 z-20 -mx-3 flex gap-2 border-t border-[var(--border-light)] bg-[var(--bg-base)] px-3 py-3 lg:bottom-0 lg:mx-0 lg:rounded-xl lg:border">
+      <div className="fixed bottom-[calc(3.25rem+env(safe-area-inset-bottom))] left-0 right-0 z-20 flex gap-2 border-t border-[var(--border-light)] bg-[var(--bg-base)] px-3 py-2 lg:static lg:rounded-xl lg:border">
         <button
           type="button"
           onClick={() => printFarmerPatti(toPatti(), shop)}

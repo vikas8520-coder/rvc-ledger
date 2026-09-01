@@ -6,15 +6,16 @@ export default function LanguageSwitcher() {
   const { lang, setLang, t } = useI18n();
 
   return (
-    <div className="flex items-center gap-2">
-      <label htmlFor="lang" className="text-sm text-[var(--text-muted)]">
+    <div className="flex min-w-0 items-center gap-1 sm:gap-2">
+      <label htmlFor="lang" className="hidden text-sm text-[var(--text-muted)] sm:inline">
         {t('language')}
       </label>
       <select
         id="lang"
         value={lang}
         onChange={(e) => setLang(e.target.value as any)}
-        className="rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-1 text-sm"
+        aria-label={t('language')}
+        className="max-w-[5.5rem] min-h-11 rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] px-1 py-1 text-sm sm:max-w-none sm:px-2"
       >
         {LANGUAGES.map((l) => (
           <option key={l.value} value={l.value}>

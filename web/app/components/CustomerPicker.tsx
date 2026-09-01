@@ -116,7 +116,7 @@ export default function CustomerPicker({ customers, value, onChange, onAddNew, p
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={t('searchCustomers')}
-                className="min-h-11 w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-2 text-sm"
+                className="min-h-11 w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-2 text-base sm:text-sm"
               />
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -172,7 +172,7 @@ export default function CustomerPicker({ customers, value, onChange, onAddNew, p
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex min-h-11 w-full items-center rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] px-2 py-2 text-left text-sm"
+        className="flex min-h-11 w-full items-center rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] px-2 py-2 text-left text-base sm:text-sm"
       >
         {selected ? (
           <span className="flex w-full items-center justify-between gap-2">

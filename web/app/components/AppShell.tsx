@@ -45,6 +45,7 @@ const SECONDARY_NAV: NavItem[] = [
 
 // Mobile bottom bar — daily work: patti, print, collect
 const MOBILE_ACTIONS: NavItem[] = [
+  { href: '/', label: 'navOverview', icon: HomeIcon },
   { href: '/entry', label: 'navDataEntry', icon: FileIcon },
   { href: '/print', label: 'navPrint', icon: PrinterIcon },
   { href: '/payment', label: 'recordPayment', icon: DollarIcon },
@@ -98,7 +99,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <Link
           key={item.href}
           href={item.href}
-          className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors ${tabClass(item.href, item.href === '/')}`}
+          className={`flex min-h-11 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors ${tabClass(item.href, item.href === '/')}`}
         >
           <Icon size={15} className="shrink-0" />
           <span className="truncate">{t(item.label)}</span>
@@ -110,8 +111,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const Shell = ({ children: shellChildren }: { children: React.ReactNode }) => (
     <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] flex flex-col">
       <header className="sticky top-0 z-30 border-b border-[var(--border-light)] bg-[var(--bg-base)]/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-2 sm:px-5">
-          <div className="flex min-w-0 items-center gap-3">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-5">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <Link href="/" className="flex shrink-0 items-center gap-2 text-lg font-bold">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--bg-primary)] text-xs font-bold text-[var(--text-on-primary)]">
                 RVC
@@ -124,7 +125,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </nav>
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-1.5">
+          <div className="flex shrink-0 items-center justify-end gap-1 sm:gap-1.5">
             <LanguageSwitcher />
             <ThemeToggle />
             <Link
@@ -151,7 +152,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             {/* Mobile menu toggle */}
             <button
               onClick={() => setMenuOpen((v) => !v)}
-              className="lg:hidden rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] p-1.5 text-[var(--text-secondary)]"
+              className="lg:hidden flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] text-[var(--text-secondary)]"
               aria-label="Menu"
             >
               {menuOpen ? <XIcon size={18} /> : <MenuIcon size={18} />}
@@ -192,31 +193,34 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         )}
       </header>
 
-      <div className="mx-auto w-full max-w-6xl flex-1 px-3 py-4 sm:px-5 pb-28 lg:pb-6">
+      <div className={`mx-auto w-full max-w-6xl flex-1 px-3 py-3 sm:px-5 lg:pb-6 ${path === '/entry' ? 'pb-44' : 'pb-28'}`}>
         {shellChildren}
       </div>
 
       {/* Mobile bottom action bar */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 border-t border-[var(--border-light)] bg-[var(--bg-base)]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
-        <div className="flex items-center justify-around px-2 py-1.5">
+      <nav
+        aria-label="Daily"
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-30 border-t border-[var(--border-light)] bg-[var(--bg-base)]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
+      >
+        <div className="flex items-stretch justify-around">
           {MOBILE_ACTIONS.map((item) => {
             const Icon = item.icon;
-            const active = path === item.href;
+            const active = item.href === '/' ? path === '/' : path === item.href || path.startsWith(`${item.href}/`);
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex flex-col items-center gap-0.5 rounded-lg px-3 py-1 text-[10px] ${
+                className={`flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[10px] leading-tight ${
                   active ? 'text-[var(--bg-primary)]' : 'text-[var(--text-muted)]'
                 }`}
               >
                 <Icon size={20} />
-                <span>{t(item.label)}</span>
+                <span className="max-w-full truncate">{t(item.label)}</span>
               </Link>
             );
           })}
         </div>
-      </div>
+      </nav>
     </div>
   );
 

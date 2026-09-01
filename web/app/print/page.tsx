@@ -146,7 +146,7 @@ export default function PrintPage() {
             </>
           );
           const cls =
-            'rounded-xl border border-[var(--border-card)] bg-[var(--bg-card)] p-4 text-left hover:bg-[var(--bg-card-hover)]';
+            'min-h-24 rounded-xl border border-[var(--border-card)] bg-[var(--bg-card)] p-4 text-left hover:bg-[var(--bg-card-hover)]';
           if (tile.href) {
             return (
               <Link key={tile.key} href={tile.href} className={cls}>
@@ -190,7 +190,7 @@ export default function PrintPage() {
                   type={type}
                   value={docket[field]}
                   onChange={(e) => setDocket({ ...docket, [field]: e.target.value })}
-                  className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-2 py-2 text-sm"
+                  className="w-full min-h-11 rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-2 py-2 text-base sm:text-sm"
                 />
               </div>
             ))}

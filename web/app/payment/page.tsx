@@ -361,24 +361,25 @@ export default function PaymentPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="text-sm text-[var(--text-muted)]">{t('date')}</label>
               <input
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] p-2.5 text-sm"
+                className="w-full min-h-11 rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] p-2.5 text-base sm:text-sm"
               />
             </div>
             <div>
               <label className="text-sm text-[var(--text-muted)]">{t('amountReceived')}</label>
               <input
                 type="number"
+                inputMode="decimal"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="₹0"
-                className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] p-2.5 text-sm"
+                className="w-full min-h-11 rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] p-2.5 text-base sm:text-sm"
                 required
               />
             </div>
@@ -392,7 +393,7 @@ export default function PaymentPage() {
                   key={m}
                   type="button"
                   onClick={() => setPaymentMethod(m)}
-                  className={`flex-1 rounded-lg border p-2.5 text-sm font-medium transition-colors ${
+                  className={`min-h-11 flex-1 rounded-lg border p-2.5 text-sm font-medium transition-colors ${
                     paymentMethod === m
                       ? 'border-[var(--bg-primary)] bg-[var(--bg-primary)] text-[var(--text-on-primary)]'
                       : 'border-[var(--border-input)] bg-[var(--bg-input)] hover:bg-[var(--bg-card-hover)]'
@@ -410,7 +411,7 @@ export default function PaymentPage() {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder={t('notes')}
-              className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] p-2.5 text-sm"
+              className="w-full min-h-11 rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] p-2.5 text-base sm:text-sm"
             />
           </div>
 

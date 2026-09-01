@@ -82,7 +82,7 @@ export function Button({
   variant?: ButtonVariant;
   size?: 'sm' | 'md' | 'lg';
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  const sizeClass = size === 'sm' ? 'px-2.5 py-1 text-xs' : size === 'lg' ? 'px-5 py-2.5 text-sm' : 'px-3 py-1.5 text-sm';
+  const sizeClass = size === 'sm' ? 'min-h-10 px-2.5 py-1 text-xs' : size === 'lg' ? 'min-h-12 px-5 py-2.5 text-sm' : 'min-h-11 px-3 py-2 text-sm';
   return (
     <button
       className={`rounded-lg font-medium transition-colors ${buttonStyles[variant]} ${sizeClass} ${className} disabled:opacity-50 disabled:cursor-not-allowed`}

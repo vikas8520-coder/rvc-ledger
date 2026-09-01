@@ -179,7 +179,27 @@ export default function Home() {
       {farmers.length > 0 && (
         <Card>
           <SectionHeader title={t('farmerSummary')} icon={<TrendingIcon size={16} />} />
-          <div className="overflow-x-auto">
+          <div className="space-y-2 md:hidden">
+            {farmers.map((f) => (
+              <div key={f.farmer} className="rounded-lg border border-[var(--border-light)] bg-[var(--bg-base)] p-3">
+                <p className="font-medium">{f.farmer}</p>
+                <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                  {f.lineCount} {t('lines')}
+                  {f.totalBags > 0 ? ` · ${f.totalBags} ${t('totalBags')}` : ''}
+                  {f.totalKgs > 0 ? ` · ${f.totalKgs} ${t('totalKgs')}` : ''}
+                </p>
+                <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
+                  <span className="text-[var(--text-muted)]">{t('fySales')}</span>
+                  <span className="text-right tabular-nums">{fmt(f.totalSales)}</span>
+                  <span className="text-[var(--text-muted)]">{t('commissionEarned')}</span>
+                  <span className="text-right tabular-nums">{f.commission > 0 ? fmt(f.commission) : '—'}</span>
+                  <span className="text-[var(--text-muted)]">{t('netPayable')}</span>
+                  <span className="text-right font-semibold tabular-nums text-[var(--bg-success)]">{fmt(f.netPayable)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[var(--border-light)] text-[10px] uppercase tracking-wide text-[var(--text-muted)]">

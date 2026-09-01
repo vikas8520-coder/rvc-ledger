@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
@@ -25,12 +25,19 @@ export const metadata: Metadata = {
   title: "RVC Ledger",
   description: "Upload bills and track customer dues",
   manifest: "/manifest.json",
-  themeColor: "#8b2e2e",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "RVC Ledger",
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
+  themeColor: "#8b2e2e",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

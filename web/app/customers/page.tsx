@@ -403,7 +403,7 @@ export default function CustomersPage() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder={t('searchCustomers')}
-            className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] pl-9 pr-3 py-2 text-sm"
+            className="w-full min-h-11 rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] pl-9 pr-3 py-2 text-base sm:text-sm"
           />
         </div>
         <div className="flex rounded-lg border border-[var(--border-input)] bg-[var(--bg-input)] p-0.5">
@@ -570,7 +570,7 @@ export default function CustomersPage() {
                     <button
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpenCustomerMenu(openCustomerMenu === c.id ? null : c.id); }}
                       title="Print & Share"
-                      className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-primary)] hover:text-[var(--text-on-primary)] transition-colors"
+                      className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-[var(--text-muted)] hover:bg-[var(--bg-primary)] hover:text-[var(--text-on-primary)] transition-colors"
                       aria-label="Print & Share"
                     >
                       <MessageIcon size={16} />
