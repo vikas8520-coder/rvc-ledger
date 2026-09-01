@@ -1,4 +1,4 @@
-const CACHE = 'rvc-ledger-v3';
+const CACHE = 'rvc-ledger-v5';
 const SHELL = ['/', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', (event) => {
@@ -11,6 +11,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
+      // Delete ALL old caches — forces complete refresh
       Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
     )
   );
@@ -19,6 +20,7 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
+  // Never intercept non-GET requests (POST, PUT, DELETE etc.)
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
@@ -37,20 +39,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Network-first for pages — always get the latest version
+  // Network-first for static assets too — always get the latest build
   if (url.pathname.startsWith('/_next/static/')) {
-    // Cache-first for static assets (they have hashed names, so they're safe)
     event.respondWith(
-      caches.match(request).then((cached) => {
-        if (cached) return cached;
-        return fetch(request).then((response) => {
+      fetch(request)
+        .then((response) => {
           if (response.ok && url.origin === self.location.origin) {
             const copy = response.clone();
             caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
           }
           return response;
-        });
-      })
+        })
+        .catch(() => caches.match(request).then((cached) => cached || fetch(request)))
     );
     return;
   }

@@ -1244,7 +1244,7 @@ export default function SellPage() {
           <div className="w-full max-w-md rounded-2xl bg-[var(--bg-card)] p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold">{t('addCustomer')}</h3>
-              <button onClick={() => setShowAddCustomer(false)} className="text-[var(--text-muted)]">✕</button>
+              <button type="button" onClick={() => setShowAddCustomer(false)} className="text-[var(--text-muted)]">✕</button>
             </div>
             <div className="space-y-3">
               <div>
@@ -1283,11 +1283,11 @@ export default function SellPage() {
               </p>
             )}
             <div className="flex gap-2 pt-2">
-              <button onClick={() => { setShowAddCustomer(false); setAddCustomerError(''); }}
+              <button type="button" onClick={() => { setShowAddCustomer(false); setAddCustomerError(''); }}
                 className="flex-1 rounded-lg border border-[var(--border-input)] py-2 text-sm text-[var(--text-primary)]">
                 {t('cancel')}
               </button>
-              <button onClick={handleAddCustomer} disabled={addingCustomer || !newCustomerName.trim()}
+              <button type="button" onClick={handleAddCustomer} disabled={addingCustomer || !newCustomerName.trim()}
                 className="flex-1 rounded-lg bg-[var(--bg-primary)] py-2 text-sm font-medium text-[var(--text-on-primary)] disabled:opacity-50">
                 {addingCustomer ? 'Saving…' : t('save')}
               </button>
