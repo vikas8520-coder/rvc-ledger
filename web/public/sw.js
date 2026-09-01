@@ -1,4 +1,4 @@
-const CACHE = 'rvc-ledger-v6';
+const CACHE = 'rvc-ledger-v7';
 const SHELL = ['/', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', (event) => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { usePersistentState } from '../components/usePersistentState';
 import { useI18n } from '../components/I18nProvider';
 import { fmt } from '@/lib/format';
@@ -55,7 +55,7 @@ function emptyLine(commodity = '', price = ''): Line {
 }
 
 const inputCls =
-  'w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-2 py-2 text-sm tabular-nums';
+  'min-h-11 w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-2 py-2 text-sm tabular-nums';
 
 export default function EntryPage() {
   const { t } = useI18n();
@@ -387,115 +387,113 @@ export default function EntryPage() {
         )}
       </section>
 
-      <section className="overflow-hidden rounded-xl border border-[var(--border-card)] bg-[var(--bg-card)]">
-        <div className="hidden border-b border-[var(--border-input)] bg-[var(--bg-base)] px-3 py-2 text-[10px] uppercase tracking-wide text-[var(--text-muted)] lg:grid lg:grid-cols-[1.3fr_4.5rem_1.4fr_5.5rem_5.5rem_6rem_4.5rem_2.5rem_2rem] lg:gap-2">
-          <span>{t('commodity')}</span>
-          <span>{t('qty')}</span>
-          <span>{t('customer')}</span>
-          <span>{t('weightKg')}</span>
-          <span>{t('ratePerKg')}</span>
-          <span>{t('amt')}</span>
-          <span />
-          <span>{t('hamali')}</span>
-          <span />
-        </div>
-
-        <div className="divide-y divide-[var(--border-input)]">
+      <section className="overflow-visible rounded-xl border border-[var(--border-card)] bg-[var(--bg-card)]">
+        <div className="space-y-2 p-3">
           {lines.map((line, i) => (
-            <div key={line.id} className="grid grid-cols-2 gap-2 p-3 lg:grid-cols-[1.3fr_4.5rem_1.4fr_5.5rem_5.5rem_6rem_4.5rem_2.5rem_2rem] lg:items-end lg:gap-2">
-              <div className="col-span-2 lg:col-span-1">
-                <label className="text-[10px] text-[var(--text-muted)] lg:hidden">{t('commodity')}</label>
-                <Autocomplete
-                  options={catalog}
-                  value={line.commodity}
-                  onChange={(v) => updateLine(line.id, { commodity: v })}
-                  placeholder="OSURI, BODA…"
-                />
+            <div
+              key={line.id}
+              className="relative z-0 rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-3 focus-within:z-10"
+            >
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
+                  {t('dataEntryTitle')} #{i + 1}
+                </span>
+                {lines.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setLines(lines.filter((l) => l.id !== line.id))}
+                    className="min-h-11 min-w-11 rounded-md px-2 text-sm text-[var(--text-muted)]"
+                    aria-label="Remove line"
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
-              <div>
-                <label className="text-[10px] text-[var(--text-muted)] lg:hidden">{t('qty')}</label>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={line.bags}
-                  onChange={(e) => updateLine(line.id, { bags: e.target.value })}
-                  placeholder="0"
-                  className={inputCls}
-                />
-              </div>
-              <div className="col-span-2 lg:col-span-1">
-                <label className="text-[10px] text-[var(--text-muted)] lg:hidden">{t('customer')}</label>
-                <Autocomplete
-                  options={customerNames}
-                  value={line.customerName}
-                  onChange={(v) => setCustomerOnLine(line.id, v)}
-                  placeholder="Name or CASH SALES"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] text-[var(--text-muted)] lg:hidden">{t('weightKg')}</label>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={line.weightKg}
-                  onChange={(e) => updateLine(line.id, { weightKg: e.target.value })}
-                  placeholder="0"
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className="text-[10px] text-[var(--text-muted)] lg:hidden">{t('ratePerKg')}</label>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={line.pricePerKg}
-                  onChange={(e) => updateLine(line.id, { pricePerKg: e.target.value })}
-                  placeholder="0"
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className="text-[10px] text-[var(--text-muted)] lg:hidden">{t('amt')}</label>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={line.amount}
-                  onChange={(e) => updateLine(line.id, { amount: e.target.value })}
-                  className={`${inputCls} font-semibold`}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => (line.cash ? updateLine(line.id, { cash: false }) : markCash(line.id))}
-                className={`rounded-md px-2 py-2 text-[11px] font-medium ${
-                  line.cash
-                    ? 'bg-[var(--bg-success)] text-[var(--text-on-success)]'
-                    : 'border border-[var(--border-input)] text-[var(--text-muted)]'
-                }`}
-              >
-                {line.cash ? t('cashSale') : t('creditSale')}
-              </button>
-              <div>
-                <label className="text-[10px] text-[var(--text-muted)] lg:hidden">{t('hamali')}</label>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={line.hamali}
-                  onChange={(e) => updateLine(line.id, { hamali: e.target.value })}
-                  className={inputCls}
-                />
-              </div>
-              {lines.length > 1 ? (
-                <button type="button" onClick={() => setLines(lines.filter((l) => l.id !== line.id))} className="text-xs text-[var(--text-muted)]" aria-label="Remove line">
-                  ✕
+              <div className="flex flex-wrap items-end gap-2">
+                <Field label={t('commodity')} className="min-w-[10rem] flex-[2]">
+                  <Autocomplete
+                    options={catalog}
+                    value={line.commodity}
+                    onChange={(v) => updateLine(line.id, { commodity: v })}
+                    placeholder="OSURI, BODA…"
+                  />
+                </Field>
+                <Field label={t('customer')} className="min-w-[10rem] flex-[2]">
+                  <Autocomplete
+                    options={customerNames}
+                    value={line.customerName}
+                    onChange={(v) => setCustomerOnLine(line.id, v)}
+                    placeholder="Name or CASH SALES"
+                  />
+                </Field>
+                <Field label={t('qty')} className="w-20 shrink-0">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={line.bags}
+                    onChange={(e) => updateLine(line.id, { bags: e.target.value })}
+                    placeholder="0"
+                    className={inputCls}
+                  />
+                </Field>
+                <Field label={t('weightKg')} className="w-24 shrink-0">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={line.weightKg}
+                    onChange={(e) => updateLine(line.id, { weightKg: e.target.value })}
+                    placeholder="0"
+                    className={inputCls}
+                  />
+                </Field>
+                <Field label={t('ratePerKg')} className="w-24 shrink-0">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={line.pricePerKg}
+                    onChange={(e) => updateLine(line.id, { pricePerKg: e.target.value })}
+                    placeholder="0"
+                    className={inputCls}
+                  />
+                </Field>
+                <Field label={t('amt')} className="w-28 shrink-0">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={line.amount}
+                    onChange={(e) => updateLine(line.id, { amount: e.target.value })}
+                    className={`${inputCls} font-semibold`}
+                  />
+                </Field>
+                <button
+                  type="button"
+                  onClick={() => (line.cash ? updateLine(line.id, { cash: false }) : markCash(line.id))}
+                  className={`min-h-11 shrink-0 rounded-md px-3 text-sm font-medium ${
+                    line.cash
+                      ? 'bg-[var(--bg-success)] text-[var(--text-on-success)]'
+                      : 'border border-[var(--border-input)] text-[var(--text-muted)]'
+                  }`}
+                >
+                  {line.cash ? t('cashSale') : t('creditSale')}
                 </button>
-              ) : (
-                <span className="text-[10px] text-[var(--text-faint)]">{i + 1}</span>
-              )}
+                <Field label={t('hamali')} className="w-24 shrink-0">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={line.hamali}
+                    onChange={(e) => updateLine(line.id, { hamali: e.target.value })}
+                    className={inputCls}
+                  />
+                </Field>
+              </div>
             </div>
           ))}
         </div>
-        <button type="button" onClick={addLine} className="w-full border-t border-dashed border-[var(--border-input)] py-2.5 text-sm text-[var(--text-muted)]">
+        <button
+          type="button"
+          onClick={addLine}
+          className="min-h-11 w-full border-t border-dashed border-[var(--border-input)] py-2.5 text-sm text-[var(--text-muted)]"
+        >
           + {t('addLine')}
         </button>
       </section>
@@ -538,12 +536,12 @@ export default function EntryPage() {
         </p>
       )}
 
-      <div className="flex gap-2 pb-4">
+      <div className="sticky bottom-16 z-20 -mx-3 flex gap-2 border-t border-[var(--border-light)] bg-[var(--bg-base)] px-3 py-3 lg:bottom-0 lg:mx-0 lg:rounded-xl lg:border">
         <button
           type="button"
           onClick={() => printFarmerPatti(toPatti(), shop)}
           disabled={validLines.length === 0}
-          className="flex-1 rounded-lg border border-[var(--border-input)] py-3 text-sm font-medium disabled:opacity-40"
+          className="min-h-12 flex-1 rounded-lg border border-[var(--border-input)] text-sm font-medium disabled:opacity-40"
         >
           {t('printPatti')}
         </button>
@@ -551,11 +549,28 @@ export default function EntryPage() {
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="flex-[2] rounded-lg bg-[var(--bg-success)] py-3 text-sm font-bold text-[var(--text-on-success)] disabled:opacity-50"
+          className="min-h-12 flex-[2] rounded-lg bg-[var(--bg-success)] text-sm font-bold text-[var(--text-on-success)] disabled:opacity-50"
         >
           {saving ? t('saving') : t('savePatti')}
         </button>
       </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  className,
+  children,
+}: {
+  label: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={className}>
+      <label className="mb-0.5 block text-[10px] text-[var(--text-muted)]">{label}</label>
+      {children}
     </div>
   );
 }

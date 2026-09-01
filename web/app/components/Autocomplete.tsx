@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 
 interface Props {
   options: string[];
@@ -12,9 +13,8 @@ interface Props {
 }
 
 /**
- * Reusable autocomplete input that works on both mobile and desktop.
- * Shows a dropdown of filtered options when the input is focused.
- * Allows free text entry (for new values not in the list).
+ * Autocomplete that portals the list to document.body so it is never clipped
+ * by overflow:hidden parents or buried under later rows.
  */
 export default function Autocomplete({
   options,
@@ -26,8 +26,10 @@ export default function Autocomplete({
 }: Props) {
   const [open, setOpen] = useState(false);
   const [highlightedIdx, setHighlightedIdx] = useState(-1);
-  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number; maxH: number } | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const filtered = useMemo(() => {
     if (!value.trim()) return options.slice(0, 50);
@@ -35,31 +37,57 @@ export default function Autocomplete({
     return options.filter((o) => o.toLowerCase().includes(q)).slice(0, 50);
   }, [options, value]);
 
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-        setHighlightedIdx(-1);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
+  const place = () => {
+    const el = inputRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const gap = 4;
+    const spaceBelow = window.innerHeight - r.bottom - gap - 8;
+    const spaceAbove = r.top - gap - 8;
+    const openUp = spaceBelow < 140 && spaceAbove > spaceBelow;
+    const maxH = Math.max(96, Math.min(240, openUp ? spaceAbove : spaceBelow));
+    const top = openUp ? r.top - gap - maxH : r.bottom + gap;
+    setPos({
+      top: Math.max(8, top),
+      left: Math.min(r.left, window.innerWidth - Math.max(r.width, 180) - 8),
+      width: Math.max(r.width, 180),
+      maxH,
+    });
+  };
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    place();
+    const onWin = () => place();
+    window.addEventListener('resize', onWin);
+    window.addEventListener('scroll', onWin, true);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('resize', onWin);
+      window.removeEventListener('scroll', onWin, true);
     };
-  }, []);
+  }, [open, filtered.length, value]);
+
+  useEffect(() => {
+    if (!open) return;
+    function handlePointerDown(e: PointerEvent) {
+      const t = e.target as Node;
+      if (wrapRef.current?.contains(t) || listRef.current?.contains(t)) return;
+      setOpen(false);
+      setHighlightedIdx(-1);
+    }
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [open]);
 
   const selectOption = (opt: string) => {
     onChange(opt);
     setOpen(false);
     setHighlightedIdx(-1);
-    inputRef.current?.blur();
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (!open) {
-      if (e.key === 'ArrowDown' || e.key === 'Enter') {
-        setOpen(true);
-      }
+      if (e.key === 'ArrowDown' || e.key === 'Enter') setOpen(true);
       return;
     }
     if (e.key === 'ArrowDown') {
@@ -81,8 +109,48 @@ export default function Autocomplete({
     }
   };
 
+  const list =
+    open && filtered.length > 0 && pos && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            ref={listRef}
+            role="listbox"
+            style={{
+              position: 'fixed',
+              top: pos.top,
+              left: pos.left,
+              width: pos.width,
+              maxHeight: pos.maxH,
+              zIndex: 80,
+            }}
+            className="overflow-y-auto overscroll-contain rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] shadow-lg"
+          >
+            {filtered.map((opt, i) => (
+              <button
+                key={`${opt}-${i}`}
+                type="button"
+                role="option"
+                aria-selected={opt === value}
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  selectOption(opt);
+                }}
+                className={`flex min-h-11 w-full items-center px-3 py-2 text-left text-sm ${
+                  i === highlightedIdx
+                    ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'
+                    : 'hover:bg-[var(--bg-base)]'
+                } ${opt === value ? 'font-semibold' : ''}`}
+              >
+                {opt}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
-    <div ref={ref} className={`relative ${className || ''}`}>
+    <div ref={wrapRef} className={`relative ${className || ''}`}>
       <input
         ref={inputRef}
         type="text"
@@ -95,27 +163,10 @@ export default function Autocomplete({
         onFocus={() => setOpen(true)}
         onKeyDown={onKeyDown}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm"
+        className="min-h-11 w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] px-2 py-2 text-sm"
         autoComplete="off"
       />
-      {open && filtered.length > 0 && (
-        <div className="absolute z-[100] mt-1 w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] shadow-lg max-h-48 overflow-y-auto overscroll-contain">
-          {filtered.map((opt, i) => (
-            <button
-              key={opt}
-              type="button"
-              onClick={() => selectOption(opt)}
-              className={`flex w-full items-center px-3 py-2 text-left text-sm ${
-                i === highlightedIdx
-                  ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'
-                  : 'hover:bg-[var(--bg-base)] active:bg-[var(--bg-base)]'
-              } ${opt === value ? 'font-semibold' : ''}`}
-            >
-              {opt}
-            </button>
-          ))}
-        </div>
-      )}
+      {list}
     </div>
   );
 }
