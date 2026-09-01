@@ -93,16 +93,9 @@ export async function getAuth(): Promise<AuthResult | null> {
     return { shopId, role: 'superadmin', userId: 'admin', email: '', name: 'Admin' };
   }
 
-  // If Clerk isn't configured at all, use default shop (no-auth mode)
-  // This allows the app to function when Clerk keys are not set
+  // If Clerk isn't configured at all, return null (no access)
   if (!isClerkConfigured()) {
-    let shopId: string | null = null;
-    if (isDbConfigured()) {
-      try {
-        shopId = await ensureDefaultShop();
-      } catch {}
-    }
-    return { shopId, role: 'owner', userId: 'local-user', email: '', name: 'Local User' };
+    return null;
   }
 
   const { userId, isAuthenticated } = await auth();
