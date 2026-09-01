@@ -63,6 +63,10 @@ export default function SellPage() {
   const [kgs, setKgs] = useState('');
   const [rate, setRate] = useState('');
   const [rateUnit, setRateUnit] = useState<'per_kg' | 'per_10kg'>('per_kg');
+  const [multiRate, setMultiRate] = useState(false);
+  const [rateSlabs, setRateSlabs] = useState<{ bags: string; rate: string; unit: 'per_kg' | 'per_10kg' }[]>([
+    { bags: '', rate: '', unit: 'per_10kg' },
+  ]);
   const [hamaliEnabled, setHamaliEnabled] = useState(false);
   const [hamali, setHamali] = useState('');
   const [paymentType, setPaymentType] = useState<'cash' | 'credit'>('credit');
@@ -166,33 +170,72 @@ export default function SellPage() {
   // Effective rate per kg (convert per-10kg rate to per-kg)
   const ratePerKg = rateUnit === 'per_10kg' ? num(rate) / 10 : num(rate);
 
+  // Multi-rate: calculate amount from rate slabs
+  // Each slab: slabBags × weightPerBag × (slabRate / 10 if per_10kg else slabRate)
+  const slabAmount = (() => {
+    if (!multiRate) return 0;
+    const w = num(weightPerBag);
+    return rateSlabs.reduce((sum, s) => {
+      const sb = num(s.bags);
+      const sr = s.unit === 'per_10kg' ? num(s.rate) / 10 : num(s.rate);
+      const slabKgs = w > 0 ? sb * w : 0;
+      return sum + (slabKgs > 0 ? slabKgs * sr : sb * sr);
+    }, 0);
+  })();
+
+  // Total bags entered in slabs (for validation)
+  const slabBagsTotal = multiRate ? rateSlabs.reduce((s, sl) => s + num(sl.bags), 0) : 0;
+
   // Auto-calculate amount
   const computedAmount = (() => {
-    const base = effectiveKgs > 0 ? effectiveKgs * ratePerKg : num(bags) * ratePerKg;
+    const base = multiRate
+      ? slabAmount
+      : effectiveKgs > 0 ? effectiveKgs * ratePerKg : num(bags) * ratePerKg;
     const h = hamaliEnabled ? num(hamali) : 0;
     return Math.round(base + h);
   })();
 
-  const canSave = item.trim() && (customerId || customerName.trim()) && (num(bags) > 0 || num(kgs) > 0 || autoKgs > 0) && num(rate) > 0;
+  const canSave = item.trim() && (customerId || customerName.trim()) && (num(bags) > 0 || num(kgs) > 0 || autoKgs > 0) && (multiRate ? rateSlabs.some(s => num(s.bags) > 0 && num(s.rate) > 0) : num(rate) > 0);
 
   const handleSave = async () => {
     setSaving(true);
     setSaveError('');
     setSaveSuccess(false);
     try {
-      const items = [{
-        raw_text: item.trim(),
-        confirmed_name: item.trim(),
-        qty: effectiveKgs > 0 ? String(effectiveKgs) : null,
-        rate: String(Math.round(ratePerKg * 100) / 100),
-        amount: computedAmount,
-        display: `${bags || 0} bags${effectiveKgs > 0 ? `, ${effectiveKgs} kg` : ''} @ ₹${rate}/${rateUnit === 'per_10kg' ? '10kg' : 'kg'}`,
-        kind: 'item',
-        chargeCode: null,
-        farmer: farmer.trim() || null,
-        hamali: hamaliEnabled ? num(hamali) : null,
-        bags: num(bags) || null,
-      }];
+      // Build items: one per rate slab if multi-rate, else single item
+      const items = multiRate
+        ? rateSlabs.filter(s => num(s.bags) > 0 && num(s.rate) > 0).map(s => {
+            const sb = num(s.bags);
+            const sr = s.unit === 'per_10kg' ? num(s.rate) / 10 : num(s.rate);
+            const slabKgs = num(weightPerBag) > 0 ? Math.round(sb * num(weightPerBag) * 100) / 100 : 0;
+            const slabAmt = Math.round(slabKgs > 0 ? slabKgs * sr : sb * sr);
+            return {
+              raw_text: item.trim(),
+              confirmed_name: item.trim(),
+              qty: slabKgs > 0 ? String(slabKgs) : null,
+              rate: String(Math.round(sr * 100) / 100),
+              amount: slabAmt,
+              display: `${sb} bags${slabKgs > 0 ? `, ${slabKgs} kg` : ''} @ ₹${s.rate}/${s.unit === 'per_10kg' ? '10kg' : 'kg'}`,
+              kind: 'item' as const,
+              chargeCode: null,
+              farmer: farmer.trim() || null,
+              hamali: hamaliEnabled ? num(hamali) : null,
+              bags: sb,
+            };
+          })
+        : [{
+            raw_text: item.trim(),
+            confirmed_name: item.trim(),
+            qty: effectiveKgs > 0 ? String(effectiveKgs) : null,
+            rate: String(Math.round(ratePerKg * 100) / 100),
+            amount: computedAmount,
+            display: `${bags || 0} bags${effectiveKgs > 0 ? `, ${effectiveKgs} kg` : ''} @ ₹${rate}/${rateUnit === 'per_10kg' ? '10kg' : 'kg'}`,
+            kind: 'item' as const,
+            chargeCode: null,
+            farmer: farmer.trim() || null,
+            hamali: hamaliEnabled ? num(hamali) : null,
+            bags: num(bags) || null,
+          }];
       const res = await fetch('/api/bills', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -231,7 +274,9 @@ export default function SellPage() {
       }]);
 
       // Reset form for next entry
-      setBags(''); setWeightPerBag(''); setKgs(''); setRate(''); setRateUnit('per_kg'); setHamali(''); setHamaliEnabled(false);
+      setBags(''); setWeightPerBag(''); setKgs(''); setRate(''); setRateUnit('per_kg');
+      setMultiRate(false); setRateSlabs([{ bags: '', rate: '', unit: 'per_10kg' }]);
+      setHamali(''); setHamaliEnabled(false);
       setPaymentType('credit');
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
@@ -253,6 +298,7 @@ export default function SellPage() {
     setKgs(line.kgs);
     setRate(line.rate); // stored as per-kg rate
     setRateUnit('per_kg'); // saved rate is always per-kg
+    setMultiRate(false); setRateSlabs([{ bags: '', rate: '', unit: 'per_10kg' }]);
     setHamaliEnabled(line.hamaliEnabled);
     setHamali(line.hamali);
     setPaymentType(line.isCash ? 'cash' : 'credit');
@@ -275,20 +321,40 @@ export default function SellPage() {
         throw new Error(d.error || 'Failed to delete old entry');
       }
 
-      // Save new transaction
-      const items = [{
-        raw_text: item.trim(),
-        confirmed_name: item.trim(),
-        qty: effectiveKgs > 0 ? String(effectiveKgs) : null,
-        rate: String(Math.round(ratePerKg * 100) / 100),
-        amount: computedAmount,
-        display: `${bags || 0} bags${effectiveKgs > 0 ? `, ${effectiveKgs} kg` : ''} @ ₹${rate}/${rateUnit === 'per_10kg' ? '10kg' : 'kg'}`,
-        kind: 'item',
-        chargeCode: null,
-        farmer: farmer.trim() || null,
-        hamali: hamaliEnabled ? num(hamali) : null,
-        bags: num(bags) || null,
-      }];
+      // Save new transaction — build items same as handleSave
+      const items = multiRate
+        ? rateSlabs.filter(s => num(s.bags) > 0 && num(s.rate) > 0).map(s => {
+            const sb = num(s.bags);
+            const sr = s.unit === 'per_10kg' ? num(s.rate) / 10 : num(s.rate);
+            const slabKgs = num(weightPerBag) > 0 ? Math.round(sb * num(weightPerBag) * 100) / 100 : 0;
+            const slabAmt = Math.round(slabKgs > 0 ? slabKgs * sr : sb * sr);
+            return {
+              raw_text: item.trim(),
+              confirmed_name: item.trim(),
+              qty: slabKgs > 0 ? String(slabKgs) : null,
+              rate: String(Math.round(sr * 100) / 100),
+              amount: slabAmt,
+              display: `${sb} bags${slabKgs > 0 ? `, ${slabKgs} kg` : ''} @ ₹${s.rate}/${s.unit === 'per_10kg' ? '10kg' : 'kg'}`,
+              kind: 'item' as const,
+              chargeCode: null,
+              farmer: farmer.trim() || null,
+              hamali: hamaliEnabled ? num(hamali) : null,
+              bags: sb,
+            };
+          })
+        : [{
+            raw_text: item.trim(),
+            confirmed_name: item.trim(),
+            qty: effectiveKgs > 0 ? String(effectiveKgs) : null,
+            rate: String(Math.round(ratePerKg * 100) / 100),
+            amount: computedAmount,
+            display: `${bags || 0} bags${effectiveKgs > 0 ? `, ${effectiveKgs} kg` : ''} @ ₹${rate}/${rateUnit === 'per_10kg' ? '10kg' : 'kg'}`,
+            kind: 'item' as const,
+            chargeCode: null,
+            farmer: farmer.trim() || null,
+            hamali: hamaliEnabled ? num(hamali) : null,
+            bags: num(bags) || null,
+          }];
       const res = await fetch('/api/bills', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -333,7 +399,9 @@ export default function SellPage() {
 
       // Reset form
       setItem(''); setFarmer(''); setCustomerId(null); setCustomerName('');
-      setBags(''); setWeightPerBag(''); setKgs(''); setRate(''); setRateUnit('per_kg'); setHamali(''); setHamaliEnabled(false);
+      setBags(''); setWeightPerBag(''); setKgs(''); setRate(''); setRateUnit('per_kg');
+      setMultiRate(false); setRateSlabs([{ bags: '', rate: '', unit: 'per_10kg' }]);
+      setHamali(''); setHamaliEnabled(false);
       setPaymentType('credit');
       setEditingId(null);
       setSaveSuccess(true);
@@ -347,7 +415,9 @@ export default function SellPage() {
 
   const handleCancelEdit = () => {
     setItem(''); setFarmer(''); setCustomerId(null); setCustomerName('');
-    setBags(''); setWeightPerBag(''); setKgs(''); setRate(''); setRateUnit('per_kg'); setHamali(''); setHamaliEnabled(false);
+    setBags(''); setWeightPerBag(''); setKgs(''); setRate(''); setRateUnit('per_kg');
+    setMultiRate(false); setRateSlabs([{ bags: '', rate: '', unit: 'per_10kg' }]);
+    setHamali(''); setHamaliEnabled(false);
     setPaymentType('credit');
     setEditingId(null);
     setSaveError('');
@@ -772,42 +842,116 @@ export default function SellPage() {
               <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">{bags} × {weightPerBag} = {autoKgs} kg</p>
             )}
           </div>
-          <div>
-            <label className="text-xs text-[var(--text-muted)]">{t('rate')}</label>
-            <input
-              type="number"
-              value={rate}
-              onChange={(e) => setRate(e.target.value)}
-              placeholder="0"
-              inputMode="decimal"
-              className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm"
-            />
-            <div className="mt-1 flex gap-1">
+          <div className={multiRate ? 'sm:col-span-2' : ''}>
+            <label className="text-xs text-[var(--text-muted)] flex items-center justify-between">
+              <span>{t('rate')}</span>
               <button
                 type="button"
-                onClick={() => setRateUnit('per_kg')}
-                className={`flex-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                  rateUnit === 'per_kg'
-                    ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'
-                    : 'bg-[var(--bg-secondary)] text-[var(--text-muted)]'
-                }`}
+                onClick={() => setMultiRate(!multiRate)}
+                className="text-[10px] text-[var(--bg-primary)] hover:underline"
               >
-                per kg
+                {multiRate ? '← Single rate' : 'Auction? Multiple rates →'}
               </button>
-              <button
-                type="button"
-                onClick={() => setRateUnit('per_10kg')}
-                className={`flex-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                  rateUnit === 'per_10kg'
-                    ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'
-                    : 'bg-[var(--bg-secondary)] text-[var(--text-muted)]'
-                }`}
-              >
-                per 10 kg
-              </button>
-            </div>
-            {rateUnit === 'per_10kg' && num(rate) > 0 && (
-              <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">= ₹{Math.round(ratePerKg * 100) / 100}/kg</p>
+            </label>
+
+            {!multiRate ? (
+              <>
+                <input
+                  type="number"
+                  value={rate}
+                  onChange={(e) => setRate(e.target.value)}
+                  placeholder="0"
+                  inputMode="decimal"
+                  className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm"
+                />
+                <div className="mt-1 flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setRateUnit('per_kg')}
+                    className={`flex-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                      rateUnit === 'per_kg'
+                        ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'
+                        : 'bg-[var(--bg-secondary)] text-[var(--text-muted)]'
+                    }`}
+                  >
+                    per kg
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRateUnit('per_10kg')}
+                    className={`flex-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                      rateUnit === 'per_10kg'
+                        ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'
+                        : 'bg-[var(--bg-secondary)] text-[var(--text-muted)]'
+                    }`}
+                  >
+                    per 10 kg
+                  </button>
+                </div>
+                {rateUnit === 'per_10kg' && num(rate) > 0 && (
+                  <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">= ₹{Math.round(ratePerKg * 100) / 100}/kg</p>
+                )}
+              </>
+            ) : (
+              <div className="space-y-1.5">
+                {rateSlabs.map((slab, i) => {
+                  const sr = slab.unit === 'per_10kg' ? num(slab.rate) / 10 : num(slab.rate);
+                  const slabKgs = num(weightPerBag) > 0 ? num(slab.bags) * num(weightPerBag) : 0;
+                  const slabAmt = Math.round(slabKgs > 0 ? slabKgs * sr : num(slab.bags) * sr);
+                  return (
+                    <div key={i} className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        value={slab.bags}
+                        onChange={(e) => setRateSlabs(prev => prev.map((s, x) => x === i ? { ...s, bags: e.target.value } : s))}
+                        placeholder="bags"
+                        inputMode="numeric"
+                        className="w-16 rounded border border-[var(--border-input)] bg-[var(--bg-base)] p-1.5 text-xs"
+                      />
+                      <span className="text-xs text-[var(--text-muted)]">@</span>
+                      <input
+                        type="number"
+                        value={slab.rate}
+                        onChange={(e) => setRateSlabs(prev => prev.map((s, x) => x === i ? { ...s, rate: e.target.value } : s))}
+                        placeholder="rate"
+                        inputMode="decimal"
+                        className="w-20 rounded border border-[var(--border-input)] bg-[var(--bg-base)] p-1.5 text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setRateSlabs(prev => prev.map((s, x) => x === i ? { ...s, unit: s.unit === 'per_kg' ? 'per_10kg' : 'per_kg' } : s))}
+                        className="shrink-0 rounded bg-[var(--bg-secondary)] px-1 py-1 text-[9px] font-medium text-[var(--text-muted)]"
+                      >
+                        {slab.unit === 'per_10kg' ? '/10kg' : '/kg'}
+                      </button>
+                      {slabAmt > 0 && (
+                        <span className="shrink-0 text-[10px] font-medium text-[var(--text-muted)]">₹{slabAmt}</span>
+                      )}
+                      {rateSlabs.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setRateSlabs(prev => prev.filter((_, x) => x !== i))}
+                          className="shrink-0 text-xs text-red-500"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => setRateSlabs(prev => [...prev, { bags: '', rate: '', unit: 'per_10kg' }])}
+                  className="w-full rounded border border-dashed border-[var(--border-input)] py-1 text-[10px] text-[var(--text-muted)]"
+                >
+                  + Add rate slab
+                </button>
+                {slabBagsTotal > 0 && (
+                  <p className={`text-[10px] ${slabBagsTotal === num(bags) ? 'text-[var(--text-muted)]' : 'text-[var(--bg-primary)] font-medium'}`}>
+                    {slabBagsTotal} / {num(bags)} bags {slabBagsTotal === num(bags) ? '✓' : `(${num(bags) - slabBagsTotal} remaining)`}
+                  </p>
+                )}
+              </div>
             )}
           </div>
           <div>
