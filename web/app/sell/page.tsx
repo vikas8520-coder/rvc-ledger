@@ -91,6 +91,15 @@ export default function SellPage() {
   const [newCustomerTeluguName, setNewCustomerTeluguName] = useState('');
   const [newCustomerHindiName, setNewCustomerHindiName] = useState('');
 
+  // Add farmer inline
+  const [showAddFarmer, setShowAddFarmer] = useState(false);
+  const [newFarmerName, setNewFarmerName] = useState('');
+  const [newFarmerPhone, setNewFarmerPhone] = useState('');
+  const [addingFarmer, setAddingFarmer] = useState(false);
+
+  // Stock received for selected item
+  const [stockReceived, setStockReceived] = useState<{ bags: number; totalKgs: number } | null>(null);
+
   useEffect(() => {
     fetch('/api/customers')
       .then((r) => r.json())
@@ -127,6 +136,52 @@ export default function SellPage() {
       .then((d) => setShopSettings(d.settings || {}))
       .catch(() => {});
   }, []);
+
+  // Fetch stock received for the selected item (bags + total weight)
+  useEffect(() => {
+    if (!item.trim()) { setStockReceived(null); return; }
+    fetch('/api/stock')
+      .then((r) => r.json())
+      .then((d) => {
+        const stock = (d.stock || []).find((s: any) =>
+          s.itemName?.toLowerCase() === item.trim().toLowerCase() ||
+          s.itemKey?.toLowerCase() === item.trim().toLowerCase().replace(/\s+/g, '-')
+        );
+        if (stock && stock.qty > 0) {
+          // qty is in kg from stock calculation; estimate bags from weightPerBag if set
+          const totalKgs = stock.qty;
+          const w = num(weightPerBag);
+          const bags = w > 0 ? Math.round(totalKgs / w) : 0;
+          setStockReceived({ bags, totalKgs });
+        } else {
+          setStockReceived(null);
+        }
+      })
+      .catch(() => setStockReceived(null));
+  }, [item, weightPerBag]);
+
+  const handleAddFarmer = async () => {
+    if (!newFarmerName.trim()) return;
+    setAddingFarmer(true);
+    try {
+      const r = await fetch('/api/suppliers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create', name: newFarmerName.trim(), phone: newFarmerPhone.trim() || undefined }),
+      });
+      const d = await r.json();
+      if (d.error) throw new Error(d.error);
+      setFarmers(prev => Array.from(new Set([...prev, newFarmerName.trim()])).sort());
+      setFarmer(newFarmerName.trim());
+      setShowAddFarmer(false);
+      setNewFarmerName('');
+      setNewFarmerPhone('');
+    } catch (err: any) {
+      setSaveError(err.message || 'Failed to add farmer');
+    } finally {
+      setAddingFarmer(false);
+    }
+  };
 
   // Close ledger dropdown when clicking outside
   useEffect(() => {
@@ -285,6 +340,7 @@ export default function SellPage() {
       setBags(''); setWeightPerBag(''); setKgs(''); setRate(''); setRateUnit('per_kg');
       setMultiRate(false); setRateSlabs([{ bags: '', rate: '', unit: 'per_10kg' }]);
       setHamali(''); setHamaliEnabled(false);
+      setShowAddFarmer(false); setNewFarmerName(''); setNewFarmerPhone('');
       setPaymentType('credit');
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
@@ -410,6 +466,7 @@ export default function SellPage() {
       setBags(''); setWeightPerBag(''); setKgs(''); setRate(''); setRateUnit('per_kg');
       setMultiRate(false); setRateSlabs([{ bags: '', rate: '', unit: 'per_10kg' }]);
       setHamali(''); setHamaliEnabled(false);
+      setShowAddFarmer(false); setNewFarmerName(''); setNewFarmerPhone('');
       setPaymentType('credit');
       setEditingId(null);
       setSaveSuccess(true);
@@ -426,6 +483,7 @@ export default function SellPage() {
     setBags(''); setWeightPerBag(''); setKgs(''); setRate(''); setRateUnit('per_kg');
     setMultiRate(false); setRateSlabs([{ bags: '', rate: '', unit: 'per_10kg' }]);
     setHamali(''); setHamaliEnabled(false);
+    setShowAddFarmer(false); setNewFarmerName(''); setNewFarmerPhone('');
     setPaymentType('credit');
     setEditingId(null);
     setSaveError('');
@@ -752,17 +810,61 @@ export default function SellPage() {
               onChange={setItem}
               placeholder="e.g. W.MIRCHI, BEANS"
             />
+            {stockReceived && (
+              <p className="mt-1 rounded bg-[var(--bg-secondary)] px-2 py-1 text-[10px] text-[var(--text-on-secondary)]">
+                Stock: {stockReceived.totalKgs} kg{stockReceived.bags > 0 ? ` (~${stockReceived.bags} bags)` : ''}
+              </p>
+            )}
           </div>
 
           {/* Farmer */}
           <div>
-            <label className="text-xs text-[var(--text-muted)]">{t('farmer')}</label>
-            <Autocomplete
-              options={farmers}
-              value={farmer}
-              onChange={setFarmer}
-              placeholder="e.g. SK 170"
-            />
+            <label className="text-xs text-[var(--text-muted)] flex items-center justify-between">
+              <span>{t('farmer')}</span>
+              <button
+                type="button"
+                onClick={() => setShowAddFarmer(!showAddFarmer)}
+                className="text-[10px] text-[var(--bg-primary)] hover:underline"
+              >
+                {showAddFarmer ? 'Cancel' : '+ Add new'}
+              </button>
+            </label>
+            {showAddFarmer ? (
+              <div className="space-y-1.5">
+                <input
+                  type="text"
+                  value={newFarmerName}
+                  onChange={(e) => setNewFarmerName(e.target.value)}
+                  placeholder="Farmer name"
+                  className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm"
+                />
+                <div className="flex gap-1.5">
+                  <input
+                    type="tel"
+                    value={newFarmerPhone}
+                    onChange={(e) => setNewFarmerPhone(e.target.value)}
+                    placeholder="Phone (optional)"
+                    inputMode="tel"
+                    className="flex-1 rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddFarmer}
+                    disabled={!newFarmerName.trim() || addingFarmer}
+                    className="rounded-lg bg-[var(--bg-primary)] px-3 py-2 text-xs font-medium text-[var(--text-on-primary)] disabled:opacity-50"
+                  >
+                    {addingFarmer ? '…' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <Autocomplete
+                options={farmers}
+                value={farmer}
+                onChange={setFarmer}
+                placeholder="e.g. SK 170"
+              />
+            )}
           </div>
 
           {/* Buyer */}
