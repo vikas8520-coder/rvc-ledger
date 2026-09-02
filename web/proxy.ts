@@ -3,6 +3,9 @@ import { clerkMiddleware } from '@clerk/nextjs/server';
 
 const ADMIN_COOKIE_NAME = 'rvc_admin_session';
 
+// Check if Clerk is configured with real keys
+const CLERK_CONFIGURED = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+
 // Public admin routes that don't require the admin cookie
 const publicAdminPaths = [
   '/admin/login',
@@ -14,33 +17,34 @@ function isPublicAdminPath(pathname: string): boolean {
   return publicAdminPaths.some((p) => pathname === p || pathname.startsWith(p + '/'));
 }
 
-// Combine Clerk middleware with admin cookie auth
-export default clerkMiddleware((auth, req) => {
+// Admin auth logic — works with or without Clerk
+function adminHandler(req: NextRequest): NextResponse {
   const { pathname } = req.nextUrl;
 
-  // Admin routes: check admin cookie (separate from Clerk)
   const isAdminRoute = pathname === '/admin' || pathname.startsWith('/admin/') ||
                        pathname.startsWith('/api/admin/');
 
   if (isAdminRoute) {
-    // Allow public admin routes (login, logout endpoints)
     if (isPublicAdminPath(pathname)) {
       return NextResponse.next();
     }
-    // Check for admin session cookie
     const adminCookie = req.cookies.get(ADMIN_COOKIE_NAME);
     if (adminCookie?.value) {
       return NextResponse.next();
     }
-    // Not authenticated — redirect to admin login
     const loginUrl = new URL('/admin/login', req.url);
     return NextResponse.redirect(loginUrl);
   }
 
-  // Shop routes: Clerk handles auth automatically
-  // Clerk will redirect unauthenticated users to /sign-in
   return NextResponse.next();
-});
+}
+
+// When Clerk is configured, use clerkMiddleware (which handles shop auth).
+// When Clerk is NOT configured (local dev/testing without Clerk keys),
+// use a plain middleware that only handles admin routes.
+export default CLERK_CONFIGURED
+  ? clerkMiddleware((_auth, req) => adminHandler(req))
+  : adminHandler;
 
 export const config = {
   // Run proxy on all routes except static files

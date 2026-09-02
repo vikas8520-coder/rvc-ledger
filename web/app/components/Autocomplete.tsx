@@ -145,10 +145,8 @@ export default function Autocomplete({
                 type="button"
                 role="option"
                 aria-selected={opt === value}
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  selectOption(opt);
-                }}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => selectOption(opt)}
                 className={`flex min-h-11 w-full items-center px-3 py-2 text-left text-sm ${
                   i === highlightedIdx
                     ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'

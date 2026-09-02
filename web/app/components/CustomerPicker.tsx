@@ -127,8 +127,8 @@ export default function CustomerPicker({ customers, value, onChange, onAddNew, p
                 <button
                   key={c.id}
                   type="button"
-                  onPointerDown={(e) => {
-                    e.preventDefault();
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
                     onChange(c.id, formatCustomerName(c, uiLang));
                     setOpen(false);
                     setQuery('');
@@ -150,8 +150,8 @@ export default function CustomerPicker({ customers, value, onChange, onAddNew, p
             {onAddNew && (
               <button
                 type="button"
-                onPointerDown={(e) => {
-                  e.preventDefault();
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
                   setOpen(false);
                   setQuery('');
                   onAddNew();

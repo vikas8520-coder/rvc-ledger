@@ -44,7 +44,7 @@ export default function PrintShareMenu({ options, disabled, label = 'Print / Sha
         <PrinterIcon size={14} /> {btnLabel} ▾
       </button>
       {open && (
-        <span className="absolute right-0 top-full z-50 mt-1 w-64 rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] p-1 text-[var(--text-primary)] shadow-lg">
+        <span className="absolute right-0 top-full z-50 mt-1 max-h-[70vh] w-64 overflow-y-auto overscroll-contain rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] p-1 text-[var(--text-primary)] shadow-lg">
           {options.map((opt, i) => (
             <div key={opt.key} className={i > 0 ? 'border-t border-[var(--border-light)] px-2 py-1.5' : 'px-2 py-1.5'}>
               <p className="text-xs font-semibold text-[var(--text-secondary)]">{opt.label}</p>
