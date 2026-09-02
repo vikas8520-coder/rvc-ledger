@@ -894,7 +894,7 @@ export default function EntryPage() {
                 <div className="space-y-1.5 rounded-lg border border-[var(--border-card)] bg-[var(--bg-base)] p-1.5">
                   <div className="flex flex-wrap items-end gap-1.5 text-xs">
                     {/* Customer */}
-                    <div className="min-w-[8rem] flex-1">
+                    <div className="min-w-[7rem] flex-1">
                       <label className="mb-0.5 block text-[10px] text-[var(--text-muted)]">{t('customer')}</label>
                       <Autocomplete
                         options={customerNames}
@@ -919,12 +919,12 @@ export default function EntryPage() {
                       />
                     </div>
                     {/* Item dropdown — only this farmer's items */}
-                    <div className="w-28">
+                    <div className="w-20">
                       <label className="mb-0.5 block text-[10px] text-[var(--text-muted)]">{t('item')}</label>
                       <select
                         value={lot.id}
                         onChange={(e) => setSelectedLotId(e.target.value)}
-                        className={smInput}
+                        className={`${smInput} w-full`}
                       >
                         {block.lots.map((l, i) => (
                           <option key={l.id} value={l.id}>
@@ -934,7 +934,7 @@ export default function EntryPage() {
                       </select>
                     </div>
                     {/* Bags */}
-                    <div className="w-16">
+                    <div className="w-14">
                       <label className="mb-0.5 block text-[10px] text-[var(--text-muted)]">{t('bags')}</label>
                       <input
                         type="number"
@@ -943,7 +943,7 @@ export default function EntryPage() {
                         max={MAX_SALE_BAGS}
                         value={line.bags}
                         placeholder="20"
-                        className={smInput}
+                        className={`${smInput} w-full`}
                         onChange={(e) =>
                           patchLotLine(block.id, lot.id, line.id, (ln) =>
                             fillLine(ln, { bags: e.target.value, commodity: lot.commodity }, rateUnit, 'bags'),
@@ -952,7 +952,7 @@ export default function EntryPage() {
                       />
                     </div>
                     {/* Rate */}
-                    <div className="w-20">
+                    <div className="w-16">
                       <label className="mb-0.5 block text-[10px] text-[var(--text-muted)]">
                         {rateUnit === 'per_10kg' ? '₹/10kg' : '₹/kg'}
                       </label>
@@ -961,7 +961,7 @@ export default function EntryPage() {
                         inputMode="decimal"
                         value={line.pricePerKg}
                         placeholder={rateUnit === 'per_10kg' ? '220' : '22'}
-                        className={smInput}
+                        className={`${smInput} w-full`}
                         onChange={(e) =>
                           patchLotLine(block.id, lot.id, line.id, (ln) =>
                             fillLine(ln, { pricePerKg: e.target.value, commodity: lot.commodity }, rateUnit, 'rate'),
@@ -970,13 +970,13 @@ export default function EntryPage() {
                       />
                     </div>
                     {/* Amount */}
-                    <div className="w-24">
+                    <div className="w-20">
                       <label className="mb-0.5 block text-[10px] text-[var(--text-muted)]">{t('amt')}</label>
                       <input
                         type="number"
                         inputMode="numeric"
                         value={line.amount}
-                        className={`${smInput} font-semibold`}
+                        className={`${smInput} w-full font-semibold`}
                         onChange={(e) =>
                           patchLotLine(block.id, lot.id, line.id, (ln) =>
                             fillLine(ln, { amount: e.target.value, commodity: lot.commodity }, rateUnit, 'amount'),
@@ -985,35 +985,38 @@ export default function EntryPage() {
                       />
                     </div>
                     {/* Hamali */}
-                    <div className="w-16">
+                    <div className="w-14">
                       <label className="mb-0.5 block text-[10px] text-[var(--text-muted)]">{t('hamali')}</label>
                       <input
                         type="number"
                         inputMode="decimal"
                         value={line.hamali}
-                        className={smInput}
+                        className={`${smInput} w-full`}
                         onChange={(e) => patchLotLine(block.id, lot.id, line.id, (ln) => ({ ...ln, hamali: e.target.value }))}
                       />
                     </div>
                     {/* Cash/Credit toggle */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const name = cashCustomer?.name || 'CASH SALES';
-                        patchLotLine(block.id, lot.id, line.id, (ln) =>
-                          ln.cash
-                            ? { ...ln, cash: false }
-                            : { ...ln, cash: true, customerName: name, customerId: cashCustomer?.id || null, commodity: lot.commodity },
-                        );
-                      }}
-                      className={`min-h-9 rounded px-2 py-1 text-xs font-medium ${
-                        line.cash
-                          ? 'bg-[var(--bg-success)] text-[var(--text-on-success)]'
-                          : 'border border-[var(--border-input)] text-[var(--text-muted)]'
-                      }`}
-                    >
-                      {line.cash ? t('cashSale') : t('creditSale')}
-                    </button>
+                    <div className="w-16">
+                      <label className="mb-0.5 block text-[10px] text-[var(--text-muted)]">&nbsp;</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const name = cashCustomer?.name || 'CASH SALES';
+                          patchLotLine(block.id, lot.id, line.id, (ln) =>
+                            ln.cash
+                              ? { ...ln, cash: false }
+                              : { ...ln, cash: true, customerName: name, customerId: cashCustomer?.id || null, commodity: lot.commodity },
+                          );
+                        }}
+                        className={`min-h-9 w-full rounded border px-1 py-1 text-[10px] font-medium ${
+                          line.cash
+                            ? 'bg-[var(--bg-success)] text-[var(--text-on-success)] border-[var(--bg-success)]'
+                            : 'border border-[var(--border-input)] text-[var(--text-muted)]'
+                        }`}
+                      >
+                        {line.cash ? t('cashSale') : t('creditSale')}
+                      </button>
+                    </div>
                   </div>
                   {/* Per-bag weights — compact grid */}
                   {line.bagWeights.length > 0 && (
@@ -1256,10 +1259,10 @@ function ChargeBox({
   placeholder?: string;
 }) {
   return (
-    <div>
-      <label className="text-[10px] text-[var(--text-muted)]">{label}</label>
-      <input type="number" inputMode="decimal" value={value} placeholder={placeholder || '0'} onChange={(e) => onChange(e.target.value)} className={inputCls} />
-      {suffix && <p className="text-[10px] text-[var(--text-faint)]">{suffix}</p>}
+    <div className="w-16">
+      <label className="mb-0.5 block text-[10px] text-[var(--text-muted)]">{label}</label>
+      <input type="number" inputMode="decimal" value={value} placeholder={placeholder || '0'} onChange={(e) => onChange(e.target.value)} className={`${smInput} w-full`} />
+      {suffix && <p className="mt-0.5 text-[9px] text-[var(--text-faint)]">{suffix}</p>}
     </div>
   );
 }
