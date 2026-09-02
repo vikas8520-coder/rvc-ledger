@@ -25,7 +25,7 @@ function num(s: string): number {
 }
 
 type RateUnit = 'per_kg' | 'per_10kg';
-type CalcField = 'bags' | 'weight' | 'rate' | 'amount';
+type CalcField = 'bags' | 'weight' | 'totalWeight' | 'rate' | 'amount';
 type StockField = 'bags' | 'kg' | 'avg';
 
 const MAX_SALE_BAGS = 80;
@@ -78,8 +78,15 @@ function fillLine(line: Line, patch: Partial<Line>, unit: RateUnit, changed: Cal
   } else {
     next.bagWeights = next.bagWeights ? [...next.bagWeights] : [];
   }
-  const total = weightsTotal(next.bagWeights);
-  next.weightKg = total > 0 ? String(total) : '';
+  // In total mode, weightKg is entered directly; in per-bag mode, it's summed
+  if (changed === 'totalWeight') {
+    // weightKg already set via patch; don't recompute from bagWeights
+  } else if (next.weightMode === 'total') {
+    // keep existing weightKg as-is
+  } else {
+    const total = weightsTotal(next.bagWeights);
+    next.weightKg = total > 0 ? String(total) : '';
+  }
   if (changed === 'amount') return next;
   const perKg = toPerKg(next.pricePerKg, unit);
   const w = num(next.weightKg);
@@ -95,6 +102,7 @@ interface Line {
   customerName: string;
   customerId: string | null;
   weightKg: string;
+  weightMode: 'per_bag' | 'total';
   pricePerKg: string;
   amount: string;
   cash: boolean;
@@ -156,6 +164,7 @@ function emptyLine(commodity = '', price = ''): Line {
     customerName: '',
     customerId: null,
     weightKg: '',
+    weightMode: 'per_bag',
     pricePerKg: price,
     amount: '',
     cash: false,
@@ -1017,35 +1026,70 @@ export default function EntryPage() {
                       </button>
                     </div>
                   </div>
-                  {/* Per-bag weights — compact grid */}
+                  {/* Weight entry — per-bag or total toggle */}
                   {line.bagWeights.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {line.bagWeights.map((w, wi) => (
+                    <div className="flex flex-wrap items-center gap-1">
+                      {/* Toggle: per-bag vs total */}
+                      <div className="flex rounded border border-[var(--border-input)] text-[9px]">
+                        <button
+                          type="button"
+                          className={`px-1.5 py-0.5 ${line.weightMode !== 'total' ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]' : 'text-[var(--text-muted)]'}`}
+                          onClick={() => patchLotLine(block.id, lot.id, line.id, (ln) => ({ ...ln, weightMode: 'per_bag' }))}
+                        >
+                          per bag
+                        </button>
+                        <button
+                          type="button"
+                          className={`px-1.5 py-0.5 ${line.weightMode === 'total' ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]' : 'text-[var(--text-muted)]'}`}
+                          onClick={() => patchLotLine(block.id, lot.id, line.id, (ln) => ({ ...ln, weightMode: 'total' }))}
+                        >
+                          total
+                        </button>
+                      </div>
+                      {line.weightMode === 'total' ? (
+                        /* Single total weight input */
                         <input
-                          key={`${line.id}-w-${wi}`}
                           type="number"
                           inputMode="decimal"
-                          value={w}
-                          placeholder={`${wi + 1}`}
-                          aria-label={`${t('bag')} ${wi + 1} kg`}
-                          className={`${smInput} w-14`}
+                          value={line.weightKg}
+                          placeholder="total kg"
+                          aria-label="Total weight kg"
+                          className={`${smInput} w-20`}
                           onChange={(e) =>
                             patchLotLine(block.id, lot.id, line.id, (ln) =>
-                              fillLine(
-                                ln,
-                                {
-                                  commodity: lot.commodity,
-                                  bagWeights: ln.bagWeights.map((x, j) => (j === wi ? e.target.value : x)),
-                                },
-                                rateUnit,
-                                'weight',
-                              ),
+                              fillLine(ln, { commodity: lot.commodity, weightKg: e.target.value }, rateUnit, 'totalWeight'),
                             )
                           }
                         />
-                      ))}
+                      ) : (
+                        /* Per-bag weight inputs — very small */
+                        line.bagWeights.map((w, wi) => (
+                          <input
+                            key={`${line.id}-w-${wi}`}
+                            type="number"
+                            inputMode="decimal"
+                            value={w}
+                            placeholder={`${wi + 1}kg`}
+                            aria-label={`${t('bag')} ${wi + 1} kg`}
+                            className={`${smInput} h-8 w-10 px-1 text-[10px]`}
+                            onChange={(e) =>
+                              patchLotLine(block.id, lot.id, line.id, (ln) =>
+                                fillLine(
+                                  ln,
+                                  {
+                                    commodity: lot.commodity,
+                                    bagWeights: ln.bagWeights.map((x, j) => (j === wi ? e.target.value : x)),
+                                  },
+                                  rateUnit,
+                                  'weight',
+                                ),
+                              )
+                            }
+                          />
+                        ))
+                      )}
                       {num(line.weightKg) > 0 && (
-                        <span className="self-center text-[10px] text-[var(--text-muted)]">= {line.weightKg}kg</span>
+                        <span className="text-[10px] text-[var(--text-muted)]">= {line.weightKg}kg</span>
                       )}
                     </div>
                   )}

@@ -60,15 +60,15 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
     await fillAndBlur(f1.getByPlaceholder('Name or CASH'), `PWTEST_RAMESH_${TS}`);
     await f1.getByPlaceholder('20', { exact: true }).fill('2');
     // Per-bag weight inputs appear (placeholder is bag number: "1", "2")
-    await f1.getByPlaceholder('1', { exact: true }).fill('48');
-    await f1.getByPlaceholder('2', { exact: true }).fill('52');
+    await f1.getByPlaceholder('1kg', { exact: true }).fill('48');
+    await f1.getByPlaceholder('2kg', { exact: true }).fill('52');
     await f1.getByPlaceholder('220', { exact: true }).fill('220');
     await saveAndWait(page, 1);
 
     // Sale 2: Krishna, 1 bag (40kg), ₹230/10kg — same item, fields cleared
     await fillAndBlur(f1.getByPlaceholder('Name or CASH'), `PWTEST_KRISHNA_${TS}`);
     await f1.getByPlaceholder('20', { exact: true }).fill('1');
-    await f1.getByPlaceholder('1', { exact: true }).fill('40');
+    await f1.getByPlaceholder('1kg', { exact: true }).fill('40');
     await f1.getByPlaceholder('220', { exact: true }).fill('230');
     await saveAndWait(page, 2);
 
@@ -80,7 +80,7 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
     // Sale 3: Suresh, 1 bag (22kg), ₹180/10kg — on BEANS
     await fillAndBlur(f1.getByPlaceholder('Name or CASH'), `PWTEST_SURESH_${TS}`);
     await f1.getByPlaceholder('20', { exact: true }).fill('1');
-    await f1.getByPlaceholder('1', { exact: true }).fill('22');
+    await f1.getByPlaceholder('1kg', { exact: true }).fill('22');
     await f1.getByPlaceholder('220', { exact: true }).fill('180');
     await saveAndWait(page, 3);
 
@@ -97,14 +97,14 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
     // Sale 4: Anand, 1 bag (19kg), ₹150/10kg
     await fillAndBlur(f2.getByPlaceholder('Name or CASH'), `PWTEST_ANAND_${TS}`);
     await f2.getByPlaceholder('20', { exact: true }).fill('1');
-    await f2.getByPlaceholder('1', { exact: true }).fill('19');
+    await f2.getByPlaceholder('1kg', { exact: true }).fill('19');
     await f2.getByPlaceholder('220', { exact: true }).fill('150');
     await saveAndWait(page, 4);
 
     // Sale 5: CASH SALES, 1 bag (21kg) — same tomato
     await fillAndBlur(f2.getByPlaceholder('Name or CASH'), 'CASH SALES');
     await f2.getByPlaceholder('20', { exact: true }).fill('1');
-    await f2.getByPlaceholder('1', { exact: true }).fill('21');
+    await f2.getByPlaceholder('1kg', { exact: true }).fill('21');
     await f2.getByPlaceholder('220', { exact: true }).fill('150');
     await saveAndWait(page, 5);
 
@@ -187,9 +187,9 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
     // Sell 10 bags (more than 5 received)
     await fillAndBlur(f1.getByPlaceholder('Name or CASH'), `PWTEST_BUYER_${TS}`);
     await f1.getByPlaceholder('20', { exact: true }).fill('10');
-    // 10 per-bag weight inputs appear
+    // 10 per-bag weight inputs appear (placeholders: "1kg", "2kg", ...)
     for (let i = 0; i < 10; i++) {
-      await f1.getByPlaceholder(String(i + 1), { exact: true }).fill('10');
+      await f1.getByPlaceholder(`${i + 1}kg`, { exact: true }).fill('10');
     }
     await f1.getByPlaceholder('220', { exact: true }).fill('100');
 
