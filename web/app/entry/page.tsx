@@ -216,6 +216,7 @@ export default function EntryPage() {
   const [selectedLotId, setSelectedLotId] = useState<string | null>(null);
   const [newItemName, setNewItemName] = useState('');
   const [editingLotId, setEditingLotId] = useState<string | null>(null);
+  const [stockPopoverId, setStockPopoverId] = useState<string | null>(null);
 
   const [customers, setCustomers] = useState<CustomerOpt[]>([]);
   const [catalog, setCatalog] = useState<string[]>([]);
@@ -706,7 +707,7 @@ export default function EntryPage() {
               </div>
             )}
 
-            {/* ── Item chips + stock-in (compact) ───────────────────────────── */}
+            {/* ── Item chips (click to open stock popover) ──────────────────── */}
             <div className="flex flex-wrap items-center gap-1.5 pt-1">
               {block.lots.map((lt, li) => {
                 const isSel = (selectedLotId || block.lots[0]?.id) === lt.id;
@@ -714,10 +715,11 @@ export default function EntryPage() {
                 const stockLabel = lt.commodity.trim()
                   ? `${lt.commodity}${num(lt.bags) > 0 ? ` ${lt.bags}/${num(lt.kg) > 0 ? `${lt.kg}kg` : ''}` : ''}`
                   : `${t('item')} ${li + 1}`;
+                const oversold = tally?.oversold;
                 return (
                   <div
                     key={lt.id}
-                    className={`group flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
+                    className={`group relative flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
                       isSel
                         ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'
                         : 'bg-[var(--bg-base)] text-[var(--text-muted)] border border-[var(--border-input)]'
@@ -726,24 +728,98 @@ export default function EntryPage() {
                     <button
                       type="button"
                       className="truncate"
-                      onClick={() => setSelectedLotId(lt.id)}
+                      onClick={() => {
+                        setSelectedLotId(lt.id);
+                        setStockPopoverId(lt.id);
+                      }}
                       onDoubleClick={() => setEditingLotId(lt.id)}
-                      title={tally?.oversold ? '⚠ oversold' : undefined}
+                      title={oversold ? '⚠ oversold' : 'Click to edit stock'}
                     >
                       {stockLabel}
+                      {oversold && <span className="ml-0.5">⚠</span>}
                     </button>
                     {block.lots.length > 1 && (
                       <button
                         type="button"
                         className="text-[10px] opacity-60 hover:opacity-100"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           patchBlock(block.id, (b) => ({ ...b, lots: b.lots.filter((l) => l.id !== lt.id) }));
                           setSelectedLotId(null);
+                          setStockPopoverId(null);
                         }}
                         aria-label={`Delete ${lt.commodity.trim() || `item ${li + 1}`}`}
                       >
                         ✕
                       </button>
+                    )}
+                    {/* Stock popover */}
+                    {stockPopoverId === lt.id && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setStockPopoverId(null)} />
+                        <div className="absolute left-0 top-full z-50 mt-1 w-64 rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] p-2 shadow-lg">
+                          <div className="mb-1.5 flex items-center justify-between">
+                            <span className="text-xs font-semibold">{lt.commodity.trim() || `${t('item')} ${li + 1}`}</span>
+                            <button
+                              type="button"
+                              className="text-[10px] text-[var(--text-muted)]"
+                              onClick={() => setStockPopoverId(null)}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap items-end gap-1.5 text-xs">
+                            <label className="flex items-center gap-1">
+                              <span className="text-[var(--text-muted)]">{t('bags')}</span>
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                value={lt.bags}
+                                placeholder="200"
+                                className={`${smInput} w-14`}
+                                onChange={(e) => {
+                                  const s = fillStock(e.target.value, lt.kg, lt.avg, 'bags');
+                                  patchLot(block.id, lt.id, (l) => ({ ...l, ...s, commodity: l.commodity, lines: l.lines }));
+                                }}
+                              />
+                            </label>
+                            <label className="flex items-center gap-1">
+                              <span className="text-[var(--text-muted)]">kg</span>
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                value={lt.kg}
+                                placeholder="3000"
+                                className={`${smInput} w-16`}
+                                onChange={(e) => {
+                                  const s = fillStock(lt.bags, e.target.value, lt.avg, 'kg');
+                                  patchLot(block.id, lt.id, (l) => ({ ...l, ...s, commodity: l.commodity, lines: l.lines }));
+                                }}
+                              />
+                            </label>
+                            <label className="flex items-center gap-1">
+                              <span className="text-[var(--text-muted)]">avg</span>
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                value={lt.avg}
+                                placeholder="15"
+                                className={`${smInput} w-12`}
+                                onChange={(e) => {
+                                  const s = fillStock(lt.bags, lt.kg, e.target.value, 'avg');
+                                  patchLot(block.id, lt.id, (l) => ({ ...l, ...s, commodity: l.commodity, lines: l.lines }));
+                                }}
+                              />
+                            </label>
+                          </div>
+                          {tally && lt.commodity.trim() && (
+                            <p className={`mt-1.5 text-[10px] ${tally.oversold ? 'text-[var(--bg-danger)]' : 'text-[var(--text-muted)]'}`}>
+                              {t('stockReceived')} {tally.inBags} / {tally.inKg}kg · sold {tally.soldBags} / {tally.soldKg}kg · {t('leftover')} {tally.leftBags} / {tally.leftKg}kg
+                              {tally.oversold ? ' ⚠' : ''}
+                            </p>
+                          )}
+                        </div>
+                      </>
                     )}
                   </div>
                 );
@@ -807,65 +883,6 @@ export default function EntryPage() {
             {block.lots.length === 0 && (
               <p className="text-xs text-[var(--text-muted)]">Type an item name above and press Enter to add it.</p>
             )}
-
-            {/* Compact stock-in for selected chip */}
-            {(() => {
-              const lot = block.lots.find((l) => l.id === selectedLotId) || block.lots[0];
-              if (!lot) return null;
-              const lotTally = tot.tally.find((r) => itemKey(r.item) === itemKey(lot.commodity));
-              return (
-                <div className="flex flex-wrap items-end gap-2 rounded-lg bg-[var(--bg-base)] p-1.5 text-xs">
-                  <label className="flex items-center gap-1">
-                    <span className="text-[var(--text-muted)]">{t('bags')} in</span>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      value={lot.bags}
-                      placeholder="200"
-                      className={`${smInput} w-16`}
-                      onChange={(e) => {
-                        const s = fillStock(e.target.value, lot.kg, lot.avg, 'bags');
-                        patchLot(block.id, lot.id, (l) => ({ ...l, ...s, commodity: l.commodity, lines: l.lines }));
-                      }}
-                    />
-                  </label>
-                  <label className="flex items-center gap-1">
-                    <span className="text-[var(--text-muted)]">{t('totalKgIn')}</span>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      value={lot.kg}
-                      placeholder="3000"
-                      className={`${smInput} w-20`}
-                      onChange={(e) => {
-                        const s = fillStock(lot.bags, e.target.value, lot.avg, 'kg');
-                        patchLot(block.id, lot.id, (l) => ({ ...l, ...s, commodity: l.commodity, lines: l.lines }));
-                      }}
-                    />
-                  </label>
-                  <label className="flex items-center gap-1">
-                    <span className="text-[var(--text-muted)]">{t('avgKgBag')}</span>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      value={lot.avg}
-                      placeholder="15"
-                      className={`${smInput} w-16`}
-                      onChange={(e) => {
-                        const s = fillStock(lot.bags, lot.kg, e.target.value, 'avg');
-                        patchLot(block.id, lot.id, (l) => ({ ...l, ...s, commodity: l.commodity, lines: l.lines }));
-                      }}
-                    />
-                  </label>
-                  {lotTally && lot.commodity.trim() && (
-                    <span className={`ml-auto ${lotTally.oversold ? 'text-[var(--bg-danger)]' : 'text-[var(--text-muted)]'}`}>
-                      {t('stockReceived')} {lotTally.inBags} / {lotTally.inKg}kg · sold {lotTally.soldBags} / {lotTally.soldKg}kg · {t('leftover')} {lotTally.leftBags} / {lotTally.leftKg}kg
-                      {lotTally.oversold ? ' ⚠' : ''}
-                    </span>
-                  )}
-                </div>
-              );
-            })()}
 
             {/* ── Sale entry (compact table row) ────────────────────────────── */}
             {(() => {

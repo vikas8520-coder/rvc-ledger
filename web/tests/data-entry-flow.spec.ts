@@ -20,6 +20,17 @@ async function addItem(farmer: Locator, name: string) {
   await input.press('Enter');
 }
 
+// Click the item chip to open the stock popover, then fill bags + kg
+async function fillStock(farmer: Locator, itemName: string, bags: string, kg: string) {
+  // Click the chip button showing the item name
+  await farmer.getByRole('button', { name: itemName, exact: true }).click();
+  // Stock popover opens — fill bags and kg
+  await farmer.getByPlaceholder('200', { exact: true }).fill(bags);
+  await farmer.getByPlaceholder('3000', { exact: true }).fill(kg);
+  // Close popover by clicking the ✕ inside it
+  await farmer.locator('.fixed.inset-0.z-40').click();
+}
+
 async function saveAndWait(page: Page, expectedRows: number) {
   const saveBtn = page.getByRole('button', { name: /Save patti/i });
   await saveBtn.click();
@@ -42,9 +53,8 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
 
     // Add first item: CHILLI
     await addItem(f1, 'PWTEST_CHILLI');
-    // Stock in for CHILLI: 200 bags, 3000 kg
-    await f1.getByPlaceholder('200', { exact: true }).fill('200');
-    await f1.getByPlaceholder('3000', { exact: true }).fill('3000');
+    // Stock in for CHILLI: 200 bags, 3000 kg (via popover)
+    await fillStock(f1, 'PWTEST_CHILLI', '200', '3000');
 
     // Sale 1: Ramesh, 2 bags (48kg + 52kg), ₹220/10kg → save → fields clear
     await fillAndBlur(f1.getByPlaceholder('Name or CASH'), `PWTEST_RAMESH_${TS}`);
@@ -64,9 +74,8 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
 
     // Add second item: BEANS
     await addItem(f1, 'PWTEST_BEANS');
-    // Stock in for BEANS: 50 bags, 1000 kg
-    await f1.getByPlaceholder('200', { exact: true }).fill('50');
-    await f1.getByPlaceholder('3000', { exact: true }).fill('1000');
+    // Stock in for BEANS: 50 bags, 1000 kg (via popover)
+    await fillStock(f1, 'PWTEST_BEANS', '50', '1000');
 
     // Sale 3: Suresh, 1 bag (22kg), ₹180/10kg — on BEANS
     await fillAndBlur(f1.getByPlaceholder('Name or CASH'), `PWTEST_SURESH_${TS}`);
@@ -83,8 +92,7 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
 
     // Add item: TOMATO
     await addItem(f2, 'PWTEST_TOMATO');
-    await f2.getByPlaceholder('200', { exact: true }).fill('40');
-    await f2.getByPlaceholder('3000', { exact: true }).fill('800');
+    await fillStock(f2, 'PWTEST_TOMATO', '40', '800');
 
     // Sale 4: Anand, 1 bag (19kg), ₹150/10kg
     await fillAndBlur(f2.getByPlaceholder('Name or CASH'), `PWTEST_ANAND_${TS}`);
@@ -173,9 +181,8 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
 
     // Add item: ONION
     await addItem(f1, 'PWTEST_ONION');
-    // Stock in: 5 bags, 100 kg
-    await f1.getByPlaceholder('200', { exact: true }).fill('5');
-    await f1.getByPlaceholder('3000', { exact: true }).fill('100');
+    // Stock in: 5 bags, 100 kg (via popover)
+    await fillStock(f1, 'PWTEST_ONION', '5', '100');
 
     // Sell 10 bags (more than 5 received)
     await fillAndBlur(f1.getByPlaceholder('Name or CASH'), `PWTEST_BUYER_${TS}`);
