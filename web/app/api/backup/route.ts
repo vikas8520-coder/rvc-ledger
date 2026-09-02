@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { exportAllData } from '@/lib/db';
+import { exportAllData, istToday } from '@/lib/db';
 import { requireShopAuth, AuthError } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
@@ -10,7 +10,7 @@ export async function GET() {
     const data = await exportAllData(auth.shopId!);
     return NextResponse.json(data, {
       headers: {
-        'Content-Disposition': `attachment; filename="rvc-backup-${new Date().toISOString().slice(0, 10)}.json"`,
+        'Content-Disposition': `attachment; filename="rvc-backup-${istToday()}.json"`,
       },
     });
   } catch (err: any) {

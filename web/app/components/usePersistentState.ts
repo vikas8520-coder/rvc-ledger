@@ -9,10 +9,15 @@ import { useState, useEffect, useCallback, useRef } from 'react';
  *
  * Usage:
  *   const [sort, setSort] = usePersistentState('customers-sort', 'due');
+ *
+ * Optional `validate` function: called with the loaded value before
+ * setting state. Return a transformed value (e.g. to reject stale data)
+ * or return the value as-is. Useful for date-rollover logic.
  */
 export function usePersistentState<T>(
   key: string,
-  defaultValue: T
+  defaultValue: T,
+  validate?: (loaded: T) => T
 ): [T, (value: T | ((prev: T) => T)) => void] {
   const [state, setState] = useState<T>(defaultValue);
   const hydratedRef = useRef(false);
@@ -22,7 +27,9 @@ export function usePersistentState<T>(
     try {
       const saved = localStorage.getItem(key);
       if (saved !== null) {
-        setState(JSON.parse(saved) as T);
+        let parsed = JSON.parse(saved) as T;
+        if (validate) parsed = validate(parsed);
+        setState(parsed);
       }
     } catch {
       // ignore parse errors or localStorage unavailable

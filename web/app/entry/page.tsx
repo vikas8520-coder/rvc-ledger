@@ -22,8 +22,8 @@ import { sliceCustomer, rangeLabel } from '@/lib/dateRange';
 import type { Customer } from '@/lib/types';
 
 function today() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  // Use IST explicitly — the user's device timezone might not be set to Asia/Kolkata
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 }
 
 let idCounter = 0;
@@ -225,7 +225,13 @@ const smInput =
 export default function EntryPage() {
   const { t, lang } = useI18n();
   const uiLang = getUiLang(lang);
-  const [date, setDate] = usePersistentState('entry-date', today());
+  const [date, setDate] = usePersistentState('entry-date', today(), (loaded) => {
+    // Day rollover: if the persisted date is before today, reset to today.
+    // This ensures the entry page starts fresh each new day — previous
+    // day's sales remain in the DB and visible in Overview/Customers/Farmers.
+    const realToday = today();
+    return loaded < realToday ? realToday : loaded;
+  });
   const [rateUnit, setRateUnit] = useState<RateUnit>('per_10kg');
   const [commissionPct, setCommissionPct] = useState('10');
   const [blocks, setBlocks] = usePersistentState<FarmerBlock[]>('entry-blocks', [emptyFarmer('10')]);
@@ -250,6 +256,25 @@ export default function EntryPage() {
   const [newFarmerName, setNewFarmerName] = useState('');
   const [newFarmerPhone, setNewFarmerPhone] = useState('');
   const [addingFarmer, setAddingFarmer] = useState(false);
+
+  // Day rollover for when the app is left open overnight: check when the
+  // page regains focus and reset the date + form if a new day has started.
+  useEffect(() => {
+    const onFocus = () => {
+      const t = today();
+      setDate((prev) => {
+        if (prev < t) {
+          setBlocks([emptyFarmer(commissionPct)]);
+          setSavedSales([]);
+          setSavedPattis([]);
+          return t;
+        }
+        return prev;
+      });
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, []);
 
   useEffect(() => {
     fetch('/api/customers')

@@ -207,9 +207,24 @@ async function ensureSchema() {
 
 // ---- Financial year helpers ----
 
+// Returns the current date in IST (Asia/Kolkata) as YYYY-MM-DD.
+// The app's users are all in India; using UTC date causes a 5.5-hour
+// mismatch between midnight and 5:30 AM IST where the "today" is wrong.
+export function istToday(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+}
+
 // Indian FY: April 1 to March 31. Month index 0-based: April = 3.
 // If current month is Jan-Mar (0-2), we're in FY that started last year.
-export function currentFYStartYear(d: Date = new Date()): number {
+// Uses IST to determine the current date — on the server, new Date() is UTC,
+// which would give the wrong FY between midnight and 5:30 AM IST on April 1.
+export function currentFYStartYear(d?: Date): number {
+  if (!d) {
+    // Use IST date parts to avoid UTC mismatch on April 1 boundary
+    const istStr = istToday(); // YYYY-MM-DD
+    const [y, m] = istStr.split('-').map(Number);
+    return m >= 4 ? y : y - 1;
+  }
   return d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1;
 }
 
@@ -941,7 +956,7 @@ export async function extendSubscription(shopId: string, days: number): Promise<
     WHERE shop_id = ${shopId}
     ORDER BY covers_to DESC LIMIT 1
   `;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = istToday();
   const baseDate = latest ? new Date((latest as any).covers_to) : new Date(today);
   // If already expired, extend from today instead
   if (baseDate < new Date(today)) {

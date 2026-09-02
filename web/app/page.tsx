@@ -86,11 +86,11 @@ export default function Home() {
       .catch(() => setFarmers([]));
   }, [fyParam]);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
-  // FY label
-  const now = new Date();
-  const currentFY = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  // FY label — use IST date to determine current FY
+  const [istY, istM] = today.split('-').map(Number);
+  const currentFY = istM >= 4 ? istY : istY - 1;
   const fyLabel = fyParam === 'all' ? t('allTime') : fyParam === null ? `FY ${currentFY}-${String((currentFY + 1) % 100).padStart(2, '0')}` : `FY ${fyParam}-${String((fyParam + 1) % 100).padStart(2, '0')}`;
 
   // Use fySummary from backend if available, otherwise calculate from customers

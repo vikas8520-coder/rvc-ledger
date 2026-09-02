@@ -11,6 +11,7 @@ import {
   setShopTrialEnd,
   extendSubscription,
   getMonthlyRevenue,
+  istToday,
 } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
         shopId,
         Number(amount),
         paymentMethod || 'cash',
-        paymentDate || new Date().toISOString().slice(0, 10),
+        paymentDate || istToday(),
         plan,
         coversFrom,
         coversTo,

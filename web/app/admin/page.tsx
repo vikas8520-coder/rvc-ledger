@@ -531,7 +531,7 @@ function PaymentForm({ shop, plans, onSaved, onCancel }: {
   onSaved: () => void;
   onCancel: () => void;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const [plan, setPlan] = useState(plans[0]?.id || 'single');
   const [amount, setAmount] = useState(String(plans[0]?.price || 15000));
   const [paymentMethod, setPaymentMethod] = useState('cash');
