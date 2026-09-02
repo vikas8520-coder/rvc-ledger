@@ -709,6 +709,7 @@ export interface FarmerPattiData {
   other: number;
   hundekari?: string;
   leftoverBags?: number;
+  leftoverKg?: number;
 }
 
 export function printFarmerPatti(data: FarmerPattiData, shop: ShopProfile): void {
@@ -770,7 +771,7 @@ export function printFarmerPatti(data: FarmerPattiData, shop: ShopProfile): void
     <div>Other ${money(data.other)}</div>
     ${data.hundekari ? `<div>Hundekari ${esc(data.hundekari)}</div>` : '<div></div>'}
   </div>
-  <div class="net"><span>Nett to farmer${data.leftoverBags ? ` · leftover ${data.leftoverBags} bags` : ''}</span><span>${money(nett)}</span></div>
+  <div class="net"><span>Nett to farmer${data.leftoverBags || data.leftoverKg ? ` · leftover ${data.leftoverBags || 0} bags · ${data.leftoverKg || 0} kg` : ''}</span><span>${money(nett)}</span></div>
   <div class="sign">Authorized Signatory</div>
 </div>
 <button class="print-btn" onclick="window.print()">Print Patti</button>

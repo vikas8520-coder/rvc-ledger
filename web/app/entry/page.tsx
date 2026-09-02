@@ -35,6 +35,27 @@ function toPerKg(entered: string, unit: RateUnit): number {
   return unit === 'per_10kg' ? r / 10 : r;
 }
 
+type StockField = 'bags' | 'kg' | 'avg';
+
+/** Any two of bags-in, total kg, avg kg/bag fill the third. */
+function fillStock(bags: string, kg: string, avg: string, changed: StockField): { bags: string; kg: string; avg: string } {
+  let b = num(bags);
+  let k = num(kg);
+  let a = num(avg);
+  if (changed === 'bags' || changed === 'avg') {
+    if (b > 0 && a > 0) k = round2(b * a);
+    else if (b > 0 && k > 0) a = round2(k / b);
+  } else if (changed === 'kg') {
+    if (b > 0 && k > 0) a = round2(k / b);
+    else if (k > 0 && a > 0) b = round2(k / a);
+  }
+  return {
+    bags: b > 0 ? String(b) : bags,
+    kg: k > 0 ? String(k) : kg,
+    avg: a > 0 ? String(a) : avg,
+  };
+}
+
 function fillLine(line: Line, patch: Partial<Line>, kgBagDefault: number, unit: RateUnit, changed: CalcField): Line {
   const next: Line = { ...line, ...patch };
   if (changed === 'amount') return next;
@@ -43,17 +64,11 @@ function fillLine(line: Line, patch: Partial<Line>, kgBagDefault: number, unit: 
   let weight = num(next.weightKg);
   const kgBag = kgBagDefault;
 
+  // Actual weighed kg wins. Average kg/bag only fills an empty weight.
   if (changed === 'bags' || changed === 'kgBag') {
-    if (bags > 0 && kgBag > 0) weight = round2(bags * kgBag);
-    else if (bags > 0 && weight > 0 && kgBag <= 0) {
-      /* keep weight; kg/bag is implied in the hint */
-    }
+    if (bags > 0 && kgBag > 0 && weight <= 0) weight = round2(bags * kgBag);
   } else if (changed === 'weight') {
-    if (bags > 0 && weight > 0) {
-      /* implied kg/bag shown in hint */
-    } else if (weight > 0 && kgBag > 0 && bags <= 0) {
-      bags = round2(weight / kgBag);
-    }
+    if (weight > 0 && kgBag > 0 && bags <= 0) bags = round2(weight / kgBag);
   }
 
   if (bags > 0) next.bags = String(bags);
@@ -107,6 +122,7 @@ export default function EntryPage() {
   const [farmerName, setFarmerName] = useState('');
   const [kgPerBag, setKgPerBag] = useState('');
   const [bagsReceived, setBagsReceived] = useState('');
+  const [kgReceived, setKgReceived] = useState('');
   const [rateUnit, setRateUnit] = useState<RateUnit>('per_10kg');
   const [hundekari, setHundekari] = useState('');
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
@@ -170,17 +186,31 @@ export default function EntryPage() {
   const hamali = num(hamaliTotal) || lineHamali;
   const exp = comm + hamali + num(bardan) + num(freight) + num(advance) + num(packing) + num(other);
   const nett = gross - exp;
-  const leftover = num(bagsReceived) > 0 ? num(bagsReceived) - totalBagsSold : 0;
-  const stockKg = num(bagsReceived) > 0 && num(kgPerBag) > 0 ? round2(num(bagsReceived) * num(kgPerBag)) : 0;
+  const leftoverBags = num(bagsReceived) > 0 ? round2(num(bagsReceived) - totalBagsSold) : 0;
+  const leftoverKg = num(kgReceived) > 0 ? round2(num(kgReceived) - totalWeightSold) : 0;
+  const stockKg = num(kgReceived) > 0 ? num(kgReceived) : num(bagsReceived) > 0 && num(kgPerBag) > 0 ? round2(num(bagsReceived) * num(kgPerBag)) : 0;
+  const oversold = leftoverBags < 0 || leftoverKg < 0;
 
   const updateLine = (id: string, patch: Partial<Line>, changed: CalcField = 'rate') => {
     setLines((prev) => prev.map((l) => (l.id === id ? fillLine(l, patch, num(kgPerBag), rateUnit, changed) : l)));
   };
 
-  const setKgPerBagAndFill = (v: string) => {
-    setKgPerBag(v);
-    const k = num(v);
-    setLines((prev) => prev.map((l) => fillLine(l, {}, k, rateUnit, 'kgBag')));
+  const setStock = (changed: StockField, value: string) => {
+    const next = fillStock(
+      changed === 'bags' ? value : bagsReceived,
+      changed === 'kg' ? value : kgReceived,
+      changed === 'avg' ? value : kgPerBag,
+      changed,
+    );
+    setBagsReceived(next.bags);
+    setKgReceived(next.kg);
+    setKgPerBag(next.avg);
+    const avg = num(next.avg);
+    if (avg > 0) {
+      setLines((prev) =>
+        prev.map((l) => (num(l.weightKg) > 0 ? l : fillLine(l, {}, avg, rateUnit, 'kgBag'))),
+      );
+    }
   };
 
   const setRateUnitAndFill = (u: RateUnit) => {
@@ -278,7 +308,8 @@ export default function EntryPage() {
     packing: num(packing),
     other: num(other),
     hundekari: hundekari.trim() || undefined,
-    leftoverBags: leftover || undefined,
+    leftoverBags: leftoverBags || undefined,
+    leftoverKg: leftoverKg || undefined,
   });
 
   const handleSave = async () => {
@@ -359,6 +390,7 @@ export default function EntryPage() {
     setFarmerName('');
     setKgPerBag('');
     setBagsReceived('');
+    setKgReceived('');
     setHundekari('');
     setLines([emptyLine()]);
     setHamaliTotal('');
@@ -414,7 +446,7 @@ export default function EntryPage() {
       </div>
 
       <section className="rounded-xl border border-[var(--border-card)] bg-[var(--bg-card)] p-3 sm:p-4">
-        <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-7">
           <div className="col-span-2 sm:col-span-1">
             <label className="text-xs text-[var(--text-muted)]">{t('date')}</label>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
@@ -424,12 +456,16 @@ export default function EntryPage() {
             <Autocomplete options={farmers} value={farmerName} onChange={setFarmerName} placeholder="LOCAL, RSB…" />
           </div>
           <div>
-            <label className="text-xs text-[var(--text-muted)]">{t('kgPerBag')}</label>
-            <input type="number" inputMode="decimal" value={kgPerBag} onChange={(e) => setKgPerBagAndFill(e.target.value)} placeholder="20" className={inputCls} />
+            <label className="text-xs text-[var(--text-muted)]">{t('bags')} in</label>
+            <input type="number" inputMode="numeric" value={bagsReceived} onChange={(e) => setStock('bags', e.target.value)} placeholder="200" className={inputCls} />
           </div>
           <div>
-            <label className="text-xs text-[var(--text-muted)]">{t('bags')} in</label>
-            <input type="number" inputMode="numeric" value={bagsReceived} onChange={(e) => setBagsReceived(e.target.value)} placeholder="0" className={inputCls} />
+            <label className="text-xs text-[var(--text-muted)]">{t('totalKgIn')}</label>
+            <input type="number" inputMode="decimal" value={kgReceived} onChange={(e) => setStock('kg', e.target.value)} placeholder="3000" className={inputCls} />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--text-muted)]">{t('avgKgBag')}</label>
+            <input type="number" inputMode="decimal" value={kgPerBag} onChange={(e) => setStock('avg', e.target.value)} placeholder="15" className={inputCls} />
           </div>
           <div className="col-span-2 sm:col-span-1">
             <label className="text-xs text-[var(--text-muted)]">{t('hundekari')}</label>
@@ -462,9 +498,11 @@ export default function EntryPage() {
           </button>
           <span className="w-full text-xs leading-snug text-[var(--text-muted)] sm:w-auto">{t('wholesaleHint')}</span>
         </div>
+        <p className="mt-2 text-xs leading-snug text-[var(--text-muted)]">{t('stockInHint')}</p>
         {stockKg > 0 && (
-          <p className="mt-2 text-xs text-[var(--text-muted)]">
-            {bagsReceived} bags × {kgPerBag} kg = <span className="font-semibold text-[var(--text-primary)]">{stockKg} kg</span> in
+          <p className="mt-1 text-xs text-[var(--text-muted)]">
+            {t('stockReceived')}: {bagsReceived || 0} {t('bags')} · {stockKg} kg
+            {num(kgPerBag) > 0 ? ` · ${t('avgKgBag')} ${kgPerBag}` : ''}
           </p>
         )}
         <button type="button" onClick={() => setShowAddFarmer((v) => !v)} className="mt-2 text-xs text-[var(--text-muted)] underline">
@@ -618,9 +656,10 @@ export default function EntryPage() {
           <div className="rounded-lg bg-[var(--bg-base)] p-2">
             <p className="text-[10px] uppercase text-[var(--text-muted)]">{t('nettSale')}</p>
             <p className="text-lg font-bold text-[var(--bg-success)]">{fmt(nett)}</p>
-            {num(bagsReceived) > 0 && (
-              <p className={`text-[10px] ${leftover < 0 ? 'text-[var(--bg-danger)]' : 'text-[var(--text-faint)]'}`}>
-                {t('leftover')}: {leftover} bags
+            {(num(bagsReceived) > 0 || num(kgReceived) > 0) && (
+              <p className={`text-[10px] ${oversold ? 'text-[var(--bg-danger)]' : 'text-[var(--text-faint)]'}`}>
+                {t('leftover')}: {leftoverBags} {t('bags')} · {leftoverKg} kg
+                {oversold ? ' ⚠' : ''}
               </p>
             )}
           </div>
