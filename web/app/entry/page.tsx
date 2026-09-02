@@ -209,6 +209,7 @@ export default function EntryPage() {
   const [savedSales, setSavedSales] = useState<SavedSale[]>([]);
   const [savedPattis, setSavedPattis] = useState<FarmerPattiData[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [selectedLotId, setSelectedLotId] = useState<string | null>(null);
 
   const [customers, setCustomers] = useState<CustomerOpt[]>([]);
   const [catalog, setCatalog] = useState<string[]>([]);
@@ -254,6 +255,18 @@ export default function EntryPage() {
       setActiveTabId(blocks[0].id);
     }
   }, [blocks, activeTabId]);
+
+  // Keep selectedLotId pointing at a valid lot in the active block
+  useEffect(() => {
+    const active = blocks.find((b) => b.id === activeTabId);
+    if (!active || active.lots.length === 0) {
+      setSelectedLotId(null);
+      return;
+    }
+    if (!selectedLotId || !active.lots.some((l) => l.id === selectedLotId)) {
+      setSelectedLotId(active.lots[0].id);
+    }
+  }, [blocks, activeTabId, selectedLotId]);
 
   const customerNames = useMemo(() => customers.map((c) => formatCustomerName(c, uiLang)), [customers, uiLang]);
   const cashCustomer = useMemo(
@@ -649,6 +662,7 @@ export default function EntryPage() {
         const tot = totalsOf(block);
         return (
           <section key={block.id} className="space-y-2 rounded-xl rounded-t-none border border-t-0 border-[var(--border-card)] bg-[var(--bg-card)] p-3 sm:p-4">
+            {/* Farmer + hundekari */}
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs text-[var(--text-muted)]">{t('farmer')} *</label>
@@ -657,24 +671,6 @@ export default function EntryPage() {
                   value={block.farmerName}
                   onChange={(v) => patchBlock(block.id, (b) => ({ ...b, farmerName: v }))}
                   placeholder="LOCAL, RSB…"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-[var(--text-muted)]">{t('item')} *</label>
-                <Autocomplete
-                  options={catalog}
-                  value={block.lots[0]?.commodity || ''}
-                  onChange={(v) => {
-                    rememberItem(v);
-                    const first = block.lots[0];
-                    if (!first) return;
-                    patchLot(block.id, first.id, (l) => ({
-                      ...l,
-                      commodity: v,
-                      lines: l.lines.map((ln) => ({ ...ln, commodity: v })),
-                    }));
-                  }}
-                  placeholder="CHILLI, BEANS…"
                 />
               </div>
               <div className="col-span-2 sm:col-span-1">
@@ -703,46 +699,46 @@ export default function EntryPage() {
               </div>
             )}
 
+            {/* Items list — add multiple items at the top, each with stock-in */}
             <p className="pt-1 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">{t('farmerItems')}</p>
             <p className="text-xs text-[var(--text-muted)]">{t('stockInHint')}</p>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {block.lots.map((lot, pi) => {
                 const lotTally = tot.tally.find((r) => itemKey(r.item) === itemKey(lot.commodity));
                 return (
                   <div key={lot.id} className="space-y-2 rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-                        {pi === 0
-                          ? `${t('item')} · ${lot.commodity.trim() || '—'}`
-                          : `${t('item')} ${pi + 1}${lot.commodity.trim() ? ` · ${lot.commodity.trim()}` : ''}`}
+                        {t('item')} {pi + 1}{lot.commodity.trim() ? ` · ${lot.commodity.trim()}` : ''}
                       </p>
                       {block.lots.length > 1 && (
                         <button
                           type="button"
                           className="min-h-11 min-w-11 text-sm text-[var(--text-muted)]"
-                          onClick={() => patchBlock(block.id, (b) => ({ ...b, lots: b.lots.filter((l) => l.id !== lot.id) }))}
+                          onClick={() => {
+                            patchBlock(block.id, (b) => ({ ...b, lots: b.lots.filter((l) => l.id !== lot.id) }));
+                            if (selectedLotId === lot.id) setSelectedLotId(null);
+                          }}
                         >
                           ✕
                         </button>
                       )}
                     </div>
-                    {pi > 0 && (
-                      <Field label={`${t('item')} *`}>
-                        <Autocomplete
-                          options={catalog}
-                          value={lot.commodity}
-                          onChange={(v) => {
-                            rememberItem(v);
-                            patchLot(block.id, lot.id, (l) => ({
-                              ...l,
-                              commodity: v,
-                              lines: l.lines.map((ln) => ({ ...ln, commodity: v })),
-                            }));
-                          }}
-                          placeholder="CHILLI, BEANS…"
-                        />
-                      </Field>
-                    )}
+                    <Field label={`${t('item')} *`}>
+                      <Autocomplete
+                        options={catalog}
+                        value={lot.commodity}
+                        onChange={(v) => {
+                          rememberItem(v);
+                          patchLot(block.id, lot.id, (l) => ({
+                            ...l,
+                            commodity: v,
+                            lines: l.lines.map((ln) => ({ ...ln, commodity: v })),
+                          }));
+                        }}
+                        placeholder="CHILLI, BEANS…"
+                      />
+                    </Field>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                       <Field label={`${t('bags')} in`}>
                         <input
@@ -784,147 +780,6 @@ export default function EntryPage() {
                         />
                       </Field>
                     </div>
-
-                    <p className="pt-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-                      {t('farmerSales')}
-                    </p>
-                    {(() => {
-                      const line = lot.lines[0];
-                      if (!line) return null;
-                      return (
-                        <div className="space-y-2">
-                          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end">
-                            <Field label={t('customer')} className="col-span-2 min-w-0 sm:min-w-[10rem] sm:flex-[2]">
-                              <Autocomplete
-                                options={customerNames}
-                                value={line.customerName}
-                                onChange={(v) => {
-                                  const match = customers.find(
-                                    (c) =>
-                                      c.name.toLowerCase() === v.trim().toLowerCase() ||
-                                      formatCustomerName(c, uiLang).toLowerCase() === v.trim().toLowerCase(),
-                                  );
-                                  const isCash = v.trim().toUpperCase() === 'CASH SALES' || v.trim().toUpperCase() === 'CASH SALE ACOUNT';
-                                  patchLotLine(block.id, lot.id, line.id, (ln) => ({
-                                    ...ln,
-                                    customerName: v,
-                                    customerId: match?.id || (isCash ? cashCustomer?.id || null : null),
-                                    cash: isCash,
-                                    commodity: lot.commodity,
-                                  }));
-                                }}
-                                placeholder="Name or CASH SALES"
-                              />
-                            </Field>
-                            <Field label={t('bags')} className="min-w-0 sm:w-20">
-                              <input
-                                type="number"
-                                inputMode="numeric"
-                                min={0}
-                                max={MAX_SALE_BAGS}
-                                value={line.bags}
-                                placeholder="20"
-                                className={inputCls}
-                                onChange={(e) =>
-                                  patchLotLine(block.id, lot.id, line.id, (ln) =>
-                                    fillLine(ln, { bags: e.target.value, commodity: lot.commodity }, rateUnit, 'bags'),
-                                  )
-                                }
-                              />
-                            </Field>
-                            <Field label={rateUnit === 'per_10kg' ? t('ratePer10kg') : t('ratePerKg')} className="min-w-0 sm:w-28">
-                              <input
-                                type="number"
-                                inputMode="decimal"
-                                value={line.pricePerKg}
-                                placeholder={rateUnit === 'per_10kg' ? '220' : '22'}
-                                className={inputCls}
-                                onChange={(e) =>
-                                  patchLotLine(block.id, lot.id, line.id, (ln) =>
-                                    fillLine(ln, { pricePerKg: e.target.value, commodity: lot.commodity }, rateUnit, 'rate'),
-                                  )
-                                }
-                              />
-                            </Field>
-                            <Field label={t('amt')} className="min-w-0 sm:w-28">
-                              <input
-                                type="number"
-                                inputMode="numeric"
-                                value={line.amount}
-                                className={`${inputCls} font-semibold`}
-                                onChange={(e) =>
-                                  patchLotLine(block.id, lot.id, line.id, (ln) =>
-                                    fillLine(ln, { amount: e.target.value, commodity: lot.commodity }, rateUnit, 'amount'),
-                                  )
-                                }
-                              />
-                            </Field>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const name = cashCustomer?.name || 'CASH SALES';
-                                patchLotLine(block.id, lot.id, line.id, (ln) =>
-                                  ln.cash
-                                    ? { ...ln, cash: false }
-                                    : { ...ln, cash: true, customerName: name, customerId: cashCustomer?.id || null, commodity: lot.commodity },
-                                );
-                              }}
-                              className={`col-span-1 min-h-11 w-full rounded-md px-3 text-sm font-medium sm:w-auto ${
-                                line.cash
-                                  ? 'bg-[var(--bg-success)] text-[var(--text-on-success)]'
-                                  : 'border border-[var(--border-input)] text-[var(--text-muted)]'
-                              }`}
-                            >
-                              {line.cash ? t('cashSale') : t('creditSale')}
-                            </button>
-                            <Field label={t('hamali')} className="min-w-0 sm:w-24">
-                              <input
-                                type="number"
-                                inputMode="decimal"
-                                value={line.hamali}
-                                className={inputCls}
-                                onChange={(e) => patchLotLine(block.id, lot.id, line.id, (ln) => ({ ...ln, hamali: e.target.value }))}
-                              />
-                            </Field>
-                          </div>
-                          {line.bagWeights.length > 0 && (
-                            <div className="mt-2">
-                              <p className="mb-1 text-[10px] text-[var(--text-muted)]">
-                                {t('eachBagKg')}
-                                {num(line.weightKg) > 0 ? ` · ${line.weightKg} kg` : ''}
-                              </p>
-                              <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 lg:grid-cols-8">
-                                {line.bagWeights.map((w, wi) => (
-                                  <Field key={`${line.id}-w-${wi}`} label={`${wi + 1}`}>
-                                    <input
-                                      type="number"
-                                      inputMode="decimal"
-                                      value={w}
-                                      placeholder="kg"
-                                      aria-label={`${t('bag')} ${wi + 1} kg`}
-                                      className={inputCls}
-                                      onChange={(e) =>
-                                        patchLotLine(block.id, lot.id, line.id, (ln) =>
-                                          fillLine(
-                                            ln,
-                                            {
-                                              commodity: lot.commodity,
-                                              bagWeights: ln.bagWeights.map((x, j) => (j === wi ? e.target.value : x)),
-                                            },
-                                            rateUnit,
-                                            'weight',
-                                          ),
-                                        )
-                                      }
-                                    />
-                                  </Field>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
                     {lotTally && lot.commodity.trim() ? (
                       <p className={`text-xs ${lotTally.oversold ? 'text-[var(--bg-danger)]' : 'text-[var(--text-muted)]'}`}>
                         {t('stockReceived')} {lotTally.inBags} {t('bags')} / {lotTally.inKg} kg
@@ -941,11 +796,184 @@ export default function EntryPage() {
             </div>
             <button
               type="button"
-              onClick={() => patchBlock(block.id, (b) => ({ ...b, lots: [...b.lots, emptyLot()] }))}
+              onClick={() => {
+                const newLot = emptyLot();
+                patchBlock(block.id, (b) => ({ ...b, lots: [...b.lots, newLot] }));
+                setSelectedLotId(newLot.id);
+              }}
               className="min-h-11 w-full rounded-md border border-dashed border-[var(--border-input)] text-sm text-[var(--text-muted)]"
             >
               + {t('addItem')}
             </button>
+
+            {/* Item dropdown + customer sale fields for the selected item */}
+            {(() => {
+              const lot = block.lots.find((l) => l.id === selectedLotId) || block.lots[0];
+              if (!lot) return null;
+              const line = lot.lines[0];
+              if (!line) return null;
+              const lotTally = tot.tally.find((r) => itemKey(r.item) === itemKey(lot.commodity));
+              return (
+                <div className="space-y-2 rounded-lg border border-[var(--border-card)] bg-[var(--bg-base)] p-3">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-[var(--text-muted)]">{t('item')}:</label>
+                    <select
+                      value={lot.id}
+                      onChange={(e) => setSelectedLotId(e.target.value)}
+                      className={`${inputCls} flex-1`}
+                    >
+                      {block.lots.map((l, i) => (
+                        <option key={l.id} value={l.id}>
+                          {l.commodity.trim() || `${t('item')} ${i + 1}`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {lotTally && lot.commodity.trim() ? (
+                    <p className={`text-xs ${lotTally.oversold ? 'text-[var(--bg-danger)]' : 'text-[var(--text-muted)]'}`}>
+                      {t('stockReceived')} {lotTally.inBags} {t('bags')} / {lotTally.inKg} kg
+                      {' · sold '}
+                      {lotTally.soldBags} / {lotTally.soldKg} kg
+                      {' · '}
+                      {t('leftover')} {lotTally.leftBags} {t('bags')} / {lotTally.leftKg} kg
+                      {lotTally.oversold ? ' ⚠' : ''}
+                    </p>
+                  ) : null}
+                  <p className="pt-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                    {t('farmerSales')}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end">
+                    <Field label={t('customer')} className="col-span-2 min-w-0 sm:min-w-[10rem] sm:flex-[2]">
+                      <Autocomplete
+                        options={customerNames}
+                        value={line.customerName}
+                        onChange={(v) => {
+                          const match = customers.find(
+                            (c) =>
+                              c.name.toLowerCase() === v.trim().toLowerCase() ||
+                              formatCustomerName(c, uiLang).toLowerCase() === v.trim().toLowerCase(),
+                          );
+                          const isCash = v.trim().toUpperCase() === 'CASH SALES' || v.trim().toUpperCase() === 'CASH SALE ACOUNT';
+                          patchLotLine(block.id, lot.id, line.id, (ln) => ({
+                            ...ln,
+                            customerName: v,
+                            customerId: match?.id || (isCash ? cashCustomer?.id || null : null),
+                            cash: isCash,
+                            commodity: lot.commodity,
+                          }));
+                        }}
+                        placeholder="Name or CASH SALES"
+                      />
+                    </Field>
+                    <Field label={t('bags')} className="min-w-0 sm:w-20">
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        max={MAX_SALE_BAGS}
+                        value={line.bags}
+                        placeholder="20"
+                        className={inputCls}
+                        onChange={(e) =>
+                          patchLotLine(block.id, lot.id, line.id, (ln) =>
+                            fillLine(ln, { bags: e.target.value, commodity: lot.commodity }, rateUnit, 'bags'),
+                          )
+                        }
+                      />
+                    </Field>
+                    <Field label={rateUnit === 'per_10kg' ? t('ratePer10kg') : t('ratePerKg')} className="min-w-0 sm:w-28">
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={line.pricePerKg}
+                        placeholder={rateUnit === 'per_10kg' ? '220' : '22'}
+                        className={inputCls}
+                        onChange={(e) =>
+                          patchLotLine(block.id, lot.id, line.id, (ln) =>
+                            fillLine(ln, { pricePerKg: e.target.value, commodity: lot.commodity }, rateUnit, 'rate'),
+                          )
+                        }
+                      />
+                    </Field>
+                    <Field label={t('amt')} className="min-w-0 sm:w-28">
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        value={line.amount}
+                        className={`${inputCls} font-semibold`}
+                        onChange={(e) =>
+                          patchLotLine(block.id, lot.id, line.id, (ln) =>
+                            fillLine(ln, { amount: e.target.value, commodity: lot.commodity }, rateUnit, 'amount'),
+                          )
+                        }
+                      />
+                    </Field>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const name = cashCustomer?.name || 'CASH SALES';
+                        patchLotLine(block.id, lot.id, line.id, (ln) =>
+                          ln.cash
+                            ? { ...ln, cash: false }
+                            : { ...ln, cash: true, customerName: name, customerId: cashCustomer?.id || null, commodity: lot.commodity },
+                        );
+                      }}
+                      className={`col-span-1 min-h-11 w-full rounded-md px-3 text-sm font-medium sm:w-auto ${
+                        line.cash
+                          ? 'bg-[var(--bg-success)] text-[var(--text-on-success)]'
+                          : 'border border-[var(--border-input)] text-[var(--text-muted)]'
+                      }`}
+                    >
+                      {line.cash ? t('cashSale') : t('creditSale')}
+                    </button>
+                    <Field label={t('hamali')} className="min-w-0 sm:w-24">
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={line.hamali}
+                        className={inputCls}
+                        onChange={(e) => patchLotLine(block.id, lot.id, line.id, (ln) => ({ ...ln, hamali: e.target.value }))}
+                      />
+                    </Field>
+                  </div>
+                  {line.bagWeights.length > 0 && (
+                    <div className="mt-2">
+                      <p className="mb-1 text-[10px] text-[var(--text-muted)]">
+                        {t('eachBagKg')}
+                        {num(line.weightKg) > 0 ? ` · ${line.weightKg} kg` : ''}
+                      </p>
+                      <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 lg:grid-cols-8">
+                        {line.bagWeights.map((w, wi) => (
+                          <Field key={`${line.id}-w-${wi}`} label={`${wi + 1}`}>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              value={w}
+                              placeholder="kg"
+                              aria-label={`${t('bag')} ${wi + 1} kg`}
+                              className={inputCls}
+                              onChange={(e) =>
+                                patchLotLine(block.id, lot.id, line.id, (ln) =>
+                                  fillLine(
+                                    ln,
+                                    {
+                                      commodity: lot.commodity,
+                                      bagWeights: ln.bagWeights.map((x, j) => (j === wi ? e.target.value : x)),
+                                    },
+                                    rateUnit,
+                                    'weight',
+                                  ),
+                                )
+                              }
+                            />
+                          </Field>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {tot.tally.length > 0 && (
               <div className="space-y-1 rounded-lg bg-[var(--bg-base)] p-2 text-xs">

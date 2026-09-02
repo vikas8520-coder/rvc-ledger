@@ -51,44 +51,48 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
     // Farmer 1 tab is active by default
     let f1 = farmerCard(page, 1);
     await fillAndBlur(f1.getByPlaceholder('LOCAL, RSB…'), `PWTEST_LOCAL_${TS}`);
+    // Enter first item name in the items list at top
     await fillAndBlur(f1.getByPlaceholder('CHILLI, BEANS…').first(), 'PWTEST_CHILLI');
 
-    // Stock in: 200 bags, 3000 kg
-    const chilli = lotCard(f1, 1);
-    await chilli.getByPlaceholder('200').fill('200');
-    await chilli.getByPlaceholder('3000').fill('3000');
+    // Stock in for item 1: 200 bags, 3000 kg (in the items list at top)
+    await f1.getByPlaceholder('200').first().fill('200');
+    await f1.getByPlaceholder('3000').first().fill('3000');
 
     // Sale 1: Ramesh, 2 bags (48kg + 52kg), ₹220/10kg → save → fields clear
-    await fillAndBlur(chilli.getByPlaceholder('Name or CASH SALES'), `PWTEST_RAMESH_${TS}`);
-    await chilli.getByPlaceholder('20', { exact: true }).fill('2');
-    await expect(chilli.getByPlaceholder('kg')).toHaveCount(2);
-    await chilli.getByPlaceholder('kg').nth(0).fill('48');
-    await chilli.getByPlaceholder('kg').nth(1).fill('52');
-    await chilli.getByPlaceholder('220', { exact: true }).fill('220');
+    // Customer fields are below the item dropdown
+    await fillAndBlur(f1.getByPlaceholder('Name or CASH SALES'), `PWTEST_RAMESH_${TS}`);
+    await f1.getByPlaceholder('20', { exact: true }).fill('2');
+    await expect(f1.getByPlaceholder('kg')).toHaveCount(2);
+    await f1.getByPlaceholder('kg').nth(0).fill('48');
+    await f1.getByPlaceholder('kg').nth(1).fill('52');
+    await f1.getByPlaceholder('220', { exact: true }).fill('220');
     await page.screenshot({ path: 'test-output/data-entry-before-save.png', fullPage: true });
     await saveAndWait(page, 1);
 
-    // Sale 2: Krishna, 1 bag (40kg), ₹230/10kg — same lot, fields cleared after save
-    await fillAndBlur(chilli.getByPlaceholder('Name or CASH SALES'), `PWTEST_KRISHNA_${TS}`);
-    await chilli.getByPlaceholder('20', { exact: true }).fill('1');
-    await chilli.getByPlaceholder('kg').fill('40');
-    await chilli.getByPlaceholder('220', { exact: true }).fill('230');
+    // Sale 2: Krishna, 1 bag (40kg), ₹230/10kg — same item, fields cleared after save
+    await fillAndBlur(f1.getByPlaceholder('Name or CASH SALES'), `PWTEST_KRISHNA_${TS}`);
+    await f1.getByPlaceholder('20', { exact: true }).fill('1');
+    await f1.getByPlaceholder('kg').fill('40');
+    await f1.getByPlaceholder('220', { exact: true }).fill('230');
     await saveAndWait(page, 2);
 
     // Verify farmer name and item persisted across saves
     await expect(f1.getByPlaceholder('LOCAL, RSB…')).toHaveValue(`PWTEST_LOCAL_${TS}`);
     await expect(f1.getByPlaceholder('CHILLI, BEANS…').first()).toHaveValue('PWTEST_CHILLI');
 
-    // Add second item to farmer 1: BEANS, Sale 3: Suresh
+    // Add second item to farmer 1: BEANS (via + Add item at top)
     await f1.getByRole('button', { name: /\+ .*Add item/ }).click();
-    const beans = lotCard(f1, 2);
-    await fillAndBlur(beans.getByPlaceholder('CHILLI, BEANS…'), 'PWTEST_BEANS');
-    await beans.getByPlaceholder('200').fill('50');
-    await beans.getByPlaceholder('3000').fill('1000');
-    await fillAndBlur(beans.getByPlaceholder('Name or CASH SALES'), `PWTEST_SURESH_${TS}`);
-    await beans.getByPlaceholder('20', { exact: true }).fill('1');
-    await beans.getByPlaceholder('kg').fill('22');
-    await beans.getByPlaceholder('220', { exact: true }).fill('180');
+    // Enter BEANS as the second item name
+    await fillAndBlur(f1.getByPlaceholder('CHILLI, BEANS…').nth(1), 'PWTEST_BEANS');
+    await f1.getByPlaceholder('200').nth(1).fill('50');
+    await f1.getByPlaceholder('3000').nth(1).fill('1000');
+    // Switch to BEANS via dropdown
+    await f1.locator('select').selectOption({ label: 'PWTEST_BEANS' });
+    // Sale 3: Suresh, 1 bag (22kg), ₹180/10kg
+    await fillAndBlur(f1.getByPlaceholder('Name or CASH SALES'), `PWTEST_SURESH_${TS}`);
+    await f1.getByPlaceholder('20', { exact: true }).fill('1');
+    await f1.getByPlaceholder('kg').fill('22');
+    await f1.getByPlaceholder('220', { exact: true }).fill('180');
     await saveAndWait(page, 3);
 
     // ── Farmer 2: PWTEST_RSB with TOMATO ──────────────────────────────────
@@ -97,22 +101,20 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
     await expect(f2).toBeVisible();
     await fillAndBlur(f2.getByPlaceholder('LOCAL, RSB…'), `PWTEST_RSB_${TS}`);
     await fillAndBlur(f2.getByPlaceholder('CHILLI, BEANS…').first(), 'PWTEST_TOMATO');
-
-    const tomato = lotCard(f2, 1);
-    await tomato.getByPlaceholder('200').fill('40');
-    await tomato.getByPlaceholder('3000').fill('800');
+    await f2.getByPlaceholder('200').first().fill('40');
+    await f2.getByPlaceholder('3000').first().fill('800');
     // Sale 4: Anand, 1 bag (19kg), ₹150/10kg
-    await fillAndBlur(tomato.getByPlaceholder('Name or CASH SALES'), `PWTEST_ANAND_${TS}`);
-    await tomato.getByPlaceholder('20', { exact: true }).fill('1');
-    await tomato.getByPlaceholder('kg').fill('19');
-    await tomato.getByPlaceholder('220', { exact: true }).fill('150');
+    await fillAndBlur(f2.getByPlaceholder('Name or CASH SALES'), `PWTEST_ANAND_${TS}`);
+    await f2.getByPlaceholder('20', { exact: true }).fill('1');
+    await f2.getByPlaceholder('kg').fill('19');
+    await f2.getByPlaceholder('220', { exact: true }).fill('150');
     await saveAndWait(page, 4);
 
-    // Sale 5: CASH SALES, 1 bag (21kg) — same tomato lot, fields cleared
-    await fillAndBlur(tomato.getByPlaceholder('Name or CASH SALES'), 'CASH SALES');
-    await tomato.getByPlaceholder('20', { exact: true }).fill('1');
-    await tomato.getByPlaceholder('kg').fill('21');
-    await tomato.getByPlaceholder('220', { exact: true }).fill('150');
+    // Sale 5: CASH SALES, 1 bag (21kg) — same tomato, fields cleared
+    await fillAndBlur(f2.getByPlaceholder('Name or CASH SALES'), 'CASH SALES');
+    await f2.getByPlaceholder('20', { exact: true }).fill('1');
+    await f2.getByPlaceholder('kg').fill('21');
+    await f2.getByPlaceholder('220', { exact: true }).fill('150');
     await saveAndWait(page, 5);
 
     // ── Screenshot after all saves ────────────────────────────────────────
@@ -190,22 +192,21 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
     await fillAndBlur(f1.getByPlaceholder('LOCAL, RSB…'), `PWTEST_OVERSELL_${TS}`);
     await fillAndBlur(f1.getByPlaceholder('CHILLI, BEANS…').first(), 'PWTEST_ONION');
 
-    const onion = lotCard(f1, 1);
-    await onion.getByPlaceholder('200').fill('5');  // only 5 bags in
-    await onion.getByPlaceholder('3000').fill('100'); // 100 kg in
+    // Stock in: 5 bags, 100 kg (in the items list at top)
+    await f1.getByPlaceholder('200').first().fill('5');
+    await f1.getByPlaceholder('3000').first().fill('100');
 
-    // Sell 10 bags (more than 5 received) — enter 10 as bag count, fill each bag weight
-    const sale = saleCard(onion, 1);
-    await fillAndBlur(sale.getByPlaceholder('Name or CASH SALES'), `PWTEST_BUYER_${TS}`);
-    await sale.getByPlaceholder('20', { exact: true }).fill('10');
-    await expect(sale.getByPlaceholder('kg')).toHaveCount(10);
+    // Sell 10 bags (more than 5 received) — customer fields below dropdown
+    await fillAndBlur(f1.getByPlaceholder('Name or CASH SALES'), `PWTEST_BUYER_${TS}`);
+    await f1.getByPlaceholder('20', { exact: true }).fill('10');
+    await expect(f1.getByPlaceholder('kg')).toHaveCount(10);
     for (let i = 0; i < 10; i++) {
-      await sale.getByPlaceholder('kg').nth(i).fill('10');
+      await f1.getByPlaceholder('kg').nth(i).fill('10');
     }
-    await sale.getByPlaceholder('220', { exact: true }).fill('100');
+    await f1.getByPlaceholder('220', { exact: true }).fill('100');
 
     // Should show oversold warning (⚠)
-    const warning = onion.locator('text=⚠');
+    const warning = f1.locator('text=⚠').first();
     await expect(warning).toBeVisible({ timeout: 5_000 });
 
     await page.screenshot({ path: 'test-output/data-entry-oversold.png', fullPage: true });
