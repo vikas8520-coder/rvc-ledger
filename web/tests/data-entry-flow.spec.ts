@@ -125,13 +125,13 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
     const saveBtn = page.getByRole('button', { name: /Save patti/i });
     await saveBtn.click();
 
-    // Wait for save to complete — success screen shows "Saved in the shop"
-    await expect(page.getByText(/Saved in the shop|సేవ్ అయింది|सेव हो गया/)).toBeVisible({ timeout: 30_000 });
+    // Wait for save to complete — saved transactions appear at the bottom of the same page
+    await expect(page.locator('tbody tr')).toHaveCount(5, { timeout: 30_000 });
 
     // ── Screenshot after save ─────────────────────────────────────────────
     await page.screenshot({ path: 'test-output/data-entry-after-save.png', fullPage: true });
 
-    // ── Verify saved sales are shown in the table ─────────────────────────
+    // ── Verify saved sales are shown in the table at the bottom ───────────
     await expect(page.locator('tbody tr')).toContainText([`PWTEST_RAMESH_${TS}`]);
     await expect(page.locator('tbody tr')).toContainText([`PWTEST_ANAND_${TS}`]);
 
@@ -165,7 +165,7 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
     // 3 sale lines: Ramesh (2 bags), Krishna (1 bag), Suresh (1 bag beans)
     expect(pattiData.patti.lines.length).toBe(3);
 
-    // ── Verify saved screen shows a day grid table ────────────────────────
+    // ── Verify live transactions table at the bottom of the same page ─────
     await expect(page.getByRole('heading', { name: /Today's Sales|నేడు అమ్మకాలు|आज की बिक्री/ })).toBeVisible();
     // Table should have 5 sale rows (Ramesh, Krishna, Suresh, Anand, CASH SALES)
     await expect(page.locator('tbody tr')).toHaveCount(5);
@@ -181,8 +181,13 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
     await expect(page.getByRole('button', { name: /Edit this patti|పట్టీ సరిదిద్దు|पट्टी सुधारें/ })).toBeVisible();
     // ── Verify "New Entry" button is present ──────────────────────────────
     await expect(page.getByRole('button', { name: /New Entry|కొత్త ఎంట్రీ|नई एंट्री/ })).toBeVisible();
-    // ── Verify print buttons are present ──────────────────────────────────
-    await expect(page.getByRole('button', { name: /Print patti/ })).toHaveCount(2);
+    // ── Verify print buttons are present in the live transactions header ──
+    // The farmer name appears in the tab, the form's print button, and the live tx print button
+    // Target the ones in the live transactions section (last occurrence)
+    const localPrintBtns = page.getByRole('button', { name: `PWTEST_LOCAL_${TS}` });
+    await expect(localPrintBtns.last()).toBeVisible();
+    const rsbPrintBtns = page.getByRole('button', { name: `PWTEST_RSB_${TS}` });
+    await expect(rsbPrintBtns.last()).toBeVisible();
 
     // ── Screenshot of the saved table ─────────────────────────────────────
     await page.screenshot({ path: 'test-output/data-entry-saved-table.png', fullPage: true });

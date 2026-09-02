@@ -8,6 +8,7 @@ import { formatCustomerName, getUiLang } from '@/lib/i18n';
 import { fmt } from '@/lib/format';
 import Autocomplete from '../components/Autocomplete';
 import { printFarmerPatti, type FarmerPattiData, type ShopProfile } from '@/lib/billPrint';
+import { PrinterIcon } from '../components/Icons';
 
 function today() {
   const d = new Date();
@@ -146,12 +147,6 @@ interface SavedSale {
   hamali: string;
 }
 
-interface SavedBundle {
-  pattis: FarmerPattiData[];
-  sales: SavedSale[];
-  purchaseIds: string[];
-}
-
 function emptyLine(commodity = '', price = ''): Line {
   return {
     id: newId(),
@@ -211,7 +206,8 @@ export default function EntryPage() {
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
-  const [saved, setSaved] = useState<SavedBundle | null>(null);
+  const [savedSales, setSavedSales] = useState<SavedSale[]>([]);
+  const [savedPattis, setSavedPattis] = useState<FarmerPattiData[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
 
   const [customers, setCustomers] = useState<CustomerOpt[]>([]);
@@ -500,9 +496,17 @@ export default function EntryPage() {
         });
         if (data.purchaseId) purchaseIds.push(data.purchaseId);
       }
-      setSaved({ pattis: savedPattis, sales: savedSales, purchaseIds });
-      // Clear the form from localStorage so a refresh after save doesn't restore stale data
-      setBlocks([emptyFarmer(commissionPct)]);
+      // Append to the live transactions list at the bottom
+      setSavedSales((prev) => [...prev, ...savedSales]);
+      setSavedPattis((prev) => [...prev, ...savedPattis]);
+      // Clear customer sale lines but keep farmer tabs and items intact
+      setBlocks((prev) =>
+        prev.map((b) => ({
+          ...b,
+          lots: b.lots.map((lot) => ({ ...lot, lines: [emptyLine(lot.commodity)] })),
+          bardan: '', freight: '', advance: '', packing: '', other: '',
+        })),
+      );
     } catch (err: unknown) {
       setSaveError(err instanceof Error ? err.message : 'Save failed — nothing was written');
     } finally {
@@ -512,7 +516,8 @@ export default function EntryPage() {
 
   const reset = () => {
     setBlocks([emptyFarmer(commissionPct)]);
-    setSaved(null);
+    setSavedSales([]);
+    setSavedPattis([]);
     setSaveError('');
   };
 
@@ -524,174 +529,18 @@ export default function EntryPage() {
       setSaveError('Could not delete this sale');
       return;
     }
-    setSaved((prev) => {
-      if (!prev) return prev;
-      const sales = prev.sales.filter((s) => s.txnId !== txnId);
-      const pattis = prev.pattis
-        .map((p) => ({
-          ...p,
-          lines: p.lines.filter((l) =>
-            sales.some((s) => s.farmer === p.farmer && s.customerName === l.customer && s.amount === l.amount),
-          ),
-        }))
-        .filter((p) => p.lines.length > 0);
-      return { ...prev, sales, pattis };
-    });
+    setSavedSales((prev) => prev.filter((s) => s.txnId !== txnId));
   };
 
   const editSavedPatti = async () => {
-    if (!saved) return;
-    for (const s of saved.sales) {
+    // Delete all saved sales from this session and clear the list
+    for (const s of savedSales) {
       if (s.txnId) await fetch(`/api/transactions/${s.txnId}`, { method: 'DELETE' }).catch(() => {});
     }
-    for (const id of saved.purchaseIds) {
-      await fetch(`/api/purchases/${id}`, { method: 'DELETE' }).catch(() => {});
-    }
-    setSaved(null);
+    setSavedSales([]);
+    setSavedPattis([]);
     setSaveError('');
   };
-
-  if (saved) {
-    const grossAll = saved.sales.reduce((s, l) => s + l.amount, 0);
-    const farmers = [...new Set(saved.sales.map((s) => s.farmer))];
-    const totalBags = saved.sales.reduce((s, l) => s + num(l.bags), 0);
-    const totalKgs = saved.sales.reduce((s, l) => s + num(l.weightKg), 0);
-    const cashTotal = saved.sales.filter((s) => s.cash).reduce((s, l) => s + l.amount, 0);
-    const creditTotal = saved.sales.filter((s) => !s.cash).reduce((s, l) => s + l.amount, 0);
-    return (
-      <div className="space-y-3">
-        <div className="rounded-xl border border-[var(--border-card)] bg-[var(--bg-card)] p-4">
-          <p className="text-lg font-bold">{t('pattiSavedCheck')}</p>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">
-            {farmers.join(', ')} · {fmt(grossAll)}
-          </p>
-        </div>
-
-        {/* Day grid — table of all saved sales, like the old Sell page */}
-        <section className="rounded-2xl bg-[var(--bg-card)] p-3 sm:p-4">
-          <h2 className="mb-3 text-sm font-semibold text-[var(--text-muted)]">
-            {t('salesToday')} — {saved.sales.length} {t('lines')}
-          </h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border-light)] text-left text-xs text-[var(--text-muted)]">
-                  <th className="py-1.5 pr-2">#</th>
-                  <th className="py-1.5 pr-2">{t('item')}</th>
-                  <th className="py-1.5 pr-2">{t('buyer')}</th>
-                  <th className="py-1.5 pr-2 text-right">{t('bags')}</th>
-                  <th className="py-1.5 pr-2 text-right">{t('kgs')}</th>
-                  <th className="py-1.5 pr-2 text-right">{t('rate')}</th>
-                  <th className="py-1.5 pr-2 text-right">{t('hamali')}</th>
-                  <th className="py-1.5 pr-2 text-right">{t('amount')}</th>
-                  <th className="py-1.5 pr-2">{t('farmer')}</th>
-                  <th className="py-1.5 pr-2 text-center">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {saved.sales.map((s, i) => (
-                  <tr
-                    key={s.txnId || `${s.customerName}-${i}`}
-                    className={`border-l-4 ${s.cash ? 'border-l-[var(--bg-success)]' : 'border-l-[var(--bg-primary)]'} border-b border-[var(--border-light)]`}
-                  >
-                    <td className="py-1.5 pr-2 text-xs text-[var(--text-muted)]">{i + 1}</td>
-                    <td className="py-1.5 pr-2 font-medium">{s.commodity}</td>
-                    <td className="py-1.5 pr-2">
-                      {s.customerName}
-                      <span className={`ml-1 rounded px-1 py-0.5 text-[10px] font-medium ${s.cash ? 'bg-[var(--bg-success)] text-[var(--text-on-primary)]' : 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'}`}>
-                        {s.cash ? t('cashSale') : t('creditSale')}
-                      </span>
-                    </td>
-                    <td className="py-1.5 pr-2 text-right">{s.bags || '—'}</td>
-                    <td className="py-1.5 pr-2 text-right">{s.weightKg || '—'}</td>
-                    <td className="py-1.5 pr-2 text-right">{s.rate}</td>
-                    <td className="py-1.5 pr-2 text-right">{num(s.hamali) > 0 ? s.hamali : '—'}</td>
-                    <td className="py-1.5 pr-2 text-right font-medium">{fmt(s.amount)}</td>
-                    <td className="py-1.5 pr-2 text-xs text-[var(--text-muted)]">{s.farmer}</td>
-                    <td className="py-1.5 pr-2">
-                      <div className="flex items-center justify-center gap-1">
-                        {s.customerId && (
-                          <Link
-                            href={`/customers/${s.customerId}`}
-                            className="rounded px-2 py-0.5 text-xs text-[var(--bg-primary)] hover:bg-[var(--bg-base)]"
-                            title={t('edit')}
-                          >
-                            ✎
-                          </Link>
-                        )}
-                        {s.txnId && (
-                          <button
-                            type="button"
-                            onClick={() => deleteSavedSale(s.txnId)}
-                            className="rounded px-2 py-0.5 text-xs text-red-500 hover:bg-red-50"
-                            title={t('delete')}
-                          >
-                            ✕
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Footer totals */}
-          <div className="mt-3 grid grid-cols-3 gap-2 border-t border-[var(--border-light)] pt-3 sm:gap-3">
-            <div className="text-center">
-              <p className="text-xs text-[var(--text-muted)]">{t('totalBags')}</p>
-              <p className="text-lg font-bold">{totalBags}</p>
-            </div>
-            <div className="text-center">
-              <p className="text-xs text-[var(--text-muted)]">{t('totalKgs')}</p>
-              <p className="text-lg font-bold">{totalKgs > 0 ? totalKgs.toFixed(1) : '—'}</p>
-            </div>
-            <div className="text-center">
-              <p className="text-xs text-[var(--text-muted)]">{t('totalAmount')}</p>
-              <p className="text-lg font-bold text-[var(--bg-primary)]">{fmt(grossAll)}</p>
-            </div>
-          </div>
-          <div className="mt-2 grid grid-cols-2 gap-3">
-            <div className="rounded-lg border-l-4 border-l-[var(--bg-success)] bg-[var(--bg-base)] p-2 text-center">
-              <p className="text-xs text-[var(--text-muted)]">{t('cash')}</p>
-              <p className="text-sm font-bold">{fmt(cashTotal)}</p>
-            </div>
-            <div className="rounded-lg border-l-4 border-l-[var(--bg-primary)] bg-[var(--bg-base)] p-2 text-center">
-              <p className="text-xs text-[var(--text-muted)]">{t('credit')}</p>
-              <p className="text-sm font-bold">{fmt(creditTotal)}</p>
-            </div>
-          </div>
-        </section>
-
-        {/* Actions: edit all, print, new entry */}
-        <button
-          type="button"
-          onClick={editSavedPatti}
-          className="w-full min-h-11 rounded-lg border border-[var(--border-input)] text-sm"
-        >
-          {t('editPatti')}
-        </button>
-        {saved.pattis.map((p) => (
-          <button
-            key={p.farmer}
-            type="button"
-            onClick={() => printFarmerPatti(p, shop)}
-            className="w-full min-h-11 rounded-lg bg-[var(--bg-secondary)] text-sm font-medium text-[var(--text-on-primary)]"
-          >
-            {t('printPatti')} — {p.farmer}
-          </button>
-        ))}
-        <button
-          type="button"
-          onClick={reset}
-          className="w-full min-h-11 rounded-lg bg-[var(--bg-primary)] text-sm font-medium text-[var(--text-on-primary)]"
-        >
-          {t('newEntry')}
-        </button>
-      </div>
-    );
-  }
 
   const anySales = blocks.some((b) => totalsOf(b).validLines.length > 0);
 
@@ -1179,6 +1028,133 @@ export default function EntryPage() {
         <p className="rounded-lg bg-[var(--bg-danger)] px-3 py-2 text-sm text-[var(--text-on-primary)]" role="alert">
           {saveError}
         </p>
+      )}
+
+      {/* Live transactions — saved sales appear here on the same page */}
+      {savedSales.length > 0 && (
+        <section className="rounded-2xl bg-[var(--bg-card)] p-3 sm:p-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-[var(--text-muted)]">
+              {t('salesToday')} — {savedSales.length} {t('lines')}
+            </h2>
+            <div className="flex gap-1">
+              {savedPattis.map((p) => (
+                <button
+                  key={p.farmer}
+                  type="button"
+                  onClick={() => printFarmerPatti(p, shop)}
+                  className="rounded-lg bg-[var(--bg-secondary)] px-2 py-1 text-xs font-medium text-[var(--text-on-primary)]"
+                >
+                  <PrinterIcon size={12} className="inline" /> {p.farmer}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={editSavedPatti}
+                className="rounded-lg border border-[var(--border-input)] px-2 py-1 text-xs text-[var(--text-muted)]"
+              >
+                {t('editPatti')}
+              </button>
+              <button
+                type="button"
+                onClick={reset}
+                className="rounded-lg border border-[var(--border-input)] px-2 py-1 text-xs text-[var(--text-muted)]"
+              >
+                {t('newEntry')}
+              </button>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--border-light)] text-left text-xs text-[var(--text-muted)]">
+                  <th className="py-1.5 pr-2">#</th>
+                  <th className="py-1.5 pr-2">{t('item')}</th>
+                  <th className="py-1.5 pr-2">{t('buyer')}</th>
+                  <th className="py-1.5 pr-2 text-right">{t('bags')}</th>
+                  <th className="py-1.5 pr-2 text-right">{t('kgs')}</th>
+                  <th className="py-1.5 pr-2 text-right">{t('rate')}</th>
+                  <th className="py-1.5 pr-2 text-right">{t('hamali')}</th>
+                  <th className="py-1.5 pr-2 text-right">{t('amount')}</th>
+                  <th className="py-1.5 pr-2">{t('farmer')}</th>
+                  <th className="py-1.5 pr-2 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {savedSales.map((s, i) => (
+                  <tr
+                    key={s.txnId || `${s.customerName}-${i}`}
+                    className={`border-l-4 ${s.cash ? 'border-l-[var(--bg-success)]' : 'border-l-[var(--bg-primary)]'} border-b border-[var(--border-light)]`}
+                  >
+                    <td className="py-1.5 pr-2 text-xs text-[var(--text-muted)]">{i + 1}</td>
+                    <td className="py-1.5 pr-2 font-medium">{s.commodity}</td>
+                    <td className="py-1.5 pr-2">
+                      {s.customerName}
+                      <span className={`ml-1 rounded px-1 py-0.5 text-[10px] font-medium ${s.cash ? 'bg-[var(--bg-success)] text-[var(--text-on-primary)]' : 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'}`}>
+                        {s.cash ? t('cashSale') : t('creditSale')}
+                      </span>
+                    </td>
+                    <td className="py-1.5 pr-2 text-right">{s.bags || '—'}</td>
+                    <td className="py-1.5 pr-2 text-right">{s.weightKg || '—'}</td>
+                    <td className="py-1.5 pr-2 text-right">{s.rate}</td>
+                    <td className="py-1.5 pr-2 text-right">{num(s.hamali) > 0 ? s.hamali : '—'}</td>
+                    <td className="py-1.5 pr-2 text-right font-medium">{fmt(s.amount)}</td>
+                    <td className="py-1.5 pr-2 text-xs text-[var(--text-muted)]">{s.farmer}</td>
+                    <td className="py-1.5 pr-2">
+                      <div className="flex items-center justify-center gap-1">
+                        {s.customerId && (
+                          <Link
+                            href={`/customers/${s.customerId}`}
+                            className="rounded px-2 py-0.5 text-xs text-[var(--bg-primary)] hover:bg-[var(--bg-base)]"
+                            title={t('edit')}
+                          >
+                            ✎
+                          </Link>
+                        )}
+                        {s.txnId && (
+                          <button
+                            type="button"
+                            onClick={() => deleteSavedSale(s.txnId)}
+                            className="rounded px-2 py-0.5 text-xs text-red-500 hover:bg-red-50"
+                            title={t('delete')}
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Footer totals */}
+          <div className="mt-3 grid grid-cols-3 gap-2 border-t border-[var(--border-light)] pt-3 sm:gap-3">
+            <div className="text-center">
+              <p className="text-xs text-[var(--text-muted)]">{t('totalBags')}</p>
+              <p className="text-lg font-bold">{savedSales.reduce((s, l) => s + num(l.bags), 0)}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-[var(--text-muted)]">{t('totalKgs')}</p>
+              <p className="text-lg font-bold">{(() => { const k = savedSales.reduce((s, l) => s + num(l.weightKg), 0); return k > 0 ? k.toFixed(1) : '—'; })()}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-[var(--text-muted)]">{t('totalAmount')}</p>
+              <p className="text-lg font-bold text-[var(--bg-primary)]">{fmt(savedSales.reduce((s, l) => s + l.amount, 0))}</p>
+            </div>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-3">
+            <div className="rounded-lg border-l-4 border-l-[var(--bg-success)] bg-[var(--bg-base)] p-2 text-center">
+              <p className="text-xs text-[var(--text-muted)]">{t('cash')}</p>
+              <p className="text-sm font-bold">{fmt(savedSales.filter((s) => s.cash).reduce((s, l) => s + l.amount, 0))}</p>
+            </div>
+            <div className="rounded-lg border-l-4 border-l-[var(--bg-primary)] bg-[var(--bg-base)] p-2 text-center">
+              <p className="text-xs text-[var(--text-muted)]">{t('credit')}</p>
+              <p className="text-sm font-bold">{fmt(savedSales.filter((s) => !s.cash).reduce((s, l) => s + l.amount, 0))}</p>
+            </div>
+          </div>
+        </section>
       )}
 
       <div className="fixed bottom-[calc(3.25rem+env(safe-area-inset-bottom))] left-0 right-0 z-20 border-t border-[var(--border-light)] bg-[var(--bg-base)] px-3 py-2 lg:static lg:rounded-xl lg:border">
