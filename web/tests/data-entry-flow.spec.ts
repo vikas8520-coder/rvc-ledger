@@ -82,7 +82,10 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
     await expect(f1.getByPlaceholder('LOCAL, RSB…')).toHaveValue(`PWTEST_LOCAL_${TS}`);
     await expect(f1.getByPlaceholder('CHILLI, BEANS…').first()).toHaveValue('PWTEST_CHILLI');
 
-    // Add second item to same farmer via "+ Add item" link
+    // Add second item to same farmer via the item dropdown
+    // Open the item dropdown (button showing current item name with ▾)
+    await f1.getByRole('button', { name: /PWTEST_CHILLI.*▾/ }).click();
+    // Click "+ Add item" inside the dropdown
     await f1.getByRole('button', { name: /\+ .*Add item/ }).click();
     // New empty item is now selected — enter BEANS
     await fillAndBlur(f1.getByPlaceholder('CHILLI, BEANS…').first(), 'PWTEST_BEANS');

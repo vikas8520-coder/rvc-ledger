@@ -699,7 +699,7 @@ export default function EntryPage() {
               </div>
             )}
 
-            {/* Item dropdown — switch items or add a new one */}
+            {/* Item dropdown — switch items, add new, or delete */}
             <p className="pt-1 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">{t('farmerItems')}</p>
             <p className="text-xs text-[var(--text-muted)]">{t('stockInHint')}</p>
             {(() => {
@@ -708,57 +708,36 @@ export default function EntryPage() {
               const lotTally = tot.tally.find((r) => itemKey(r.item) === itemKey(lot.commodity));
               return (
                 <div className="space-y-2 rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2">
-                  <div className="flex items-center gap-2">
-                    <Field label={`${t('item')} *`} className="flex-1">
-                      <Autocomplete
-                        options={catalog}
-                        value={lot.commodity}
-                        onChange={(v) => {
-                          rememberItem(v);
-                          patchLot(block.id, lot.id, (l) => ({
-                            ...l,
-                            commodity: v,
-                            lines: l.lines.map((ln) => ({ ...ln, commodity: v })),
-                          }));
-                        }}
-                        placeholder="CHILLI, BEANS…"
-                      />
-                    </Field>
-                    {block.lots.length > 1 && (
-                      <button
-                        type="button"
-                        className="mt-4 min-h-11 min-w-11 text-sm text-[var(--text-muted)]"
-                        onClick={() => {
-                          patchBlock(block.id, (b) => ({ ...b, lots: b.lots.filter((l) => l.id !== lot.id) }));
-                          setSelectedLotId(null);
-                        }}
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                  {block.lots.length > 1 && (
-                    <select
-                      value={lot.id}
-                      onChange={(e) => {
-                        if (e.target.value === '__add_new__') {
-                          const newLot = emptyLot();
-                          patchBlock(block.id, (b) => ({ ...b, lots: [...b.lots, newLot] }));
-                          setSelectedLotId(newLot.id);
-                        } else {
-                          setSelectedLotId(e.target.value);
-                        }
+                  <Field label={`${t('item')} *`}>
+                    <Autocomplete
+                      options={catalog}
+                      value={lot.commodity}
+                      onChange={(v) => {
+                        rememberItem(v);
+                        patchLot(block.id, lot.id, (l) => ({
+                          ...l,
+                          commodity: v,
+                          lines: l.lines.map((ln) => ({ ...ln, commodity: v })),
+                        }));
                       }}
-                      className={inputCls}
-                    >
-                      {block.lots.map((l, i) => (
-                        <option key={l.id} value={l.id}>
-                          {l.commodity.trim() || `${t('item')} ${i + 1}`}
-                        </option>
-                      ))}
-                      <option value="__add_new__">+ {t('addItem')}</option>
-                    </select>
-                  )}
+                      placeholder="CHILLI, BEANS…"
+                    />
+                  </Field>
+                  <ItemDropdown
+                    lots={block.lots}
+                    selectedId={lot.id}
+                    t={t}
+                    onSelect={(id) => setSelectedLotId(id)}
+                    onAdd={() => {
+                      const newLot = emptyLot();
+                      patchBlock(block.id, (b) => ({ ...b, lots: [...b.lots, newLot] }));
+                      setSelectedLotId(newLot.id);
+                    }}
+                    onDelete={(id) => {
+                      patchBlock(block.id, (b) => ({ ...b, lots: b.lots.filter((l) => l.id !== id) }));
+                      setSelectedLotId(null);
+                    }}
+                  />
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <Field label={`${t('bags')} in`}>
                       <input
@@ -813,17 +792,6 @@ export default function EntryPage() {
                 </div>
               );
             })()}
-            <button
-              type="button"
-              onClick={() => {
-                const newLot = emptyLot();
-                patchBlock(block.id, (b) => ({ ...b, lots: [...b.lots, newLot] }));
-                setSelectedLotId(newLot.id);
-              }}
-              className="text-xs text-[var(--text-muted)] underline"
-            >
-              + {t('addItem')}
-            </button>
             {(() => {
               const lot = block.lots.find((l) => l.id === selectedLotId) || block.lots[0];
               if (!lot) return null;
@@ -1162,6 +1130,91 @@ export default function EntryPage() {
           {saving ? t('saving') : t('savePatti')}
         </button>
       </div>
+    </div>
+  );
+}
+
+function ItemDropdown({
+  lots,
+  selectedId,
+  t,
+  onSelect,
+  onAdd,
+  onDelete,
+}: {
+  lots: { id: string; commodity: string }[];
+  selectedId: string;
+  t: (key: string) => string;
+  onSelect: (id: string) => void;
+  onAdd: () => void;
+  onDelete: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = lots.find((l) => l.id === selectedId);
+  const label = selected
+    ? selected.commodity.trim() || `${t('item')} ${lots.indexOf(selected) + 1}`
+    : t('item');
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex min-h-11 w-full items-center justify-between rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] px-3 py-2 text-sm"
+      >
+        <span className="truncate">{label}</span>
+        <span className="ml-2 text-xs text-[var(--text-muted)]">▾</span>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] shadow-lg">
+            {lots.map((l, i) => (
+              <div
+                key={l.id}
+                className={`flex items-center justify-between gap-2 px-3 py-2 text-sm ${
+                  l.id === selectedId ? 'bg-[var(--bg-base)] font-semibold' : 'hover:bg-[var(--bg-base)]'
+                }`}
+              >
+                <button
+                  type="button"
+                  className="flex-1 truncate text-left"
+                  onClick={() => {
+                    onSelect(l.id);
+                    setOpen(false);
+                  }}
+                >
+                  {l.commodity.trim() || `${t('item')} ${i + 1}`}
+                </button>
+                {lots.length > 1 && (
+                  <button
+                    type="button"
+                    className="min-h-11 min-w-11 text-xs text-[var(--text-muted)] hover:text-[var(--bg-danger)]"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(l.id);
+                      setOpen(false);
+                    }}
+                    aria-label={`Delete ${l.commodity.trim() || `item ${i + 1}`}`}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 border-t border-[var(--border-input)] px-3 py-2 text-sm text-[var(--text-muted)] hover:bg-[var(--bg-base)]"
+              onClick={() => {
+                onAdd();
+                setOpen(false);
+              }}
+            >
+              + {t('addItem')}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
