@@ -18,11 +18,10 @@ interface CachedData {
   timestamp: number;
 }
 
-// Client-side cache: avoid re-fetching dashboard data on every page navigation.
-// Keyed by FY parameter. TTL of 30 seconds — short enough for fresh data,
-// long enough to avoid re-fetching when navigating between pages.
+// Client-side cache: show cached data immediately for smooth UX, but
+// ALWAYS re-fetch in the background to ensure fresh data after saves.
+// Keyed by FY parameter.
 const DASHBOARD_CACHE = new Map<string, CachedData>();
-const CACHE_TTL_MS = 30_000; // 30 seconds
 
 export function useDashboard(fy?: number | null) {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -39,18 +38,9 @@ export function useDashboard(fy?: number | null) {
       ? `/api/dashboard?fy=${fy}`
       : '/api/dashboard';
 
-    // Check cache first — show cached data immediately if fresh
+    // Show cached data immediately if available (smooth UX), but
+    // ALWAYS re-fetch in the background to catch recent saves.
     const cached = DASHBOARD_CACHE.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-      setCustomers(cached.customers);
-      setConfigured(cached.configured);
-      setFySummary(cached.fySummary);
-      setFyUsed(cached.fyUsed);
-      setLoading(false);
-      return; // No re-fetch needed within TTL
-    }
-
-    // If we have stale cached data, show it immediately but re-fetch in background
     if (cached) {
       setCustomers(cached.customers);
       setConfigured(cached.configured);

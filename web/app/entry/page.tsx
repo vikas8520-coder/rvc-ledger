@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePersistentState } from '../components/usePersistentState';
 import { useI18n } from '../components/I18nProvider';
@@ -286,6 +286,57 @@ export default function EntryPage() {
       })
       .catch(() => {});
   }, []);
+
+  // Re-fetch saved sales from DB whenever the date changes — so the
+  // "Sales today" section survives page refreshes and date switches.
+  // Use a ref to skip the initial fetch on mount (the usePersistentState
+  // hydration race can cause blocks to be overwritten otherwise).
+  const dateRef = useRef<string | null>(null);
+  useEffect(() => {
+    // On first run, just record the date and do a delayed fetch
+    if (dateRef.current === null) {
+      dateRef.current = date;
+      // Delay the initial fetch to let usePersistentState hydrate blocks first
+      const timer = setTimeout(() => {
+        fetchSavedSales(date);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+    if (dateRef.current === date) return;
+    dateRef.current = date;
+    fetchSavedSales(date);
+  }, [date]);
+
+  const fetchSavedSales = (d: string) => {
+    fetch(`/api/transactions?date=${encodeURIComponent(d)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const sales = data.sales || [];
+        setSavedSales(sales);
+        const byFarmer = new Map<string, FarmerPattiData>();
+        for (const s of sales) {
+          if (!byFarmer.has(s.farmer)) {
+            byFarmer.set(s.farmer, {
+              farmer: s.farmer,
+              date: d,
+              lines: [],
+              comm: 0, hamali: 0, bardan: 0, freight: 0, advance: 0, packing: 0, other: 0,
+            });
+          }
+          byFarmer.get(s.farmer)!.lines.push({
+            customer: s.customerName,
+            commodity: s.commodity,
+            qty: s.bags,
+            weight: s.weightKg,
+            rate: s.rate,
+            amount: s.amount,
+            cash: s.cash,
+          });
+        }
+        setSavedPattis([...byFarmer.values()]);
+      })
+      .catch(() => {});
+  };
 
   // Keep activeTabId pointing at a valid block
   useEffect(() => {
@@ -674,14 +725,9 @@ export default function EntryPage() {
         });
         if (data.purchaseId) purchaseIds.push(data.purchaseId);
       }
-      // Append to the live transactions list at the bottom
-      setSavedSales((prev) => [...prev, ...savedSales]);
-      // Deduplicate pattis by farmer name — keep the latest patti per farmer
-      setSavedPattis((prev) => {
-        const byFarmer = new Map(prev.map((p) => [p.farmer, p]));
-        for (const p of savedPattis) byFarmer.set(p.farmer, p);
-        return [...byFarmer.values()];
-      });
+      // Re-fetch saved sales from DB so the list is always accurate
+      // (includes sales from this session AND any saved by other devices)
+      fetchSavedSales(date);
       // Clear customer sale lines but keep farmer tabs and items intact
       setBlocks((prev) =>
         prev.map((b) => ({
@@ -712,11 +758,11 @@ export default function EntryPage() {
       setSaveError('Could not delete this sale');
       return;
     }
-    setSavedSales((prev) => prev.filter((s) => s.txnId !== txnId));
+    fetchSavedSales(date);
   };
 
   const editSavedPatti = async () => {
-    // Delete all saved sales from this session and clear the list
+    // Delete all saved sales for this date and clear the list
     for (const s of savedSales) {
       if (s.txnId) await fetch(`/api/transactions/${s.txnId}`, { method: 'DELETE' }).catch(() => {});
     }

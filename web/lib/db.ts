@@ -1808,6 +1808,62 @@ export async function deleteTransaction(shopId: string, id: string): Promise<voi
   await sql`DELETE FROM transactions WHERE id = ${id} AND shop_id = ${shopId}`;
 }
 
+// Fetch saved sales for a given date — used by the entry page to restore
+// the "Sales today" section after a page refresh.
+export async function getSalesForDate(shopId: string, date: string): Promise<{
+  txnId: string;
+  customerId: string;
+  farmer: string;
+  commodity: string;
+  customerName: string;
+  bags: string;
+  weightKg: string;
+  rate: string;
+  amount: number;
+  cash: boolean;
+  hamali: string;
+}[]> {
+  if (!isDbConfigured()) return [];
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql`
+    SELECT
+      t.id as txn_id,
+      t.customer_id,
+      t.bill_amount,
+      t.payment_method,
+      c.name as customer_name,
+      bi.farmer,
+      bi.confirmed_name,
+      bi.qty,
+      bi.rate,
+      bi.amount,
+      bi.bags,
+      bi.hamali
+    FROM transactions t
+    JOIN bill_items bi ON bi.transaction_id = t.id
+    LEFT JOIN customers c ON c.id = t.customer_id
+    WHERE t.date = ${date}
+      AND t.shop_id = ${shopId}
+      AND (bi.kind = 'item' OR bi.kind IS NULL)
+      AND t.bill_amount > 0
+    ORDER BY t.created_at, bi.id
+  `;
+  return (rows as any[]).map((r) => ({
+    txnId: r.txn_id,
+    customerId: r.customer_id || '',
+    farmer: r.farmer || '',
+    commodity: r.confirmed_name || '',
+    customerName: r.customer_name || '',
+    bags: r.bags != null ? String(r.bags) : '',
+    weightKg: r.qty || '',
+    rate: r.rate || '',
+    amount: Number(r.amount),
+    cash: r.payment_method === 'cash',
+    hamali: r.hamali != null ? String(r.hamali) : '',
+  }));
+}
+
 /* ---- Suppliers ---- */
 
 export async function createSupplier(shopId: string, name: string, phone?: string): Promise<Supplier> {

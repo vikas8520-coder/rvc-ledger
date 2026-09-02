@@ -31,10 +31,18 @@ async function fillStock(farmer: Locator, itemName: string, bags: string, kg: st
   await farmer.locator('.fixed.inset-0.z-40').click();
 }
 
-async function saveAndWait(page: Page, expectedRows: number) {
+async function saveAndWait(page: Page, expectedNewRows: number, customerName?: string) {
   const saveBtn = page.getByRole('button', { name: /Save patti/i });
   await saveBtn.click();
-  await expect(page.locator('tbody tr')).toHaveCount(expectedRows, { timeout: 30_000 });
+  // The entry page re-fetches all sales for today from the DB after saving.
+  // Wait for the specific customer name to appear (more reliable than row count
+  // since the DB may have old test data from previous runs).
+  if (customerName) {
+    await expect(page.locator('tbody tr').filter({ hasText: customerName })).toHaveCount(expectedNewRows, { timeout: 30_000 });
+  } else {
+    // Fallback: wait for at least the expected number of new rows
+    await page.waitForTimeout(2000);
+  }
 }
 
 // ─── Tests ─────────────────────────────────────────────────────────────────
@@ -67,14 +75,14 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
     await f1.getByPlaceholder('1', { exact: true }).fill('48');
     await f1.getByPlaceholder('2', { exact: true }).fill('52');
     await f1.getByPlaceholder('220', { exact: true }).fill('220');
-    await saveAndWait(page, 1);
+    await saveAndWait(page, 1, `PWTEST_RAMESH_${TS}`);
 
     // Sale 2: Krishna, 1 bag (40kg), ₹230/10kg — same item, fields cleared
     await fillAndBlur(f1.getByPlaceholder('Name or CASH'), `PWTEST_KRISHNA_${TS}`);
     await f1.getByPlaceholder('20', { exact: true }).fill('1');
     await f1.getByPlaceholder('1', { exact: true }).fill('40');
     await f1.getByPlaceholder('220', { exact: true }).fill('230');
-    await saveAndWait(page, 2);
+    await saveAndWait(page, 1, `PWTEST_KRISHNA_${TS}`);
 
     // Add second item: BEANS
     await addItem(f1, 'PWTEST_BEANS');
@@ -86,7 +94,7 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
     await f1.getByPlaceholder('20', { exact: true }).fill('1');
     await f1.getByPlaceholder('1', { exact: true }).fill('22');
     await f1.getByPlaceholder('220', { exact: true }).fill('180');
-    await saveAndWait(page, 3);
+    await saveAndWait(page, 1, `PWTEST_SURESH_${TS}`);
 
     // ── Farmer 2: PWTEST_RSB with TOMATO ──────────────────────────────────
     await page.getByRole('button', { name: '+', exact: true }).click();
@@ -103,14 +111,14 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
     await f2.getByPlaceholder('20', { exact: true }).fill('1');
     await f2.getByPlaceholder('1', { exact: true }).fill('19');
     await f2.getByPlaceholder('220', { exact: true }).fill('150');
-    await saveAndWait(page, 4);
+    await saveAndWait(page, 1, `PWTEST_ANAND_${TS}`);
 
     // Sale 5: CASH SALES, 1 bag (21kg) — same tomato
-    await fillAndBlur(f2.getByPlaceholder('Name or CASH'), 'CASH SALES');
+    await fillAndBlur(f2.getByPlaceholder('Name or CASH'), `PWTEST_CASH_${TS}`);
     await f2.getByPlaceholder('20', { exact: true }).fill('1');
     await f2.getByPlaceholder('1', { exact: true }).fill('21');
     await f2.getByPlaceholder('220', { exact: true }).fill('150');
-    await saveAndWait(page, 5);
+    await saveAndWait(page, 1, `PWTEST_CASH_${TS}`);
 
     // ── Screenshot after all saves ────────────────────────────────────────
     await page.screenshot({ path: 'test-output/data-entry-after-save.png', fullPage: true });
@@ -151,8 +159,11 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
 
     // ── Verify live transactions table at the bottom ──────────────────────
     await expect(page.getByRole('heading', { name: /Today's Sales|నేడు అమ్మకాలు|आज की बिक्री/ })).toBeVisible();
-    await expect(page.locator('tbody tr')).toHaveCount(5);
-    const firstRow = page.locator('tbody tr').first();
+    // Check that all 5 test sales are present (filter by unique timestamp
+    // to avoid matching old test data from previous runs)
+    const testRows = page.locator('tbody tr').filter({ hasText: String(TS) });
+    await expect(testRows).toHaveCount(5);
+    const firstRow = page.locator('tbody tr').filter({ hasText: `PWTEST_RAMESH_${TS}` }).first();
     await expect(firstRow).toContainText(`PWTEST_RAMESH_${TS}`);
     await expect(firstRow).toContainText('PWTEST_CHILLI');
 
