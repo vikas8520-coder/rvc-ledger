@@ -129,7 +129,7 @@ export default function Autocomplete({
               maxHeight: pos.maxH,
               zIndex: 80,
             }}
-            className="overflow-y-auto overscroll-contain rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] shadow-lg"
+            className="overflow-y-auto overscroll-contain rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] text-[var(--text-primary)] shadow-lg"
           >
             {filtered.map((opt, i) => (
               <button
@@ -169,7 +169,7 @@ export default function Autocomplete({
         onFocus={() => setOpen(true)}
         onKeyDown={onKeyDown}
         placeholder={placeholder}
-        className="min-h-11 w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] px-2 py-2 text-base sm:text-sm"
+        className="min-h-11 w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] px-2 py-2 text-base text-[var(--text-primary)] sm:text-sm"
         autoComplete="off"
       />
       {list}

@@ -203,11 +203,11 @@ function itemKey(name: string) {
 }
 
 const inputCls =
-  'min-h-11 w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-2 py-2 text-base tabular-nums sm:text-sm';
+  'min-h-11 w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-2 py-2 text-base text-[var(--text-primary)] tabular-nums sm:text-sm';
 
 // Compact input for table rows and tight layouts
 const smInput =
-  'min-h-9 w-full rounded border border-[var(--border-input)] bg-[var(--bg-base)] px-1.5 py-1 text-xs tabular-nums';
+  'min-h-9 w-full rounded border border-[var(--border-input)] bg-[var(--bg-base)] px-1.5 py-1 text-xs text-[var(--text-primary)] tabular-nums';
 
 export default function EntryPage() {
   const { t, lang } = useI18n();
@@ -767,7 +767,7 @@ export default function EntryPage() {
                     {stockPopoverId === lt.id && (
                       <>
                         <div className="fixed inset-0 z-40" onClick={() => setStockPopoverId(null)} />
-                        <div className="absolute left-0 top-full z-50 mt-1 w-64 rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] p-2 shadow-lg">
+                        <div className="absolute left-0 top-full z-50 mt-1 w-64 rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] p-2 text-[var(--text-primary)] shadow-lg">
                           <div className="mb-1.5 flex items-center justify-between">
                             <span className="text-xs font-semibold">{lt.commodity.trim() || `${t('item')} ${li + 1}`}</span>
                             <button
@@ -1085,7 +1085,7 @@ export default function EntryPage() {
                               value={w}
                               placeholder={`${wi + 1}`}
                               aria-label={`${t('bag')} ${wi + 1} kg`}
-                              className="h-7 w-8 rounded border border-[var(--border-input)] bg-[var(--bg-base)] px-0.5 text-center text-[9px] tabular-nums"
+                              className="h-7 w-8 rounded border border-[var(--border-input)] bg-[var(--bg-base)] px-0.5 text-center text-[9px] text-[var(--text-primary)] tabular-nums"
                               onChange={(e) =>
                                 patchLotLine(block.id, lot.id, line.id, (ln) =>
                                   fillLine(

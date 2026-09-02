@@ -107,7 +107,7 @@ export default function CustomerPicker({ customers, value, onChange, onAddNew, p
               maxHeight: pos.maxH,
               zIndex: 80,
             }}
-            className="flex flex-col overflow-hidden rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] shadow-lg"
+            className="flex flex-col overflow-hidden rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] text-[var(--text-primary)] shadow-lg"
           >
             <div className="border-b border-[var(--border-input)] p-2">
               <input
@@ -172,7 +172,7 @@ export default function CustomerPicker({ customers, value, onChange, onAddNew, p
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex min-h-11 w-full items-center rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] px-2 py-2 text-left text-base sm:text-sm"
+        className="flex min-h-11 w-full items-center rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] px-2 py-2 text-left text-base text-[var(--text-primary)] sm:text-sm"
       >
         {selected ? (
           <span className="flex w-full items-center justify-between gap-2">
