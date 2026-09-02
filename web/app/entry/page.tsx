@@ -498,7 +498,12 @@ export default function EntryPage() {
       }
       // Append to the live transactions list at the bottom
       setSavedSales((prev) => [...prev, ...savedSales]);
-      setSavedPattis((prev) => [...prev, ...savedPattis]);
+      // Deduplicate pattis by farmer name — keep the latest patti per farmer
+      setSavedPattis((prev) => {
+        const byFarmer = new Map(prev.map((p) => [p.farmer, p]));
+        for (const p of savedPattis) byFarmer.set(p.farmer, p);
+        return [...byFarmer.values()];
+      });
       // Clear customer sale lines but keep farmer tabs and items intact
       setBlocks((prev) =>
         prev.map((b) => ({
@@ -783,28 +788,11 @@ export default function EntryPage() {
                     <p className="pt-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                       {t('farmerSales')}
                     </p>
-                    <div className="space-y-2">
-                      {lot.lines.map((line, i) => (
-                        <div key={line.id} className="rounded-md border border-[var(--border-card)] bg-[var(--bg-card)] p-3">
-                          <div className="mb-2 flex items-center justify-between">
-                            <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
-                              {t('customer')} #{i + 1}
-                            </span>
-                            {lot.lines.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  patchLot(block.id, lot.id, (l) => ({
-                                    ...l,
-                                    lines: l.lines.filter((ln) => ln.id !== line.id),
-                                  }))
-                                }
-                                className="min-h-11 min-w-11 text-sm text-[var(--text-muted)]"
-                              >
-                                ✕
-                              </button>
-                            )}
-                          </div>
+                    {(() => {
+                      const line = lot.lines[0];
+                      if (!line) return null;
+                      return (
+                        <div className="space-y-2">
                           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end">
                             <Field label={t('customer')} className="col-span-2 min-w-0 sm:min-w-[10rem] sm:flex-[2]">
                               <Autocomplete
@@ -935,21 +923,8 @@ export default function EntryPage() {
                             </div>
                           )}
                         </div>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const last = lot.lines[lot.lines.length - 1];
-                        patchLot(block.id, lot.id, (l) => ({
-                          ...l,
-                          lines: [...l.lines, emptyLine(lot.commodity, last?.pricePerKg || '')],
-                        }));
-                      }}
-                      className="min-h-11 w-full rounded-md border border-dashed border-[var(--border-input)] text-sm text-[var(--text-muted)]"
-                    >
-                      + {t('addCustomerLine')}
-                    </button>
+                      );
+                    })()}
                     {lotTally && lot.commodity.trim() ? (
                       <p className={`text-xs ${lotTally.oversold ? 'text-[var(--bg-danger)]' : 'text-[var(--text-muted)]'}`}>
                         {t('stockReceived')} {lotTally.inBags} {t('bags')} / {lotTally.inKg} kg

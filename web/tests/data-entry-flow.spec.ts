@@ -29,7 +29,14 @@ function lotCard(farmer: Locator, n: number): Locator {
 }
 
 function saleCard(lot: Locator, n: number): Locator {
-  return lot.locator('div.rounded-md').filter({ hasText: `Customer #${n}` }).first();
+  // No longer used — customer fields are now directly in the lot card (no tiles)
+  return lot;
+}
+
+async function saveAndWait(page: Page, expectedRows: number) {
+  const saveBtn = page.getByRole('button', { name: /Save patti/i });
+  await saveBtn.click();
+  await expect(page.locator('tbody tr')).toHaveCount(expectedRows, { timeout: 30_000 });
 }
 
 // ─── Tests ─────────────────────────────────────────────────────────────────
@@ -46,48 +53,46 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
     await fillAndBlur(f1.getByPlaceholder('LOCAL, RSB…'), `PWTEST_LOCAL_${TS}`);
     await fillAndBlur(f1.getByPlaceholder('CHILLI, BEANS…').first(), 'PWTEST_CHILLI');
 
-    // Stock in: 200 bags, 3000 kg → avg 15
+    // Stock in: 200 bags, 3000 kg
     const chilli = lotCard(f1, 1);
     await chilli.getByPlaceholder('200').fill('200');
     await chilli.getByPlaceholder('3000').fill('3000');
 
-    // Sale 1: Ramesh, 2 bags (48kg + 52kg), ₹220/10kg
-    const ramesh = saleCard(chilli, 1);
-    await fillAndBlur(ramesh.getByPlaceholder('Name or CASH SALES'), `PWTEST_RAMESH_${TS}`);
-    await ramesh.getByPlaceholder('20', { exact: true }).fill('2');
-    await expect(ramesh.getByPlaceholder('kg')).toHaveCount(2);
-    await ramesh.getByPlaceholder('kg').nth(0).fill('48');
-    await ramesh.getByPlaceholder('kg').nth(1).fill('52');
-    await ramesh.getByPlaceholder('220', { exact: true }).fill('220');
+    // Sale 1: Ramesh, 2 bags (48kg + 52kg), ₹220/10kg → save → fields clear
+    await fillAndBlur(chilli.getByPlaceholder('Name or CASH SALES'), `PWTEST_RAMESH_${TS}`);
+    await chilli.getByPlaceholder('20', { exact: true }).fill('2');
+    await expect(chilli.getByPlaceholder('kg')).toHaveCount(2);
+    await chilli.getByPlaceholder('kg').nth(0).fill('48');
+    await chilli.getByPlaceholder('kg').nth(1).fill('52');
+    await chilli.getByPlaceholder('220', { exact: true }).fill('220');
+    await page.screenshot({ path: 'test-output/data-entry-before-save.png', fullPage: true });
+    await saveAndWait(page, 1);
 
-    // Sale 2: Krishna, 1 bag (40kg), ₹230/10kg
-    await chilli.getByRole('button', { name: /\+ .*Add customer/ }).click();
-    const krishna = saleCard(chilli, 2);
-    await fillAndBlur(krishna.getByPlaceholder('Name or CASH SALES'), `PWTEST_KRISHNA_${TS}`);
-    await krishna.getByPlaceholder('20', { exact: true }).fill('1');
-    await krishna.getByPlaceholder('kg').fill('40');
-    await krishna.getByPlaceholder('220', { exact: true }).fill('230');
+    // Sale 2: Krishna, 1 bag (40kg), ₹230/10kg — same lot, fields cleared after save
+    await fillAndBlur(chilli.getByPlaceholder('Name or CASH SALES'), `PWTEST_KRISHNA_${TS}`);
+    await chilli.getByPlaceholder('20', { exact: true }).fill('1');
+    await chilli.getByPlaceholder('kg').fill('40');
+    await chilli.getByPlaceholder('220', { exact: true }).fill('230');
+    await saveAndWait(page, 2);
 
-    // Verify farmer name and item persisted
+    // Verify farmer name and item persisted across saves
     await expect(f1.getByPlaceholder('LOCAL, RSB…')).toHaveValue(`PWTEST_LOCAL_${TS}`);
     await expect(f1.getByPlaceholder('CHILLI, BEANS…').first()).toHaveValue('PWTEST_CHILLI');
 
-    // Add second item to farmer 1: BEANS
+    // Add second item to farmer 1: BEANS, Sale 3: Suresh
     await f1.getByRole('button', { name: /\+ .*Add item/ }).click();
     const beans = lotCard(f1, 2);
     await fillAndBlur(beans.getByPlaceholder('CHILLI, BEANS…'), 'PWTEST_BEANS');
     await beans.getByPlaceholder('200').fill('50');
     await beans.getByPlaceholder('3000').fill('1000');
-    const suresh = saleCard(beans, 1);
-    await fillAndBlur(suresh.getByPlaceholder('Name or CASH SALES'), `PWTEST_SURESH_${TS}`);
-    await suresh.getByPlaceholder('20', { exact: true }).fill('1');
-    await suresh.getByPlaceholder('kg').fill('22');
-    await suresh.getByPlaceholder('220', { exact: true }).fill('180');
+    await fillAndBlur(beans.getByPlaceholder('Name or CASH SALES'), `PWTEST_SURESH_${TS}`);
+    await beans.getByPlaceholder('20', { exact: true }).fill('1');
+    await beans.getByPlaceholder('kg').fill('22');
+    await beans.getByPlaceholder('220', { exact: true }).fill('180');
+    await saveAndWait(page, 3);
 
     // ── Farmer 2: PWTEST_RSB with TOMATO ──────────────────────────────────
-    // Click the "+" tab to add a new farmer
     await page.getByRole('button', { name: '+', exact: true }).click();
-    // New tab is now active — the section shows "Farmer 2" in the print button fallback
     const f2 = farmerCard(page, 2);
     await expect(f2).toBeVisible();
     await fillAndBlur(f2.getByPlaceholder('LOCAL, RSB…'), `PWTEST_RSB_${TS}`);
@@ -96,39 +101,21 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
     const tomato = lotCard(f2, 1);
     await tomato.getByPlaceholder('200').fill('40');
     await tomato.getByPlaceholder('3000').fill('800');
-    const anand = saleCard(tomato, 1);
-    await fillAndBlur(anand.getByPlaceholder('Name or CASH SALES'), `PWTEST_ANAND_${TS}`);
-    await anand.getByPlaceholder('20', { exact: true }).fill('1');
-    await anand.getByPlaceholder('kg').fill('19');
-    await anand.getByPlaceholder('220', { exact: true }).fill('150');
+    // Sale 4: Anand, 1 bag (19kg), ₹150/10kg
+    await fillAndBlur(tomato.getByPlaceholder('Name or CASH SALES'), `PWTEST_ANAND_${TS}`);
+    await tomato.getByPlaceholder('20', { exact: true }).fill('1');
+    await tomato.getByPlaceholder('kg').fill('19');
+    await tomato.getByPlaceholder('220', { exact: true }).fill('150');
+    await saveAndWait(page, 4);
 
-    // Add cash sale: 1 bag (21kg)
-    await tomato.getByRole('button', { name: /\+ .*Add customer/ }).click();
-    const cashSale = saleCard(tomato, 2);
-    await fillAndBlur(cashSale.getByPlaceholder('Name or CASH SALES'), 'CASH SALES');
-    await cashSale.getByPlaceholder('20', { exact: true }).fill('1');
-    await cashSale.getByPlaceholder('kg').fill('21');
-    await cashSale.getByPlaceholder('220', { exact: true }).fill('150');
+    // Sale 5: CASH SALES, 1 bag (21kg) — same tomato lot, fields cleared
+    await fillAndBlur(tomato.getByPlaceholder('Name or CASH SALES'), 'CASH SALES');
+    await tomato.getByPlaceholder('20', { exact: true }).fill('1');
+    await tomato.getByPlaceholder('kg').fill('21');
+    await tomato.getByPlaceholder('220', { exact: true }).fill('150');
+    await saveAndWait(page, 5);
 
-    // ── Switch back to Farmer 1 to set charges ───────────────────────────
-    await switchToFarmerByName(page, `PWTEST_LOCAL_${TS}`);
-    f1 = farmerCard(page, 1);
-    const bardanInput = f1.locator('label:has-text("Bardan")').locator('..').locator('input');
-    await bardanInput.fill('100');
-    const freightInput = f1.locator('label:has-text("Freight")').locator('..').locator('input');
-    await freightInput.fill('200');
-
-    // ── Screenshot before save ────────────────────────────────────────────
-    await page.screenshot({ path: 'test-output/data-entry-before-save.png', fullPage: true });
-
-    // ── Save ──────────────────────────────────────────────────────────────
-    const saveBtn = page.getByRole('button', { name: /Save patti/i });
-    await saveBtn.click();
-
-    // Wait for save to complete — saved transactions appear at the bottom of the same page
-    await expect(page.locator('tbody tr')).toHaveCount(5, { timeout: 30_000 });
-
-    // ── Screenshot after save ─────────────────────────────────────────────
+    // ── Screenshot after all saves ────────────────────────────────────────
     await page.screenshot({ path: 'test-output/data-entry-after-save.png', fullPage: true });
 
     // ── Verify saved sales are shown in the table at the bottom ───────────
