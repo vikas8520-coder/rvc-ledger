@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePersistentState } from '../components/usePersistentState';
 import { useI18n } from '../components/I18nProvider';
+import { formatCustomerName, getUiLang } from '@/lib/i18n';
 import { fmt } from '@/lib/format';
 import Autocomplete from '../components/Autocomplete';
 import { printFarmerPatti, type FarmerPattiData, type ShopProfile } from '@/lib/billPrint';
@@ -125,6 +126,9 @@ interface FarmerBlock {
 interface CustomerOpt {
   id: string;
   name: string;
+  englishName?: string | null;
+  teluguName?: string | null;
+  hindiName?: string | null;
 }
 
 interface SavedSale {
@@ -198,11 +202,12 @@ const inputCls =
   'min-h-11 w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-2 py-2 text-base tabular-nums sm:text-sm';
 
 export default function EntryPage() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const uiLang = getUiLang(lang);
   const [date, setDate] = usePersistentState('entry-date', today());
   const [rateUnit, setRateUnit] = useState<RateUnit>('per_10kg');
   const [commissionPct, setCommissionPct] = useState('10');
-  const [blocks, setBlocks] = useState<FarmerBlock[]>(() => [emptyFarmer('10')]);
+  const [blocks, setBlocks] = usePersistentState<FarmerBlock[]>('entry-blocks', [emptyFarmer('10')]);
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -245,7 +250,7 @@ export default function EntryPage() {
       .catch(() => {});
   }, []);
 
-  const customerNames = useMemo(() => customers.map((c) => c.name), [customers]);
+  const customerNames = useMemo(() => customers.map((c) => formatCustomerName(c, uiLang)), [customers, uiLang]);
   const cashCustomer = useMemo(
     () => customers.find((c) => c.name.toUpperCase() === 'CASH SALES') || null,
     [customers],
@@ -487,6 +492,8 @@ export default function EntryPage() {
         if (data.purchaseId) purchaseIds.push(data.purchaseId);
       }
       setSaved({ pattis: savedPattis, sales: savedSales, purchaseIds });
+      // Clear the form from localStorage so a refresh after save doesn't restore stale data
+      setBlocks([emptyFarmer(commissionPct)]);
     } catch (err: unknown) {
       setSaveError(err instanceof Error ? err.message : 'Save failed — nothing was written');
     } finally {
@@ -904,7 +911,11 @@ export default function EntryPage() {
                                 options={customerNames}
                                 value={line.customerName}
                                 onChange={(v) => {
-                                  const match = customers.find((c) => c.name.toLowerCase() === v.trim().toLowerCase());
+                                  const match = customers.find(
+                                    (c) =>
+                                      c.name.toLowerCase() === v.trim().toLowerCase() ||
+                                      formatCustomerName(c, uiLang).toLowerCase() === v.trim().toLowerCase(),
+                                  );
                                   const isCash = v.trim().toUpperCase() === 'CASH SALES' || v.trim().toUpperCase() === 'CASH SALE ACOUNT';
                                   patchLotLine(block.id, lot.id, line.id, (ln) => ({
                                     ...ln,

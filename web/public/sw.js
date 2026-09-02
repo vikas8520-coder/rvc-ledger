@@ -1,11 +1,12 @@
-const CACHE = 'rvc-ledger-v8';
+const CACHE = 'rvc-ledger-v9';
 const SHELL = ['/', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE).then((cache) => cache.addAll(SHELL).catch(() => {}))
   );
-  self.skipWaiting();
+  // Don't skipWaiting — let the new SW activate only when all tabs are closed
+  // This prevents mid-session refreshes that lose form data
 });
 
 self.addEventListener('activate', (event) => {
@@ -15,7 +16,7 @@ self.addEventListener('activate', (event) => {
       Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
     )
   );
-  self.clients.claim();
+  // Don't clients.claim() — don't take over existing tabs mid-session
 });
 
 self.addEventListener('fetch', (event) => {
