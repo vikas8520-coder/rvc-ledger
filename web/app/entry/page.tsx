@@ -178,7 +178,7 @@ function emptyFarmer(commissionPct: string): FarmerBlock {
     id: newId(),
     farmerName: '',
     hundekari: '',
-    lots: [emptyLot()],
+    lots: [],
     commissionPct,
     hamaliTotal: '',
     bardan: '',
@@ -196,6 +196,10 @@ function itemKey(name: string) {
 const inputCls =
   'min-h-11 w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-2 py-2 text-base tabular-nums sm:text-sm';
 
+// Compact input for table rows and tight layouts
+const smInput =
+  'min-h-9 w-full rounded border border-[var(--border-input)] bg-[var(--bg-base)] px-1.5 py-1 text-xs tabular-nums';
+
 export default function EntryPage() {
   const { t, lang } = useI18n();
   const uiLang = getUiLang(lang);
@@ -210,6 +214,8 @@ export default function EntryPage() {
   const [savedPattis, setSavedPattis] = useState<FarmerPattiData[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [selectedLotId, setSelectedLotId] = useState<string | null>(null);
+  const [newItemName, setNewItemName] = useState('');
+  const [editingLotId, setEditingLotId] = useState<string | null>(null);
 
   const [customers, setCustomers] = useState<CustomerOpt[]>([]);
   const [catalog, setCatalog] = useState<string[]>([]);
@@ -661,150 +667,218 @@ export default function EntryPage() {
         const fi = blocks.findIndex((b) => b.id === block.id);
         const tot = totalsOf(block);
         return (
-          <section key={block.id} className="space-y-2 rounded-xl rounded-t-none border border-t-0 border-[var(--border-card)] bg-[var(--bg-card)] p-3 sm:p-4">
-            {/* Farmer + hundekari */}
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs text-[var(--text-muted)]">{t('farmer')} *</label>
+          <section key={block.id} className="space-y-1.5 rounded-xl rounded-t-none border border-t-0 border-[var(--border-card)] bg-[var(--bg-card)] p-2 sm:p-3">
+            {/* Farmer + hundekari — compact single row */}
+            <div className="flex flex-wrap items-end gap-1.5">
+              <div className="min-w-[8rem] flex-1">
+                <label className="mb-0.5 block text-[10px] text-[var(--text-muted)]">{t('farmer')} *</label>
                 <Autocomplete
                   options={farmerNames}
                   value={block.farmerName}
                   onChange={(v) => patchBlock(block.id, (b) => ({ ...b, farmerName: v }))}
                   placeholder="LOCAL, RSB…"
+                  className="text-xs"
                 />
               </div>
-              <div className="col-span-2 sm:col-span-1">
-                <label className="text-xs text-[var(--text-muted)]">{t('hundekari')}</label>
+              <div className="w-32">
+                <label className="mb-0.5 block text-[10px] text-[var(--text-muted)]">{t('hundekari')}</label>
                 <input
                   value={block.hundekari}
                   onChange={(e) => patchBlock(block.id, (b) => ({ ...b, hundekari: e.target.value }))}
-                  className={inputCls}
+                  className={smInput}
                 />
               </div>
+              <button
+                type="button"
+                onClick={() => setShowAddFarmer((v) => (v === block.id ? null : block.id))}
+                className="min-h-9 rounded text-[10px] text-[var(--text-muted)] underline"
+              >
+                + {t('farmer')}
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowAddFarmer((v) => (v === block.id ? null : block.id))}
-              className="text-xs text-[var(--text-muted)] underline"
-            >
-              + {t('farmer')}
-            </button>
             {showAddFarmer === block.id && (
-              <div className="flex flex-wrap gap-2">
-                <input value={newFarmerName} onChange={(e) => setNewFarmerName(e.target.value)} placeholder={t('farmer')} className={`${inputCls} max-w-xs`} />
-                <input value={newFarmerPhone} onChange={(e) => setNewFarmerPhone(e.target.value)} placeholder={t('phone')} className={`${inputCls} max-w-[10rem]`} />
-                <button type="button" onClick={() => handleAddFarmerName(block.id)} disabled={addingFarmer} className="rounded-md bg-[var(--bg-primary)] px-3 py-2 text-xs text-[var(--text-on-primary)]">
+              <div className="flex flex-wrap gap-1.5">
+                <input value={newFarmerName} onChange={(e) => setNewFarmerName(e.target.value)} placeholder={t('farmer')} className={`${smInput} max-w-xs`} />
+                <input value={newFarmerPhone} onChange={(e) => setNewFarmerPhone(e.target.value)} placeholder={t('phone')} className={`${smInput} max-w-[10rem]`} />
+                <button type="button" onClick={() => handleAddFarmerName(block.id)} disabled={addingFarmer} className="min-h-9 rounded bg-[var(--bg-primary)] px-2 py-1 text-xs text-[var(--text-on-primary)]">
                   {t('savePhone')}
                 </button>
               </div>
             )}
 
-            {/* Item dropdown — switch items, add new, or delete */}
-            <p className="pt-1 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">{t('farmerItems')}</p>
-            <p className="text-xs text-[var(--text-muted)]">{t('stockInHint')}</p>
+            {/* ── Item chips + stock-in (compact) ───────────────────────────── */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              {block.lots.map((lt, li) => {
+                const isSel = (selectedLotId || block.lots[0]?.id) === lt.id;
+                const tally = tot.tally.find((r) => itemKey(r.item) === itemKey(lt.commodity));
+                const stockLabel = lt.commodity.trim()
+                  ? `${lt.commodity}${num(lt.bags) > 0 ? ` ${lt.bags}/${num(lt.kg) > 0 ? `${lt.kg}kg` : ''}` : ''}`
+                  : `${t('item')} ${li + 1}`;
+                return (
+                  <div
+                    key={lt.id}
+                    className={`group flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
+                      isSel
+                        ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'
+                        : 'bg-[var(--bg-base)] text-[var(--text-muted)] border border-[var(--border-input)]'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      className="truncate"
+                      onClick={() => setSelectedLotId(lt.id)}
+                      onDoubleClick={() => setEditingLotId(lt.id)}
+                      title={tally?.oversold ? '⚠ oversold' : undefined}
+                    >
+                      {stockLabel}
+                    </button>
+                    {block.lots.length > 1 && (
+                      <button
+                        type="button"
+                        className="text-[10px] opacity-60 hover:opacity-100"
+                        onClick={() => {
+                          patchBlock(block.id, (b) => ({ ...b, lots: b.lots.filter((l) => l.id !== lt.id) }));
+                          setSelectedLotId(null);
+                        }}
+                        aria-label={`Delete ${lt.commodity.trim() || `item ${li + 1}`}`}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+              {/* Add new item input */}
+              <input
+                type="text"
+                value={newItemName}
+                onChange={(e) => setNewItemName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && newItemName.trim()) {
+                    e.preventDefault();
+                    const newLot = emptyLot(newItemName.trim());
+                    rememberItem(newItemName.trim());
+                    patchBlock(block.id, (b) => ({ ...b, lots: [...b.lots, newLot] }));
+                    setSelectedLotId(newLot.id);
+                    setNewItemName('');
+                  }
+                }}
+                placeholder="+ item name…"
+                className="min-h-9 w-32 rounded-full border border-dashed border-[var(--border-input)] bg-transparent px-2.5 py-1 text-xs text-[var(--text-muted)] focus:border-[var(--bg-primary)] focus:outline-none"
+              />
+            </div>
+
+            {/* Inline edit for chip name */}
+            {(() => {
+              const lot = block.lots.find((l) => l.id === selectedLotId) || block.lots[0];
+              if (!lot) return null;
+              if (editingLotId === lot.id) {
+                return (
+                  <input
+                    type="text"
+                    value={lot.commodity}
+                    autoFocus
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      patchLot(block.id, lot.id, (l) => ({
+                        ...l,
+                        commodity: v,
+                        lines: l.lines.map((ln) => ({ ...ln, commodity: v })),
+                      }));
+                    }}
+                    onBlur={() => {
+                      if (lot.commodity.trim()) rememberItem(lot.commodity.trim());
+                      setEditingLotId(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        if (lot.commodity.trim()) rememberItem(lot.commodity.trim());
+                        setEditingLotId(null);
+                      }
+                      if (e.key === 'Escape') setEditingLotId(null);
+                    }}
+                    className={smInput}
+                  />
+                );
+              }
+              return null;
+            })()}
+
+            {block.lots.length === 0 && (
+              <p className="text-xs text-[var(--text-muted)]">Type an item name above and press Enter to add it.</p>
+            )}
+
+            {/* Compact stock-in for selected chip */}
             {(() => {
               const lot = block.lots.find((l) => l.id === selectedLotId) || block.lots[0];
               if (!lot) return null;
               const lotTally = tot.tally.find((r) => itemKey(r.item) === itemKey(lot.commodity));
               return (
-                <div className="space-y-2 rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2">
-                  <Field label={`${t('item')} *`}>
-                    <Autocomplete
-                      options={catalog}
-                      value={lot.commodity}
-                      autoFocus={!lot.commodity.trim()}
-                      onChange={(v) => {
-                        rememberItem(v);
-                        patchLot(block.id, lot.id, (l) => ({
-                          ...l,
-                          commodity: v,
-                          lines: l.lines.map((ln) => ({ ...ln, commodity: v })),
-                        }));
+                <div className="flex flex-wrap items-end gap-2 rounded-lg bg-[var(--bg-base)] p-1.5 text-xs">
+                  <label className="flex items-center gap-1">
+                    <span className="text-[var(--text-muted)]">{t('bags')} in</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      value={lot.bags}
+                      placeholder="200"
+                      className={`${smInput} w-16`}
+                      onChange={(e) => {
+                        const s = fillStock(e.target.value, lot.kg, lot.avg, 'bags');
+                        patchLot(block.id, lot.id, (l) => ({ ...l, ...s, commodity: l.commodity, lines: l.lines }));
                       }}
-                      placeholder="CHILLI, BEANS…"
                     />
-                  </Field>
-                  <ItemDropdown
-                    lots={block.lots}
-                    selectedId={lot.id}
-                    t={t}
-                    onSelect={(id) => setSelectedLotId(id)}
-                    onAdd={() => {
-                      const newLot = emptyLot();
-                      patchBlock(block.id, (b) => ({ ...b, lots: [...b.lots, newLot] }));
-                      setSelectedLotId(newLot.id);
-                    }}
-                    onDelete={(id) => {
-                      patchBlock(block.id, (b) => ({ ...b, lots: b.lots.filter((l) => l.id !== id) }));
-                      setSelectedLotId(null);
-                    }}
-                  />
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    <Field label={`${t('bags')} in`}>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        value={lot.bags}
-                        placeholder="200"
-                        className={inputCls}
-                        onChange={(e) => {
-                          const s = fillStock(e.target.value, lot.kg, lot.avg, 'bags');
-                          patchLot(block.id, lot.id, (l) => ({ ...l, ...s, commodity: l.commodity, lines: l.lines }));
-                        }}
-                      />
-                    </Field>
-                    <Field label={t('totalKgIn')} className="sm:col-span-2">
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        value={lot.kg}
-                        placeholder="3000"
-                        className={inputCls}
-                        onChange={(e) => {
-                          const s = fillStock(lot.bags, e.target.value, lot.avg, 'kg');
-                          patchLot(block.id, lot.id, (l) => ({ ...l, ...s, commodity: l.commodity, lines: l.lines }));
-                        }}
-                      />
-                    </Field>
-                    <Field label={t('avgKgBag')}>
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        value={lot.avg}
-                        placeholder="15"
-                        className={inputCls}
-                        onChange={(e) => {
-                          const s = fillStock(lot.bags, lot.kg, e.target.value, 'avg');
-                          patchLot(block.id, lot.id, (l) => ({ ...l, ...s, commodity: l.commodity, lines: l.lines }));
-                        }}
-                      />
-                    </Field>
-                  </div>
-                  {lotTally && lot.commodity.trim() ? (
-                    <p className={`text-xs ${lotTally.oversold ? 'text-[var(--bg-danger)]' : 'text-[var(--text-muted)]'}`}>
-                      {t('stockReceived')} {lotTally.inBags} {t('bags')} / {lotTally.inKg} kg
-                      {' · sold '}
-                      {lotTally.soldBags} / {lotTally.soldKg} kg
-                      {' · '}
-                      {t('leftover')} {lotTally.leftBags} {t('bags')} / {lotTally.leftKg} kg
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <span className="text-[var(--text-muted)]">{t('totalKgIn')}</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={lot.kg}
+                      placeholder="3000"
+                      className={`${smInput} w-20`}
+                      onChange={(e) => {
+                        const s = fillStock(lot.bags, e.target.value, lot.avg, 'kg');
+                        patchLot(block.id, lot.id, (l) => ({ ...l, ...s, commodity: l.commodity, lines: l.lines }));
+                      }}
+                    />
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <span className="text-[var(--text-muted)]">{t('avgKgBag')}</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={lot.avg}
+                      placeholder="15"
+                      className={`${smInput} w-16`}
+                      onChange={(e) => {
+                        const s = fillStock(lot.bags, lot.kg, e.target.value, 'avg');
+                        patchLot(block.id, lot.id, (l) => ({ ...l, ...s, commodity: l.commodity, lines: l.lines }));
+                      }}
+                    />
+                  </label>
+                  {lotTally && lot.commodity.trim() && (
+                    <span className={`ml-auto ${lotTally.oversold ? 'text-[var(--bg-danger)]' : 'text-[var(--text-muted)]'}`}>
+                      {t('stockReceived')} {lotTally.inBags} / {lotTally.inKg}kg · sold {lotTally.soldBags} / {lotTally.soldKg}kg · {t('leftover')} {lotTally.leftBags} / {lotTally.leftKg}kg
                       {lotTally.oversold ? ' ⚠' : ''}
-                    </p>
-                  ) : null}
+                    </span>
+                  )}
                 </div>
               );
             })()}
+
+            {/* ── Sale entry (compact table row) ────────────────────────────── */}
             {(() => {
               const lot = block.lots.find((l) => l.id === selectedLotId) || block.lots[0];
               if (!lot) return null;
               const line = lot.lines[0];
               if (!line) return null;
               return (
-                <div className="space-y-2 rounded-lg border border-[var(--border-card)] bg-[var(--bg-base)] p-3">
-                  <p className="pt-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-                    {t('farmerSales')}
-                  </p>
-                  <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end">
-                    <Field label={t('customer')} className="col-span-2 min-w-0 sm:min-w-[10rem] sm:flex-[2]">
+                <div className="space-y-1.5 rounded-lg border border-[var(--border-card)] bg-[var(--bg-base)] p-1.5">
+                  <div className="flex flex-wrap items-end gap-1.5 text-xs">
+                    {/* Customer */}
+                    <div className="min-w-[8rem] flex-1">
+                      <label className="mb-0.5 block text-[10px] text-[var(--text-muted)]">{t('customer')}</label>
                       <Autocomplete
                         options={customerNames}
                         value={line.customerName}
@@ -823,10 +897,28 @@ export default function EntryPage() {
                             commodity: lot.commodity,
                           }));
                         }}
-                        placeholder="Name or CASH SALES"
+                        placeholder="Name or CASH"
+                        className="text-xs"
                       />
-                    </Field>
-                    <Field label={t('bags')} className="min-w-0 sm:w-20">
+                    </div>
+                    {/* Item dropdown — only this farmer's items */}
+                    <div className="w-28">
+                      <label className="mb-0.5 block text-[10px] text-[var(--text-muted)]">{t('item')}</label>
+                      <select
+                        value={lot.id}
+                        onChange={(e) => setSelectedLotId(e.target.value)}
+                        className={smInput}
+                      >
+                        {block.lots.map((l, i) => (
+                          <option key={l.id} value={l.id}>
+                            {l.commodity.trim() || `${t('item')} ${i + 1}`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {/* Bags */}
+                    <div className="w-16">
+                      <label className="mb-0.5 block text-[10px] text-[var(--text-muted)]">{t('bags')}</label>
                       <input
                         type="number"
                         inputMode="numeric"
@@ -834,41 +926,59 @@ export default function EntryPage() {
                         max={MAX_SALE_BAGS}
                         value={line.bags}
                         placeholder="20"
-                        className={inputCls}
+                        className={smInput}
                         onChange={(e) =>
                           patchLotLine(block.id, lot.id, line.id, (ln) =>
                             fillLine(ln, { bags: e.target.value, commodity: lot.commodity }, rateUnit, 'bags'),
                           )
                         }
                       />
-                    </Field>
-                    <Field label={rateUnit === 'per_10kg' ? t('ratePer10kg') : t('ratePerKg')} className="min-w-0 sm:w-28">
+                    </div>
+                    {/* Rate */}
+                    <div className="w-20">
+                      <label className="mb-0.5 block text-[10px] text-[var(--text-muted)]">
+                        {rateUnit === 'per_10kg' ? '₹/10kg' : '₹/kg'}
+                      </label>
                       <input
                         type="number"
                         inputMode="decimal"
                         value={line.pricePerKg}
                         placeholder={rateUnit === 'per_10kg' ? '220' : '22'}
-                        className={inputCls}
+                        className={smInput}
                         onChange={(e) =>
                           patchLotLine(block.id, lot.id, line.id, (ln) =>
                             fillLine(ln, { pricePerKg: e.target.value, commodity: lot.commodity }, rateUnit, 'rate'),
                           )
                         }
                       />
-                    </Field>
-                    <Field label={t('amt')} className="min-w-0 sm:w-28">
+                    </div>
+                    {/* Amount */}
+                    <div className="w-24">
+                      <label className="mb-0.5 block text-[10px] text-[var(--text-muted)]">{t('amt')}</label>
                       <input
                         type="number"
                         inputMode="numeric"
                         value={line.amount}
-                        className={`${inputCls} font-semibold`}
+                        className={`${smInput} font-semibold`}
                         onChange={(e) =>
                           patchLotLine(block.id, lot.id, line.id, (ln) =>
                             fillLine(ln, { amount: e.target.value, commodity: lot.commodity }, rateUnit, 'amount'),
                           )
                         }
                       />
-                    </Field>
+                    </div>
+                    {/* Hamali */}
+                    <div className="w-16">
+                      <label className="mb-0.5 block text-[10px] text-[var(--text-muted)]">{t('hamali')}</label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={line.hamali}
+                        className={smInput}
+                        onChange={(e) => patchLotLine(block.id, lot.id, line.id, (ln) => ({ ...ln, hamali: e.target.value }))}
+                      />
+                    </div>
+                    {/* Cash/Credit toggle */}
                     <button
                       type="button"
                       onClick={() => {
@@ -879,7 +989,7 @@ export default function EntryPage() {
                             : { ...ln, cash: true, customerName: name, customerId: cashCustomer?.id || null, commodity: lot.commodity },
                         );
                       }}
-                      className={`col-span-1 min-h-11 w-full rounded-md px-3 text-sm font-medium sm:w-auto ${
+                      className={`min-h-9 rounded px-2 py-1 text-xs font-medium ${
                         line.cash
                           ? 'bg-[var(--bg-success)] text-[var(--text-on-success)]'
                           : 'border border-[var(--border-input)] text-[var(--text-muted)]'
@@ -887,100 +997,63 @@ export default function EntryPage() {
                     >
                       {line.cash ? t('cashSale') : t('creditSale')}
                     </button>
-                    <Field label={t('hamali')} className="min-w-0 sm:w-24">
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        value={line.hamali}
-                        className={inputCls}
-                        onChange={(e) => patchLotLine(block.id, lot.id, line.id, (ln) => ({ ...ln, hamali: e.target.value }))}
-                      />
-                    </Field>
                   </div>
+                  {/* Per-bag weights — compact grid */}
                   {line.bagWeights.length > 0 && (
-                    <div className="mt-2">
-                      <p className="mb-1 text-[10px] text-[var(--text-muted)]">
-                        {t('eachBagKg')}
-                        {num(line.weightKg) > 0 ? ` · ${line.weightKg} kg` : ''}
-                      </p>
-                      <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 lg:grid-cols-8">
-                        {line.bagWeights.map((w, wi) => (
-                          <Field key={`${line.id}-w-${wi}`} label={`${wi + 1}`}>
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              value={w}
-                              placeholder="kg"
-                              aria-label={`${t('bag')} ${wi + 1} kg`}
-                              className={inputCls}
-                              onChange={(e) =>
-                                patchLotLine(block.id, lot.id, line.id, (ln) =>
-                                  fillLine(
-                                    ln,
-                                    {
-                                      commodity: lot.commodity,
-                                      bagWeights: ln.bagWeights.map((x, j) => (j === wi ? e.target.value : x)),
-                                    },
-                                    rateUnit,
-                                    'weight',
-                                  ),
-                                )
-                              }
-                            />
-                          </Field>
-                        ))}
-                      </div>
+                    <div className="flex flex-wrap gap-1">
+                      {line.bagWeights.map((w, wi) => (
+                        <input
+                          key={`${line.id}-w-${wi}`}
+                          type="number"
+                          inputMode="decimal"
+                          value={w}
+                          placeholder={`${wi + 1}`}
+                          aria-label={`${t('bag')} ${wi + 1} kg`}
+                          className={`${smInput} w-14`}
+                          onChange={(e) =>
+                            patchLotLine(block.id, lot.id, line.id, (ln) =>
+                              fillLine(
+                                ln,
+                                {
+                                  commodity: lot.commodity,
+                                  bagWeights: ln.bagWeights.map((x, j) => (j === wi ? e.target.value : x)),
+                                },
+                                rateUnit,
+                                'weight',
+                              ),
+                            )
+                          }
+                        />
+                      ))}
+                      {num(line.weightKg) > 0 && (
+                        <span className="self-center text-[10px] text-[var(--text-muted)]">= {line.weightKg}kg</span>
+                      )}
                     </div>
                   )}
                 </div>
               );
             })()}
 
-            {tot.tally.length > 0 && (
-              <div className="space-y-1 rounded-lg bg-[var(--bg-base)] p-2 text-xs">
-                {tot.tally.map((row) => (
-                  <p key={row.item} className={row.oversold ? 'text-[var(--bg-danger)]' : 'text-[var(--text-muted)]'}>
-                    <span className="font-medium text-[var(--text-primary)]">{row.item}</span>
-                    {' · '}
-                    {t('stockReceived')} {row.inBags} {t('bags')} / {row.inKg} kg
-                    {' · sold '}
-                    {row.soldBags} / {row.soldKg} kg
-                    {' · '}
-                    {t('leftover')} {row.leftBags} {t('bags')} / {row.leftKg} kg
-                    {row.oversold ? ' ⚠' : ''}
-                  </p>
-                ))}
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
-              <ChargeBox label={`${t('commission')} %`} value={block.commissionPct} onChange={(v) => patchBlock(block.id, (b) => ({ ...b, commissionPct: v }))} suffix={`${fmt(tot.comm)}`} />
+            {/* Charges — compact single row */}
+            <div className="flex flex-wrap items-end gap-1.5 rounded-lg bg-[var(--bg-base)] p-1.5 text-xs">
+              <ChargeBox label={`${t('commission')}%`} value={block.commissionPct} onChange={(v) => patchBlock(block.id, (b) => ({ ...b, commissionPct: v }))} suffix={`₹${fmt(tot.comm)}`} />
               <ChargeBox label={t('hamali')} value={block.hamaliTotal} onChange={(v) => patchBlock(block.id, (b) => ({ ...b, hamaliTotal: v }))} placeholder={tot.validLines.length ? String(tot.validLines.reduce((s, l) => s + num(l.hamali), 0) || '') : '0'} />
               <ChargeBox label={t('chargesBardan')} value={block.bardan} onChange={(v) => patchBlock(block.id, (b) => ({ ...b, bardan: v }))} />
               <ChargeBox label={t('chargesFreight')} value={block.freight} onChange={(v) => patchBlock(block.id, (b) => ({ ...b, freight: v }))} />
               <ChargeBox label={t('chargesAdvance')} value={block.advance} onChange={(v) => patchBlock(block.id, (b) => ({ ...b, advance: v }))} />
               <ChargeBox label={t('chargesPacking')} value={block.packing} onChange={(v) => patchBlock(block.id, (b) => ({ ...b, packing: v }))} />
               <ChargeBox label={t('chargesOther')} value={block.other} onChange={(v) => patchBlock(block.id, (b) => ({ ...b, other: v }))} />
-            </div>
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="rounded-lg bg-[var(--bg-base)] p-2">
-                <p className="text-[10px] uppercase text-[var(--text-muted)]">{t('grossSale')}</p>
-                <p className="text-lg font-bold">{fmt(tot.gross)}</p>
-              </div>
-              <div className="rounded-lg bg-[var(--bg-base)] p-2">
-                <p className="text-[10px] uppercase text-[var(--text-muted)]">Exp</p>
-                <p className="text-lg font-bold">{fmt(tot.exp)}</p>
-              </div>
-              <div className="rounded-lg bg-[var(--bg-base)] p-2">
-                <p className="text-[10px] uppercase text-[var(--text-muted)]">{t('nettSale')}</p>
-                <p className="text-lg font-bold text-[var(--bg-success)]">{fmt(tot.nett)}</p>
+              <div className="ml-auto flex items-center gap-3 self-center">
+                <span className="text-[var(--text-muted)]">{t('grossSale')} <b className="text-[var(--text-primary)]">{fmt(tot.gross)}</b></span>
+                <span className="text-[var(--text-muted)]">Exp <b className="text-[var(--text-primary)]">{fmt(tot.exp)}</b></span>
+                <span className="text-[var(--text-muted)]">{t('nettSale')} <b className="text-[var(--bg-success)]">{fmt(tot.nett)}</b></span>
               </div>
             </div>
             <button
               type="button"
               onClick={() => printFarmerPatti(toPatti(block), shop)}
               disabled={tot.validLines.length === 0}
-              className="min-h-11 w-full rounded-lg border border-[var(--border-input)] text-sm disabled:opacity-40"
+              className="min-h-9 w-full rounded-md border border-[var(--border-input)] text-xs disabled:opacity-40"
             >
               {t('printPatti')} — {block.farmerName || `${t('farmer')} ${fi + 1}`}
             </button>
@@ -1131,91 +1204,6 @@ export default function EntryPage() {
           {saving ? t('saving') : t('savePatti')}
         </button>
       </div>
-    </div>
-  );
-}
-
-function ItemDropdown({
-  lots,
-  selectedId,
-  t,
-  onSelect,
-  onAdd,
-  onDelete,
-}: {
-  lots: { id: string; commodity: string }[];
-  selectedId: string;
-  t: (key: string) => string;
-  onSelect: (id: string) => void;
-  onAdd: () => void;
-  onDelete: (id: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const selected = lots.find((l) => l.id === selectedId);
-  const label = selected
-    ? selected.commodity.trim() || `${t('item')} ${lots.indexOf(selected) + 1}`
-    : t('item');
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex min-h-11 w-full items-center justify-between rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] px-3 py-2 text-sm"
-      >
-        <span className="truncate">{label}</span>
-        <span className="ml-2 text-xs text-[var(--text-muted)]">▾</span>
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] shadow-lg">
-            {lots.map((l, i) => (
-              <div
-                key={l.id}
-                className={`flex items-center justify-between gap-2 px-3 py-2 text-sm ${
-                  l.id === selectedId ? 'bg-[var(--bg-base)] font-semibold' : 'hover:bg-[var(--bg-base)]'
-                }`}
-              >
-                <button
-                  type="button"
-                  className="flex-1 truncate text-left"
-                  onClick={() => {
-                    onSelect(l.id);
-                    setOpen(false);
-                  }}
-                >
-                  {l.commodity.trim() || `${t('item')} ${i + 1}`}
-                </button>
-                {lots.length > 1 && (
-                  <button
-                    type="button"
-                    className="min-h-11 min-w-11 text-xs text-[var(--text-muted)] hover:text-[var(--bg-danger)]"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(l.id);
-                      setOpen(false);
-                    }}
-                    aria-label={`Delete ${l.commodity.trim() || `item ${i + 1}`}`}
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-            ))}
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 border-t border-[var(--border-input)] px-3 py-2 text-sm text-[var(--text-muted)] hover:bg-[var(--bg-base)]"
-              onClick={() => {
-                onAdd();
-                setOpen(false);
-              }}
-            >
-              + {t('addItem')}
-            </button>
-          </div>
-        </>
-      )}
     </div>
   );
 }
