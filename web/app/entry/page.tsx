@@ -1400,21 +1400,44 @@ export default function EntryPage() {
       {/* Live transactions — saved sales appear here on the same page */}
       {savedSales.length > 0 && (
         <section className="rounded-2xl bg-[var(--bg-card)] p-3 sm:p-4">
-          <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-[var(--text-muted)]">
               {t('salesToday')} — {savedSales.length} {t('lines')}
             </h2>
-            <div className="flex gap-1">
-              {savedPattis.map((p) => (
-                <button
-                  key={p.farmer}
-                  type="button"
-                  onClick={() => printFarmerPatti(p, shop)}
-                  className="rounded-lg bg-[var(--bg-secondary)] px-2 py-1 text-xs font-medium text-[var(--text-on-primary)]"
-                >
-                  <PrinterIcon size={12} className="inline" /> {p.farmer}
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <PrintShareMenu
+                label={t('printShare')}
+                options={[
+                  ...savedPattis.map((p) => ({
+                    key: `patti-${p.farmer}`,
+                    label: `${t('printFarmerPatti')} — ${p.farmer}`,
+                    onPrint: () => printFarmerPatti(p, shop),
+                  })),
+                  {
+                    key: 'all-pattis',
+                    label: t('printAllPattis'),
+                    onPrint: printAllPattis,
+                  },
+                  {
+                    key: 'bills',
+                    label: `${t('printCustomerBills')} (${date})`,
+                    onPrint: printBills,
+                    onShare: shareBills,
+                  },
+                  {
+                    key: 'dues',
+                    label: `${t('printDues')} (${date})`,
+                    onPrint: printDues,
+                    onShare: shareDues,
+                  },
+                  {
+                    key: 'ledger',
+                    label: `${t('printLedger')} (${date})`,
+                    onPrint: printLedger,
+                    onShare: shareLedger,
+                  },
+                ]}
+              />
               <button
                 type="button"
                 onClick={editSavedPatti}
