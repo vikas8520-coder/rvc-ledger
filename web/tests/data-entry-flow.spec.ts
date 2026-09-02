@@ -41,10 +41,14 @@ async function saveAndWait(page: Page, expectedRows: number) {
 
 test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edit', () => {
   test('fill two farmers with different products, bag weights, save, verify, edit', async ({ page }) => {
+    // ── Login as admin via API (sets httpOnly cookie) ────────────────────
+    await page.goto('/admin/login');
+    await page.request.post('/api/admin/login', {
+      data: { username: 'Vikas8520', password: 'BLACKberry8520.' },
+    });
+
     // ── Navigate ──────────────────────────────────────────────────────────
     await page.goto('/entry');
-    await page.evaluate(() => localStorage.clear());
-    await page.reload();
     await expect(page.getByRole('heading', { name: 'Patti Book' })).toBeVisible({ timeout: 30_000 });
 
     // ── Farmer 1: PWTEST_LOCAL with CHILLI + BEANS ────────────────────────
@@ -171,9 +175,13 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
   });
 
   test('verify leftover/oversold warning appears', async ({ page }) => {
+    // ── Login as admin via API (sets httpOnly cookie) ────────────────────
+    await page.goto('/admin/login');
+    await page.request.post('/api/admin/login', {
+      data: { username: 'Vikas8520', password: 'BLACKberry8520.' },
+    });
+
     await page.goto('/entry');
-    await page.evaluate(() => localStorage.clear());
-    await page.reload();
     await expect(page.getByRole('heading', { name: 'Patti Book' })).toBeVisible({ timeout: 30_000 });
 
     const f1 = farmerCard(page, 1);

@@ -9,6 +9,12 @@ import { recognizeBill, OcrProgress } from '@/lib/ocr';
 import { parseDate } from '@/lib/parser';
 import { distance } from 'fastest-levenshtein';
 import CustomerPicker, { CustomerOption } from '../components/CustomerPicker';
+import PrintShareMenu from '../components/PrintShareMenu';
+import { generateOutstandingListPdf, generateStatementPdf, printPdfBlob, sharePdfViaWhatsApp } from '@/lib/pdfShare';
+import { formatCustomerName, getUiLang } from '@/lib/i18n';
+import { sliceCustomer, rangeLabel } from '@/lib/dateRange';
+import type { Customer } from '@/lib/types';
+import type { ShopProfile } from '@/lib/billPrint';
 
 function today() {
   const d = new Date();
@@ -89,7 +95,8 @@ function isOcrGarbage(text: string): boolean {
 }
 
 export default function PaymentPage() {
-  const { t, ocrLangs } = useI18n();
+  const { t, ocrLangs, lang } = useI18n();
+  const uiLang = getUiLang(lang);
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState('');
@@ -99,6 +106,7 @@ export default function PaymentPage() {
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi' | 'credit'>('cash');
   const [status, setStatus] = useState<'idle' | 'saving' | 'done' | 'error'>('idle');
   const [error, setError] = useState('');
+  const [shop, setShop] = useState<ShopProfile>({});
 
   // OCR state: 'idle' | 'scanning' | 'done' | 'failed'
   const [ocrStep, setOcrStep] = useState<'idle' | 'scanning' | 'done' | 'failed'>('idle');
@@ -119,7 +127,80 @@ export default function PaymentPage() {
           setCustomerName(list[0].name);
         }
       });
+    fetch('/api/settings')
+      .then((r) => r.json())
+      .then((d) => {
+        const s = d.settings || {};
+        setShop({ shopName: s.shopName, shopAddress: s.shopAddress, shopPhone: s.shopPhone });
+      })
+      .catch(() => {});
   }, []);
+
+  // Print customer statement for the selected customer
+  const printStatement = async () => {
+    if (!customerId) return;
+    try {
+      const res = await fetch('/api/dashboard');
+      if (!res.ok) throw new Error('Could not load customer data');
+      const data = await res.json();
+      const all: Customer[] = data.customers || [];
+      const c = all.find((x) => x.id === customerId);
+      if (!c) throw new Error('Customer not found');
+      const sliced = sliceCustomer(c, date, date);
+      const blob = generateStatementPdf(sliced, shop, formatCustomerName(c, uiLang));
+      printPdfBlob(blob, `statement-${customerId}-${date}.pdf`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Print failed');
+    }
+  };
+
+  const shareStatement = async () => {
+    if (!customerId) return;
+    try {
+      const res = await fetch('/api/dashboard');
+      if (!res.ok) throw new Error('Could not load customer data');
+      const data = await res.json();
+      const all: Customer[] = data.customers || [];
+      const c = all.find((x) => x.id === customerId);
+      if (!c) throw new Error('Customer not found');
+      const sliced = sliceCustomer(c, date, date);
+      const blob = generateStatementPdf(sliced, shop, formatCustomerName(c, uiLang));
+      await sharePdfViaWhatsApp(blob, `statement-${customerId}-${date}.pdf`, `${shop.shopName || 'RVC'} — ${formatCustomerName(c, uiLang)} (${date})`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Share failed');
+    }
+  };
+
+  // Print dues list for today
+  const printDues = async () => {
+    try {
+      const res = await fetch('/api/dashboard');
+      if (!res.ok) throw new Error('Could not load dues');
+      const data = await res.json();
+      const all: Customer[] = (data.customers || []).filter((c: Customer) => (c.due || 0) > 0);
+      if (all.length === 0) throw new Error('No dues to print');
+      const sliced = all.map((c) => sliceCustomer(c, date, date));
+      const blob = generateOutstandingListPdf(sliced, shop, uiLang, date);
+      printPdfBlob(blob, `dues-${date}.pdf`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Print failed');
+    }
+  };
+
+  const shareDues = async () => {
+    try {
+      const res = await fetch('/api/dashboard');
+      if (!res.ok) throw new Error('Could not load dues');
+      const data = await res.json();
+      const all: Customer[] = (data.customers || []).filter((c: Customer) => (c.due || 0) > 0);
+      if (all.length === 0) throw new Error('No dues to print');
+      const sliced = all.map((c) => sliceCustomer(c, date, date));
+      const blob = generateOutstandingListPdf(sliced, shop, uiLang, date);
+      await sharePdfViaWhatsApp(blob, `dues-${date}.pdf`, `${shop.shopName || 'RVC'} — Dues (${date})`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Share failed');
+    }
+  };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -231,7 +312,25 @@ export default function PaymentPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title={t('recordPayment')} />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <PageHeader title={t('recordPayment')} />
+        <PrintShareMenu
+          options={[
+            {
+              key: 'statement',
+              label: `${t('printLedger')} — ${customerName || t('customer')} (${date})`,
+              onPrint: printStatement,
+              onShare: shareStatement,
+            },
+            {
+              key: 'dues',
+              label: `${t('printDues')} (${date})`,
+              onPrint: printDues,
+              onShare: shareDues,
+            },
+          ]}
+        />
+      </div>
 
       {/* Image upload for OCR */}
       <Card>

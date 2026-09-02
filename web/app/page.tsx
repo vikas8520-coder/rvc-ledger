@@ -225,19 +225,19 @@ export default function Home() {
           options={[
             {
               key: 'dues',
-              label: t('printDues'),
+              label: `${t('printDues')} (${rangeLabel(from, to)})`,
               onPrint: () => printOverview('dues'),
               onShare: () => shareOverview('dues'),
             },
             {
               key: 'ledger',
-              label: t('printLedger'),
+              label: `${t('printLedger')} (${rangeLabel(from, to)})`,
               onPrint: () => printOverview('ledger'),
               onShare: () => shareOverview('ledger'),
             },
             {
               key: 'bills',
-              label: t('printCustomerBills'),
+              label: `${t('printCustomerBills')} (${rangeLabel(from, to)})`,
               onPrint: () => printOverview('bills'),
               onShare: () => shareOverview('bills'),
             },

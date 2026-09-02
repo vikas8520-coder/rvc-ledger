@@ -8,6 +8,7 @@ import { Card, SectionHeader, StatCard, EmptyState, ListSkeleton, PageHeader, Bu
 import { StoreIcon, PrinterIcon, TrendingIcon, DollarIcon, PackageIcon, CalendarIcon } from '../../components/Icons';
 import { fmt } from '@/lib/format';
 import { printFarmerPatti, type FarmerPattiData, type ShopProfile } from '@/lib/billPrint';
+import PrintShareMenu from '../../components/PrintShareMenu';
 
 interface PattiHistoryEntry {
   date: string;
@@ -94,6 +95,20 @@ export default function FarmerDetailPage() {
       // ignore
     } finally {
       setPrintLoading(null);
+    }
+  };
+
+  // Print all dates for this farmer
+  const printAllDates = async () => {
+    for (const h of history) {
+      await printDate(h.date);
+    }
+  };
+
+  // Print the latest date for this farmer
+  const printLatest = async () => {
+    if (history.length > 0) {
+      await printDate(history[0].date);
     }
   };
 
@@ -217,17 +232,27 @@ export default function FarmerDetailPage() {
       </Card>
 
       {/* Actions */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Link href="/entry" className="flex-1">
           <Button variant="outline" className="w-full">
             {t('newEntry')}
           </Button>
         </Link>
-        <Link href="/print" className="flex-1">
-          <Button variant="outline" className="w-full">
-            {t('navPrint')}
-          </Button>
-        </Link>
+        <PrintShareMenu
+          label={`${t('printFarmerPatti')} — ${farmerName}`}
+          options={[
+            {
+              key: 'latest',
+              label: history.length > 0 ? `${t('printFarmerPatti')} (${history[0].date})` : t('printFarmerPatti'),
+              onPrint: printLatest,
+            },
+            {
+              key: 'all',
+              label: `${t('printFarmerPatti')} — ${t('allDates')}`,
+              onPrint: printAllDates,
+            },
+          ]}
+        />
       </div>
     </div>
   );

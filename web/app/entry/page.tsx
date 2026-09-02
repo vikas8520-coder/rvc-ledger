@@ -755,26 +755,26 @@ export default function EntryPage() {
           options={[
             {
               key: 'patti',
-              label: t('printFarmerPatti'),
+              label: `${t('printFarmerPatti')} (${date})`,
               onPrint: printAllPattis,
             },
             {
+              key: 'bills',
+              label: `${t('printCustomerBills')} (${date})`,
+              onPrint: printBills,
+              onShare: shareBills,
+            },
+            {
               key: 'dues',
-              label: t('printDues'),
+              label: `${t('printDues')} (${date})`,
               onPrint: printDues,
               onShare: shareDues,
             },
             {
               key: 'ledger',
-              label: t('printLedger'),
+              label: `${t('printLedger')} (${date})`,
               onPrint: printLedger,
               onShare: shareLedger,
-            },
-            {
-              key: 'bills',
-              label: t('printCustomerBills'),
-              onPrint: printBills,
-              onShare: shareBills,
             },
           ]}
         />
