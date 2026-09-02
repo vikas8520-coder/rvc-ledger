@@ -212,6 +212,7 @@ export default function EntryPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [saved, setSaved] = useState<SavedBundle | null>(null);
+  const [activeTabId, setActiveTabId] = useState<string | null>(null);
 
   const [customers, setCustomers] = useState<CustomerOpt[]>([]);
   const [catalog, setCatalog] = useState<string[]>([]);
@@ -249,6 +250,14 @@ export default function EntryPage() {
       })
       .catch(() => {});
   }, []);
+
+  // Keep activeTabId pointing at a valid block
+  useEffect(() => {
+    if (blocks.length === 0) return;
+    if (!activeTabId || !blocks.some((b) => b.id === activeTabId)) {
+      setActiveTabId(blocks[0].id);
+    }
+  }, [blocks, activeTabId]);
 
   const customerNames = useMemo(() => customers.map((c) => formatCustomerName(c, uiLang)), [customers, uiLang]);
   const cashCustomer = useMemo(
@@ -726,24 +735,66 @@ export default function EntryPage() {
         </div>
       </div>
 
-      {blocks.map((block, fi) => {
-        const tot = totalsOf(block);
-        return (
-          <section key={block.id} className="space-y-2 rounded-xl border border-[var(--border-card)] bg-[var(--bg-card)] p-3 sm:p-4">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-                {t('farmer')} {fi + 1}
-              </p>
+      {/* Farmer tabs — browser-style */}
+      <div className="flex items-center gap-1 overflow-x-auto border-b border-[var(--border-light)] pb-0">
+        {blocks.map((block, fi) => {
+          const isActive = block.id === activeTabId;
+          const label = block.farmerName.trim() || `${t('farmer')} ${fi + 1}`;
+          return (
+            <div
+              key={block.id}
+              className={`flex shrink-0 items-center gap-1 rounded-t-lg px-3 py-2 text-sm transition-colors ${
+                isActive
+                  ? 'bg-[var(--bg-card)] font-semibold text-[var(--text-primary)]'
+                  : 'bg-[var(--bg-base)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)]'
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => setActiveTabId(block.id)}
+                className="max-w-[8rem] truncate text-left"
+                title={label}
+              >
+                {label}
+              </button>
               {blocks.length > 1 && (
                 <button
                   type="button"
-                  onClick={() => setBlocks((prev) => prev.filter((b) => b.id !== block.id))}
-                  className="min-h-11 px-2 text-sm text-[var(--text-muted)]"
+                  onClick={() => {
+                    const remaining = blocks.filter((b) => b.id !== block.id);
+                    setBlocks(remaining);
+                    if (isActive && remaining.length > 0) {
+                      setActiveTabId(remaining[0].id);
+                    }
+                  }}
+                  className="text-xs text-[var(--text-faint)] hover:text-[var(--bg-danger)]"
+                  title={t('removeFarmer')}
                 >
                   ✕
                 </button>
               )}
             </div>
+          );
+        })}
+        <button
+          type="button"
+          onClick={() => {
+            const newBlock = emptyFarmer(commissionPct);
+            setBlocks((prev) => [...prev, newBlock]);
+            setActiveTabId(newBlock.id);
+          }}
+          className="shrink-0 rounded-t-lg px-3 py-2 text-sm text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)]"
+          title={t('addFarmer')}
+        >
+          +
+        </button>
+      </div>
+
+      {blocks.filter((b) => b.id === activeTabId).map((block) => {
+        const fi = blocks.findIndex((b) => b.id === block.id);
+        const tot = totalsOf(block);
+        return (
+          <section key={block.id} className="space-y-2 rounded-xl rounded-t-none border border-t-0 border-[var(--border-card)] bg-[var(--bg-card)] p-3 sm:p-4">
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs text-[var(--text-muted)]">{t('farmer')} *</label>
@@ -1118,19 +1169,11 @@ export default function EntryPage() {
               disabled={tot.validLines.length === 0}
               className="min-h-11 w-full rounded-lg border border-[var(--border-input)] text-sm disabled:opacity-40"
             >
-              {t('printPatti')} — {block.farmerName || t('farmer')}
+              {t('printPatti')} — {block.farmerName || `${t('farmer')} ${fi + 1}`}
             </button>
           </section>
         );
       })}
-
-      <button
-        type="button"
-        onClick={() => setBlocks((prev) => [...prev, emptyFarmer(commissionPct)])}
-        className="min-h-11 w-full rounded-xl border border-dashed border-[var(--border-input)] text-sm text-[var(--text-muted)]"
-      >
-        + {t('addFarmer')}
-      </button>
 
       {saveError && (
         <p className="rounded-lg bg-[var(--bg-danger)] px-3 py-2 text-sm text-[var(--text-on-primary)]" role="alert">

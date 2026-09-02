@@ -10,7 +10,18 @@ async function fillAndBlur(input: Locator, value: string) {
 }
 
 function farmerCard(page: Page, n: number): Locator {
-  return page.locator('section').filter({ hasText: `Farmer ${n}` }).first();
+  // The active farmer's section is the only visible <section> on the page.
+  // The tab bar shows "Farmer N" or the farmer's name.
+  return page.locator('section').first();
+}
+
+async function switchToFarmer(page: Page, n: number) {
+  // Click the farmer tab — tabs show "Farmer N" when no name is entered yet
+  await page.getByRole('button', { name: `Farmer ${n}`, exact: true }).click();
+}
+
+async function switchToFarmerByName(page: Page, name: string) {
+  await page.getByRole('button', { name, exact: true }).click();
 }
 
 function lotCard(farmer: Locator, n: number): Locator {
@@ -30,7 +41,8 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
     await expect(page.getByRole('heading', { name: 'Patti Book' })).toBeVisible({ timeout: 30_000 });
 
     // ── Farmer 1: PWTEST_LOCAL with CHILLI ────────────────────────────────
-    const f1 = farmerCard(page, 1);
+    // Farmer 1 tab is active by default
+    let f1 = farmerCard(page, 1);
     await fillAndBlur(f1.getByPlaceholder('LOCAL, RSB…'), `PWTEST_LOCAL_${TS}`);
     await fillAndBlur(f1.getByPlaceholder('CHILLI, BEANS…').first(), 'PWTEST_CHILLI');
 
@@ -73,7 +85,9 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
     await suresh.getByPlaceholder('220', { exact: true }).fill('180');
 
     // ── Farmer 2: PWTEST_RSB with TOMATO ──────────────────────────────────
-    await page.getByRole('button', { name: /\+ .*Add farmer/ }).click();
+    // Click the "+" tab to add a new farmer
+    await page.getByRole('button', { name: '+', exact: true }).click();
+    // New tab is now active — the section shows "Farmer 2" in the print button fallback
     const f2 = farmerCard(page, 2);
     await expect(f2).toBeVisible();
     await fillAndBlur(f2.getByPlaceholder('LOCAL, RSB…'), `PWTEST_RSB_${TS}`);
@@ -96,10 +110,9 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
     await cashSale.getByPlaceholder('kg').fill('21');
     await cashSale.getByPlaceholder('220', { exact: true }).fill('150');
 
-    // Verify two farmers exist
-    await expect(page.getByPlaceholder('LOCAL, RSB…')).toHaveCount(2);
-
-    // ── Set charges on farmer 1 ───────────────────────────────────────────
+    // ── Switch back to Farmer 1 to set charges ───────────────────────────
+    await switchToFarmerByName(page, `PWTEST_LOCAL_${TS}`);
+    f1 = farmerCard(page, 1);
     const bardanInput = f1.locator('label:has-text("Bardan")').locator('..').locator('input');
     await bardanInput.fill('100');
     const freightInput = f1.locator('label:has-text("Freight")').locator('..').locator('input');
