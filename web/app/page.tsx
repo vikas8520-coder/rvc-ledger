@@ -8,10 +8,19 @@ import { useDashboard } from './components/useDashboard';
 import TxnCard from './components/TxnCard';
 import AgingBadge from './components/AgingBadge';
 import { Card, SectionHeader, StatCard, EmptyState, StatSkeleton, ListSkeleton } from './components/ui';
-import { UsersIcon, DollarIcon, PackageIcon, CalendarIcon, TrendingIcon } from './components/Icons';
+import { UsersIcon, DollarIcon, PackageIcon, CalendarIcon, TrendingIcon, PrinterIcon } from './components/Icons';
 import { fmt } from '@/lib/format';
 import { computeAging } from '@/lib/statement';
 import { StockLevel, DailySummary } from '@/lib/types';
+import DateRangeBar from './components/DateRangeBar';
+import {
+  generateOutstandingListPdf,
+  generateCreditLedgerPdf,
+  generateBillsPdf,
+  printPdfBlob,
+} from '@/lib/pdfShare';
+import { txnToBillData, type CreditLedgerEntry, type ShopProfile } from '@/lib/billPrint';
+import { fyStartISO, fyEndISO, currentFyStartYear, sliceCustomer, rangeLabel } from '@/lib/dateRange';
 
 interface FarmerSummary {
   farmer: string;
@@ -35,6 +44,11 @@ export default function Home() {
   const [stockLoading, setStockLoading] = useState(true);
   const [commissionPct, setCommissionPct] = useState<number | null>(null);
   const [farmers, setFarmers] = useState<FarmerSummary[]>([]);
+  const fyYear = currentFyStartYear();
+  const [from, setFrom] = useState(fyStartISO(fyYear));
+  const [to, setTo] = useState(fyEndISO(fyYear));
+  const [shop, setShop] = useState<ShopProfile>({});
+  const [printError, setPrintError] = useState('');
 
   useEffect(() => {
     fetch('/api/stock')
@@ -49,7 +63,9 @@ export default function Home() {
     fetch('/api/settings')
       .then((r) => r.json())
       .then((d) => {
-        const pct = d.settings?.commissionPct;
+        const s = d.settings || {};
+        setShop({ shopName: s.shopName, shopAddress: s.shopAddress, shopPhone: s.shopPhone });
+        const pct = s.commissionPct;
         if (pct) setCommissionPct(Number(pct));
       })
       .catch(() => {});
@@ -81,6 +97,41 @@ export default function Home() {
   const totalOutstanding = fySummary?.totalOutstanding ?? customers.reduce((s, c) => s + c.due, 0);
   const customerCount = fySummary?.customerCount ?? customers.length;
   const commissionEarned = commissionPct ? (totalSales * commissionPct / 100) : 0;
+  const uiLang = getUiLang(lang);
+
+  const printOverview = (kind: 'dues' | 'ledger' | 'bills') => {
+    setPrintError('');
+    try {
+      const sliced = customers.map((c) => sliceCustomer(c, from, to));
+      const period = rangeLabel(from, to);
+      if (kind === 'dues') {
+        printPdfBlob(generateOutstandingListPdf(sliced, shop, uiLang, period));
+        return;
+      }
+      if (kind === 'ledger') {
+        const entries: CreditLedgerEntry[] = sliced
+          .filter((c) => c.due > 0)
+          .sort((a, b) => formatCustomerName(a, uiLang).localeCompare(formatCustomerName(b, uiLang)))
+          .map((c, i) => ({
+            code: String(i + 1),
+            name: formatCustomerName(c, uiLang),
+            phone: c.phone || undefined,
+            amount: Math.round(c.due),
+            isCredit: false,
+          }));
+        if (entries.length === 0) throw new Error('No outstanding in this date range');
+        printPdfBlob(generateCreditLedgerPdf(entries, shop, period, 'All'));
+        return;
+      }
+      const bills = sliced.flatMap((c) =>
+        c.txns.filter((tx) => tx.type === 'bill').map((tx) => txnToBillData(tx, formatCustomerName(c, uiLang))),
+      );
+      if (bills.length === 0) throw new Error('No customer bills in this date range');
+      printPdfBlob(generateBillsPdf(bills, shop, 'patti'));
+    } catch (err: unknown) {
+      setPrintError(err instanceof Error ? err.message : 'Print failed');
+    }
+  };
 
   const lowStock = stock.filter((s) => s.qty > 0 && s.qty < 5);
   const outStock = stock.filter((s) => s.qty <= 0);
@@ -127,6 +178,24 @@ export default function Home() {
           </button>
         ))}
       </div>
+
+      <DateRangeBar from={from} to={to} onChange={(a, b) => { setFrom(a); setTo(b); }} />
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => printOverview('dues')} className="flex min-h-11 items-center gap-1.5 rounded-lg bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-on-primary)]">
+          <PrinterIcon size={14} /> {t('printDues')}
+        </button>
+        <button type="button" onClick={() => printOverview('ledger')} className="flex min-h-11 items-center gap-1.5 rounded-lg bg-[var(--bg-secondary)] px-3 text-sm text-[var(--text-on-primary)]">
+          <PrinterIcon size={14} /> {t('printLedger')}
+        </button>
+        <button type="button" onClick={() => printOverview('bills')} className="flex min-h-11 items-center gap-1.5 rounded-lg border border-[var(--border-input)] px-3 text-sm">
+          <PrinterIcon size={14} /> {t('printCustomerBills')}
+        </button>
+      </div>
+      {printError && (
+        <p className="rounded-lg bg-[var(--bg-danger)] px-3 py-2 text-sm text-[var(--text-on-primary)]" role="alert">
+          {printError}
+        </p>
+      )}
 
       {/* Today's snapshot */}
       {daily && (daily.sold > 0 || daily.purchased > 0 || daily.collected > 0) && (

@@ -18,6 +18,8 @@ import {
   type ShopProfile,
 } from '@/lib/billPrint';
 import { FileIcon, PrinterIcon, UsersIcon, DollarIcon, TruckIcon } from '../components/Icons';
+import DateRangeBar from '../components/DateRangeBar';
+import { todayISO, sliceCustomer, rangeLabel } from '@/lib/dateRange';
 
 function today() {
   const d = new Date();
@@ -42,7 +44,9 @@ export default function PrintPage() {
   });
   const [showDocket, setShowDocket] = useState(false);
   const [showPatti, setShowPatti] = useState(false);
-  const [pattiDate, setPattiDate] = useState(today());
+  const [from, setFrom] = useState(todayISO());
+  const [to, setTo] = useState(todayISO());
+  const [printCustomerId, setPrintCustomerId] = useState('');
   const [pattiFarmer, setPattiFarmer] = useState('');
   const [pattiFarmers, setPattiFarmers] = useState<string[]>([]);
   const [pattiLoading, setPattiLoading] = useState(false);
@@ -62,9 +66,11 @@ export default function PrintPage() {
   }, []);
 
   useEffect(() => {
-    if (!showPatti || !pattiDate) return;
+    if (!showPatti) return;
+    const fromQ = from || '1970-01-01';
+    const toQ = to || todayISO();
     setPattiLoading(true);
-    fetch(`/api/farmers?date=${encodeURIComponent(pattiDate)}`)
+    fetch(`/api/farmers?from=${encodeURIComponent(fromQ)}&to=${encodeURIComponent(toQ)}`)
       .then((r) => r.json())
       .then((d) => {
         const names: string[] = d.farmers || [];
@@ -73,7 +79,7 @@ export default function PrintPage() {
       })
       .catch(() => setPattiFarmers([]))
       .finally(() => setPattiLoading(false));
-  }, [showPatti, pattiDate]);
+  }, [showPatti, from, to]);
 
   const run = (label: string, fn: () => Blob) => {
     setStatus('');
@@ -84,12 +90,17 @@ export default function PrintPage() {
     }
   };
 
+  const scopedCustomers = () => {
+    const list = printCustomerId ? customers.filter((c) => c.id === printCustomerId) : customers;
+    return list.map((c) => sliceCustomer(c, from, to));
+  };
+
   const printDues = () =>
-    run('dues', () => generateOutstandingListPdf(customers, shop, uiLang));
+    run('dues', () => generateOutstandingListPdf(scopedCustomers(), shop, uiLang, rangeLabel(from, to)));
 
   const printLedger = () =>
     run('ledger', () => {
-      const entries: CreditLedgerEntry[] = customers
+      const entries: CreditLedgerEntry[] = scopedCustomers()
         .filter((c) => c.due > 0)
         .sort((a, b) => formatCustomerName(a, uiLang).localeCompare(formatCustomerName(b, uiLang)))
         .map((c, i) => ({
@@ -99,8 +110,8 @@ export default function PrintPage() {
           amount: Math.round(c.due),
           isCredit: false,
         }));
-      const dateStr = new Date().toLocaleDateString('en-IN').replace(/\//g, '-');
-      return generateCreditLedgerPdf(entries, shop, dateStr, 'All');
+      if (entries.length === 0) throw new Error('No outstanding in this date range');
+      return generateCreditLedgerPdf(entries, shop, rangeLabel(from, to), printCustomerId ? 'Customer' : 'All');
     });
 
   const printSavedPatti = async () => {
@@ -110,8 +121,10 @@ export default function PrintPage() {
       return;
     }
     try {
+      const fromQ = from || '1970-01-01';
+      const toQ = to || todayISO();
       const res = await fetch(
-        `/api/farmers?date=${encodeURIComponent(pattiDate)}&farmer=${encodeURIComponent(pattiFarmer.trim())}`,
+        `/api/farmers?from=${encodeURIComponent(fromQ)}&to=${encodeURIComponent(toQ)}&farmer=${encodeURIComponent(pattiFarmer.trim())}`,
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not load patti');
@@ -138,12 +151,12 @@ export default function PrintPage() {
 
   const printBills = () =>
     run('bills', () => {
-      const allBills = customers.flatMap((c) =>
+      const allBills = scopedCustomers().flatMap((c) =>
         c.txns
           .filter((tx) => tx.type === 'bill')
           .map((tx) => txnToBillData(tx, formatCustomerName(c, uiLang))),
       );
-      if (allBills.length === 0) throw new Error('No customer bills yet');
+      if (allBills.length === 0) throw new Error('No customer bills in this date range');
       return generateBillsPdf(allBills, shop, 'patti');
     });
 
@@ -153,7 +166,7 @@ export default function PrintPage() {
       onClick: () => setShowPatti(true),
       icon: FileIcon,
       title: t('printFarmerPatti'),
-      help: 'Reprint a saved farmer patti. Pick the date and farmer, then print.',
+      help: 'Reprint saved farmer sales in the date range above.',
     },
     {
       key: 'bills',
@@ -192,6 +205,24 @@ export default function PrintPage() {
         <p className="text-xs text-[var(--text-muted)]">{t('printHelp')}</p>
       </div>
 
+      <DateRangeBar from={from} to={to} onChange={(a, b) => { setFrom(a); setTo(b); }} />
+
+      <div>
+        <label className="text-xs text-[var(--text-muted)]">{t('customer')}</label>
+        <select
+          value={printCustomerId}
+          onChange={(e) => setPrintCustomerId(e.target.value)}
+          className="mt-0.5 w-full min-h-11 rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-2 text-base sm:max-w-sm sm:text-sm"
+        >
+          <option value="">{t('allCustomers')}</option>
+          {customers.map((c) => (
+            <option key={c.id} value={c.id}>
+              {formatCustomerName(c, uiLang)}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {tiles.map((tile) => {
           const Icon = tile.icon;
@@ -225,23 +256,14 @@ export default function PrintPage() {
             This reprints sales already saved. Commission uses shop settings. Extra charges (bardan, freight) are not stored, so they print as 0.
           </p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div>
-              <label className="text-xs text-[var(--text-muted)]">{t('date')}</label>
-              <input
-                type="date"
-                value={pattiDate}
-                onChange={(e) => setPattiDate(e.target.value)}
-                className="w-full min-h-11 rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-2 py-2 text-base sm:text-sm"
-              />
-            </div>
-            <div>
+            <div className="sm:col-span-2">
               <label className="text-xs text-[var(--text-muted)]">{t('farmer')}</label>
               <select
                 value={pattiFarmer}
                 onChange={(e) => setPattiFarmer(e.target.value)}
                 className="w-full min-h-11 rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] px-2 py-2 text-base sm:text-sm"
               >
-                {pattiFarmers.length === 0 && <option value="">{pattiLoading ? t('loading') : 'No farmer sales this date'}</option>}
+                {pattiFarmers.length === 0 && <option value="">{pattiLoading ? t('loading') : 'No farmer sales in this range'}</option>}
                 {pattiFarmers.map((name) => (
                   <option key={name} value={name}>
                     {name}

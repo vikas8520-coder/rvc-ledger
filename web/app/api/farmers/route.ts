@@ -9,17 +9,19 @@ export async function GET(request: NextRequest) {
     const auth = await requireShopAuth();
     const { searchParams } = new URL(request.url);
     const date = searchParams.get('date');
+    const from = searchParams.get('from') || date;
+    const to = searchParams.get('to') || date;
     const farmer = searchParams.get('farmer');
 
-    if (date && farmer) {
-      const patti = await getFarmerPatti(auth.shopId!, farmer, date);
-      if (!patti) return NextResponse.json({ error: 'No sales for that farmer on that date' }, { status: 404 });
+    if (from && to && farmer) {
+      const patti = await getFarmerPatti(auth.shopId!, farmer, from, to);
+      if (!patti) return NextResponse.json({ error: 'No sales for that farmer in that date range' }, { status: 404 });
       return NextResponse.json({ patti });
     }
 
-    if (date) {
-      const names = await listFarmersOnDate(auth.shopId!, date);
-      return NextResponse.json({ farmers: names, date });
+    if (from && to) {
+      const names = await listFarmersOnDate(auth.shopId!, from, to);
+      return NextResponse.json({ farmers: names, from, to });
     }
 
     const fyParam = searchParams.get('fy');

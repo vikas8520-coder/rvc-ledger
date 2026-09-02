@@ -15,6 +15,8 @@ import { printCreditLedger, CreditLedgerEntry, ShopProfile } from '@/lib/billPri
 import { OverdueCustomer } from '@/lib/types';
 import { generateOutstandingListPdf, generateCreditLedgerPdf, generateBillsPdf, generateStatementPdf, printPdfBlob } from '@/lib/pdfShare';
 import { txnToBillData } from '@/lib/billPrint';
+import DateRangeBar from '../components/DateRangeBar';
+import { fyStartISO, fyEndISO, currentFyStartYear, sliceCustomer, rangeLabel } from '@/lib/dateRange';
 
 export default function CustomersPage() {
   const { t, lang } = useI18n();
@@ -30,6 +32,9 @@ export default function CustomersPage() {
   const [showLedgerMenu, setShowLedgerMenu] = useState(false);
   const [ledgerStatus, setLedgerStatus] = useState<'idle' | 'generating' | 'sharing'>('idle');
   const [openCustomerMenu, setOpenCustomerMenu] = useState<string | null>(null);
+  const fyYear = currentFyStartYear();
+  const [from, setFrom] = useState(fyStartISO(fyYear));
+  const [to, setTo] = useState(fyEndISO(fyYear));
 
   useEffect(() => {
     fetch('/api/settings')
@@ -106,11 +111,12 @@ export default function CustomersPage() {
 
   // Per-customer PDF generation (statement, credit ledger, bills)
   const generateCustomerPdf = (c: typeof customers[number], format: 'statement' | 'creditLedger' | 'patti'): { blob: Blob; filename: string } => {
+    const sliced = sliceCustomer(c, from, to);
     const dn = formatCustomerName(c, uiLang);
-    const dateStr = new Date().toLocaleDateString('en-IN').replace(/\//g, '-');
+    const dateStr = rangeLabel(from, to);
     if (format === 'statement') {
       return {
-        blob: generateStatementPdf(c, shopSettings as any, dn),
+        blob: generateStatementPdf(sliced, shopSettings as any, dn),
         filename: `${dn.replace(/\s+/g, '-')}-statement-${dateStr}.pdf`,
       };
     } else if (format === 'creditLedger') {
@@ -118,7 +124,7 @@ export default function CustomersPage() {
         code: '1',
         name: dn,
         phone: c.phone || undefined,
-        amount: Math.round(c.due),
+        amount: Math.round(sliced.due),
         isCredit: false,
       }];
       return {
@@ -126,8 +132,8 @@ export default function CustomersPage() {
         filename: `${dn.replace(/\s+/g, '-')}-credit-ledger-${dateStr}.pdf`,
       };
     } else {
-      const bills = c.txns.filter((tx) => tx.type === 'bill');
-      if (bills.length === 0) throw new Error('No bills found for this customer');
+      const bills = sliced.txns.filter((tx) => tx.type === 'bill');
+      if (bills.length === 0) throw new Error('No bills found for this customer in this date range');
       const billData = bills.map((b) => txnToBillData(b, dn));
       return {
         blob: generateBillsPdf(billData, shopSettings as any, 'patti'),
@@ -187,15 +193,16 @@ export default function CustomersPage() {
 
   // Generate the PDF blob for a given format (used by both print and share)
   const generateLedgerPdf = (format: 'outstanding' | 'creditLedger' | 'patti'): { blob: Blob; filename: string } => {
-    const dateStr = new Date().toLocaleDateString('en-IN').replace(/\//g, '-');
+    const dateStr = rangeLabel(from, to);
+    const sliced = customers.map((c) => sliceCustomer(c, from, to));
 
     if (format === 'outstanding') {
       return {
-        blob: generateOutstandingListPdf(customers, shopSettings, uiLang),
+        blob: generateOutstandingListPdf(sliced, shopSettings, uiLang, dateStr),
         filename: `outstanding-list-${dateStr}.pdf`,
       };
     } else if (format === 'creditLedger') {
-      const entries: CreditLedgerEntry[] = customers
+      const entries: CreditLedgerEntry[] = sliced
         .filter((c) => c.due > 0)
         .sort((a, b) => formatCustomerName(a, uiLang).localeCompare(formatCustomerName(b, uiLang)))
         .map((c, i) => ({
@@ -210,11 +217,11 @@ export default function CustomersPage() {
         filename: `credit-ledger-${dateStr}.pdf`,
       };
     } else {
-      const allBills = customers.flatMap((c) =>
+      const allBills = sliced.flatMap((c) =>
         c.txns.filter((tx) => tx.type === 'bill').map((tx) => txnToBillData(tx, formatCustomerName(c, uiLang)))
       );
       if (allBills.length === 0) {
-        throw new Error('No bills found');
+        throw new Error('No bills found in this date range');
       }
       return {
         blob: generateBillsPdf(allBills, shopSettings, 'patti'),
@@ -372,6 +379,8 @@ export default function CustomersPage() {
         title={t('navCustomers')}
         subtitle={`${customers.length} ${t('customersCount')} · ${overdueCount} ${t('overdue')} · ${fmt(totalDue)} ${t('due')}`}
       />
+
+      <DateRangeBar from={from} to={to} onChange={(a, b) => { setFrom(a); setTo(b); }} />
 
       {/* FY selector */}
       <div className="flex flex-wrap items-center gap-2">

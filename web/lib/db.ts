@@ -568,7 +568,7 @@ export async function getFarmerSummary(shopId: string, fyStartYear: number): Pro
   });
 }
 
-export async function listFarmersOnDate(shopId: string, date: string): Promise<string[]> {
+export async function listFarmersOnDate(shopId: string, from: string, to = from): Promise<string[]> {
   if (!isDbConfigured()) return [];
   await ensureSchema();
   const sql = getSql();
@@ -577,7 +577,8 @@ export async function listFarmersOnDate(shopId: string, date: string): Promise<s
     FROM bill_items bi
     JOIN transactions t ON t.id = bi.transaction_id
     WHERE bi.shop_id = ${shopId}
-      AND t.date = ${date}
+      AND t.date >= ${from}
+      AND t.date <= ${to}
       AND bi.farmer IS NOT NULL AND bi.farmer != ''
       AND (bi.kind = 'item' OR bi.kind IS NULL)
     ORDER BY bi.farmer
@@ -588,7 +589,8 @@ export async function listFarmersOnDate(shopId: string, date: string): Promise<s
 export async function getFarmerPatti(
   shopId: string,
   farmer: string,
-  date: string,
+  from: string,
+  to = from,
 ): Promise<{
   farmer: string;
   date: string;
@@ -626,7 +628,8 @@ export async function getFarmerPatti(
     JOIN transactions t ON t.id = bi.transaction_id
     JOIN customers c ON c.id = t.customer_id
     WHERE bi.shop_id = ${shopId}
-      AND t.date = ${date}
+      AND t.date >= ${from}
+      AND t.date <= ${to}
       AND bi.farmer = ${name}
       AND (bi.kind = 'item' OR bi.kind IS NULL)
     ORDER BY t.created_at, bi.created_at
@@ -655,7 +658,7 @@ export async function getFarmerPatti(
   const hamali = (rows as any[]).reduce((s, r) => s + Number(r.hamali || 0), 0);
   return {
     farmer: name,
-    date,
+    date: from === to ? from : `${from} to ${to}`,
     lines,
     comm: (gross * commissionPct) / 100,
     hamali,

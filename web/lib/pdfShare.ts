@@ -109,7 +109,8 @@ export function generateCreditLedgerPdf(
 export function generateOutstandingListPdf(
   customers: Customer[],
   shop: ShopProfile,
-  uiLang: string
+  uiLang: string,
+  period?: string,
 ): Blob {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
@@ -127,7 +128,7 @@ export function generateOutstandingListPdf(
   y += 6;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
-  doc.text(`Date: ${new Date().toLocaleDateString('en-IN')}`, pageW / 2, y, { align: 'center' });
+  doc.text(`Date: ${period || new Date().toLocaleDateString('en-IN')}`, pageW / 2, y, { align: 'center' });
   y += 5;
   doc.setLineWidth(0.5);
   doc.line(margin, y, pageW - margin, y);

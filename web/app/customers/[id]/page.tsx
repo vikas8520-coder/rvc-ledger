@@ -22,6 +22,7 @@ import {
 } from '@/lib/statement';
 import { printBill, printBills, printCreditLedger, txnToBillData, CreditLedgerEntry } from '@/lib/billPrint';
 import { generateStatementPdf, generateOutstandingListPdf, generateCreditLedgerPdf, generateBillsPdf, printPdfBlob } from '@/lib/pdfShare';
+import { sliceCustomer, rangeLabel } from '@/lib/dateRange';
 
 export default function CustomerLedgerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -183,30 +184,31 @@ export default function CustomerLedgerPage({ params }: { params: Promise<{ id: s
   const generateLedgerPdf = (format: 'statement' | 'simple' | 'itemized' | 'creditLedger' | 'patti'): { blob: Blob; filename: string } => {
     const dateStr = new Date().toLocaleDateString('en-IN').replace(/\//g, '-');
 
+    const sliced = sliceCustomer(customer, effectiveFrom, effectiveTo);
     if (format === 'statement') {
       return {
-        blob: generateStatementPdf(customer, shopSettings as any, displayName),
+        blob: generateStatementPdf(sliced, shopSettings as any, displayName),
         filename: `${displayName.replace(/\s+/g, '-')}-statement-${dateStr}.pdf`,
       };
     } else if (format === 'creditLedger') {
-      if (customer.due <= 0) {
-        throw new Error('This customer has no outstanding balance');
+      if (sliced.due <= 0) {
+        throw new Error('This customer has no outstanding balance in this date range');
       }
       const entries: CreditLedgerEntry[] = [{
         code: '1',
         name: displayName,
         phone: customer.phone || undefined,
-        amount: Math.round(customer.due),
+        amount: Math.round(sliced.due),
         isCredit: false,
       }];
       return {
-        blob: generateCreditLedgerPdf(entries, shopSettings as any, dateStr, displayName),
+        blob: generateCreditLedgerPdf(entries, shopSettings as any, rangeLabel(effectiveFrom, effectiveTo), displayName),
         filename: `${displayName.replace(/\s+/g, '-')}-credit-ledger-${dateStr}.pdf`,
       };
     } else {
-      const bills = customer.txns.filter((tx) => tx.type === 'bill');
+      const bills = sliced.txns.filter((tx) => tx.type === 'bill');
       if (bills.length === 0) {
-        throw new Error('No bills found for this customer');
+        throw new Error('No bills found for this customer in this date range');
       }
       const billData = bills.map((b) => txnToBillData(b, displayName));
       return {
