@@ -665,6 +665,64 @@ export async function getFarmerPatti(
   };
 }
 
+export async function getFarmerPattiHistory(
+  shopId: string,
+  farmer: string,
+  from?: string,
+  to?: string,
+): Promise<{
+  date: string;
+  gross: number;
+  bags: number;
+  kgs: number;
+  hamali: number;
+  lineCount: number;
+  customers: string[];
+}[]> {
+  if (!isDbConfigured()) return [];
+  await ensureSchema();
+  const sql = getSql();
+  const name = farmer.trim();
+  if (!name) return [];
+
+  const rows = await sql`
+    SELECT
+      t.date,
+      COALESCE(SUM(bi.amount), 0) as gross,
+      COALESCE(SUM(COALESCE(bi.bags, 0)), 0) as bags,
+      COALESCE(SUM(
+        CASE
+          WHEN bi.qty ~ '^[0-9]+\.?[0-9]*$' THEN bi.qty::numeric
+          WHEN substring(bi.qty from '[0-9]+[.]?[0-9]*') IS NOT NULL
+            THEN substring(bi.qty from '[0-9]+[.]?[0-9]*')::numeric
+          ELSE 0
+        END
+      ), 0) as kgs,
+      COALESCE(SUM(COALESCE(bi.hamali, 0)), 0) as hamali,
+      COUNT(*) as line_count,
+      ARRAY_AGG(DISTINCT c.name) as customers
+    FROM bill_items bi
+    JOIN transactions t ON t.id = bi.transaction_id
+    JOIN customers c ON c.id = t.customer_id
+    WHERE bi.shop_id = ${shopId}
+      AND bi.farmer = ${name}
+      AND (bi.kind = 'item' OR bi.kind IS NULL)
+      ${from ? sql`AND t.date >= ${from}` : sql``}
+      ${to ? sql`AND t.date <= ${to}` : sql``}
+    GROUP BY t.date
+    ORDER BY t.date DESC
+  `;
+  return (rows as any[]).map((r) => ({
+    date: toDateOnly(r.date),
+    gross: Number(r.gross),
+    bags: Number(r.bags),
+    kgs: Number(r.kgs),
+    hamali: Number(r.hamali),
+    lineCount: Number(r.line_count),
+    customers: (r.customers || []).filter(Boolean),
+  }));
+}
+
 function toDateOnly(value: unknown): string {
   if (!value) return '';
   if (typeof value === 'string') return value.slice(0, 10);

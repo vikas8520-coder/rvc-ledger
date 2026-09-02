@@ -9,7 +9,7 @@ import ThemeToggle from './ThemeToggle';
 import { useI18n } from './I18nProvider';
 import {
   HomeIcon, UsersIcon, ChartIcon,
-  SettingsIcon, DollarIcon, MenuIcon, XIcon, FileIcon, LayersIcon, PrinterIcon,
+  SettingsIcon, DollarIcon, MenuIcon, XIcon, FileIcon, LayersIcon, PrinterIcon, StoreIcon,
 } from './Icons';
 
 // Check if Clerk is configured at all (has publishable key)
@@ -35,6 +35,7 @@ interface NavItem {
 const PRIMARY_NAV: NavItem[] = [
   { href: '/', label: 'navOverview', icon: HomeIcon },
   { href: '/customers', label: 'navCustomers', icon: UsersIcon },
+  { href: '/farmers', label: 'navFarmers', icon: StoreIcon },
 ];
 
 const SECONDARY_NAV: NavItem[] = [

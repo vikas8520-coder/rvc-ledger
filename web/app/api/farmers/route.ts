@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireShopAuth, AuthError } from '@/lib/auth';
-import { getFarmerSummary, getFarmerPatti, listFarmersOnDate, currentFYStartYear } from '@/lib/db';
+import { getFarmerSummary, getFarmerPatti, getFarmerPattiHistory, listFarmersOnDate, currentFYStartYear } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +12,13 @@ export async function GET(request: NextRequest) {
     const from = searchParams.get('from') || date;
     const to = searchParams.get('to') || date;
     const farmer = searchParams.get('farmer');
+    const history = searchParams.get('history');
+
+    // Farmer patti history (list of dates with summary)
+    if (history === '1' && farmer) {
+      const hist = await getFarmerPattiHistory(auth.shopId!, farmer, from || undefined, to || undefined);
+      return NextResponse.json({ history: hist, farmer });
+    }
 
     if (from && to && farmer) {
       const patti = await getFarmerPatti(auth.shopId!, farmer, from, to);
