@@ -712,6 +712,7 @@ export default function EntryPage() {
                     <Autocomplete
                       options={catalog}
                       value={lot.commodity}
+                      autoFocus={!lot.commodity.trim()}
                       onChange={(v) => {
                         rememberItem(v);
                         patchLot(block.id, lot.id, (l) => ({

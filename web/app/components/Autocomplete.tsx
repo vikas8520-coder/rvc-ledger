@@ -10,6 +10,7 @@ interface Props {
   placeholder?: string;
   className?: string;
   allowFreeText?: boolean;
+  autoFocus?: boolean;
 }
 
 /**
@@ -23,6 +24,7 @@ export default function Autocomplete({
   placeholder,
   className,
   allowFreeText = true,
+  autoFocus,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [highlightedIdx, setHighlightedIdx] = useState(-1);
@@ -78,6 +80,10 @@ export default function Autocomplete({
     document.addEventListener('pointerdown', handlePointerDown);
     return () => document.removeEventListener('pointerdown', handlePointerDown);
   }, [open]);
+
+  useEffect(() => {
+    if (autoFocus) inputRef.current?.focus();
+  }, [autoFocus]);
 
   const selectOption = (opt: string) => {
     onChange(opt);
