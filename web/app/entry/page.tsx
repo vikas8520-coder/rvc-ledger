@@ -382,6 +382,23 @@ export default function EntryPage() {
     return { validLines, gross, comm, hamali, exp, nett: gross - exp, tally };
   };
 
+  // Warn user before leaving/refreshing if there's unsaved data
+  const hasUnsavedData = useMemo(() => {
+    return blocks.some(
+      (b) => b.farmerName.trim() && totalsOf(b).validLines.length > 0,
+    );
+  }, [blocks]);
+
+  useEffect(() => {
+    if (!hasUnsavedData) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [hasUnsavedData]);
+
   const toPatti = (block: FarmerBlock): FarmerPattiData => {
     const t = totalsOf(block);
     const leftBags = t.tally.reduce((s, r) => s + (r.inBags > 0 ? r.leftBags : 0), 0);
