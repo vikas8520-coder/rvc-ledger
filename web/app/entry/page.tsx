@@ -834,23 +834,29 @@ export default function EntryPage() {
                   </div>
                 );
               })}
-              {/* Add new item input */}
-              <input
-                type="text"
+              {/* Add new item input with autocomplete from catalog */}
+              <Autocomplete
+                options={catalog}
                 value={newItemName}
-                onChange={(e) => setNewItemName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && newItemName.trim()) {
-                    e.preventDefault();
-                    const newLot = emptyLot(newItemName.trim());
-                    rememberItem(newItemName.trim());
+                onChange={(v) => setNewItemName(v)}
+                onSubmit={(v) => {
+                  const name = v.trim();
+                  if (!name) return;
+                  // Check if item already exists for this farmer
+                  const existing = block.lots.find((l) => itemKey(l.commodity) === itemKey(name));
+                  if (existing) {
+                    setSelectedLotId(existing.id);
+                    setStockPopoverId(existing.id);
+                  } else {
+                    const newLot = emptyLot(name);
+                    rememberItem(name);
                     patchBlock(block.id, (b) => ({ ...b, lots: [...b.lots, newLot] }));
                     setSelectedLotId(newLot.id);
-                    setNewItemName('');
                   }
+                  setNewItemName('');
                 }}
                 placeholder="+ item name…"
-                className="min-h-9 w-32 rounded-full border border-dashed border-[var(--border-input)] bg-transparent px-2.5 py-1 text-xs text-[var(--text-muted)] focus:border-[var(--bg-primary)] focus:outline-none"
+                className="w-32 text-xs"
               />
             </div>
 

@@ -7,6 +7,7 @@ interface Props {
   options: string[];
   value: string;
   onChange: (value: string) => void;
+  onSubmit?: (value: string) => void;
   placeholder?: string;
   className?: string;
   allowFreeText?: boolean;
@@ -21,6 +22,7 @@ export default function Autocomplete({
   options,
   value,
   onChange,
+  onSubmit,
   placeholder,
   className,
   allowFreeText = true,
@@ -89,11 +91,16 @@ export default function Autocomplete({
     onChange(opt);
     setOpen(false);
     setHighlightedIdx(-1);
+    onSubmit?.(opt);
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (!open) {
       if (e.key === 'ArrowDown' || e.key === 'Enter') setOpen(true);
+      if (e.key === 'Enter' && allowFreeText && value.trim()) {
+        e.preventDefault();
+        onSubmit?.(value);
+      }
       return;
     }
     if (e.key === 'ArrowDown') {
@@ -108,6 +115,7 @@ export default function Autocomplete({
         selectOption(filtered[highlightedIdx]);
       } else if (allowFreeText) {
         setOpen(false);
+        if (value.trim()) onSubmit?.(value);
       }
     } else if (e.key === 'Escape') {
       setOpen(false);
