@@ -80,19 +80,17 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
     await expect(f1.getByPlaceholder('LOCAL, RSB…')).toHaveValue(`PWTEST_LOCAL_${TS}`);
     await expect(f1.getByPlaceholder('CHILLI, BEANS…').first()).toHaveValue('PWTEST_CHILLI');
 
-    // Add second item to farmer 1: BEANS (via + Add item at top)
-    await f1.getByRole('button', { name: /\+ .*Add item/ }).click();
-    // Enter BEANS as the second item name
-    await fillAndBlur(f1.getByPlaceholder('CHILLI, BEANS…').nth(1), 'PWTEST_BEANS');
-    await f1.getByPlaceholder('200').nth(1).fill('50');
-    await f1.getByPlaceholder('3000').nth(1).fill('1000');
-    // Switch to BEANS via dropdown
-    await f1.locator('select').selectOption({ label: 'PWTEST_BEANS' });
-    // Sale 3: Suresh, 1 bag (22kg), ₹180/10kg
-    await fillAndBlur(f1.getByPlaceholder('Name or CASH SALES'), `PWTEST_SURESH_${TS}`);
-    await f1.getByPlaceholder('20', { exact: true }).fill('1');
-    await f1.getByPlaceholder('kg').fill('22');
-    await f1.getByPlaceholder('220', { exact: true }).fill('180');
+    // Add second item as a new farmer tab: BEANS, Sale 3: Suresh
+    await page.getByRole('button', { name: '+', exact: true }).click();
+    let f1b = farmerCard(page, 2);
+    await fillAndBlur(f1b.getByPlaceholder('LOCAL, RSB…'), `PWTEST_LOCAL_${TS}`);
+    await fillAndBlur(f1b.getByPlaceholder('CHILLI, BEANS…').first(), 'PWTEST_BEANS');
+    await f1b.getByPlaceholder('200').first().fill('50');
+    await f1b.getByPlaceholder('3000').first().fill('1000');
+    await fillAndBlur(f1b.getByPlaceholder('Name or CASH SALES'), `PWTEST_SURESH_${TS}`);
+    await f1b.getByPlaceholder('20', { exact: true }).fill('1');
+    await f1b.getByPlaceholder('kg').fill('22');
+    await f1b.getByPlaceholder('220', { exact: true }).fill('180');
     await saveAndWait(page, 3);
 
     // ── Farmer 2: PWTEST_RSB with TOMATO ──────────────────────────────────
