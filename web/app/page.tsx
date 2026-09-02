@@ -8,7 +8,7 @@ import { useDashboard } from './components/useDashboard';
 import TxnCard from './components/TxnCard';
 import AgingBadge from './components/AgingBadge';
 import { Card, SectionHeader, StatCard, EmptyState, StatSkeleton, ListSkeleton } from './components/ui';
-import { UsersIcon, DollarIcon, PackageIcon, CalendarIcon, TrendingIcon, PrinterIcon } from './components/Icons';
+import { UsersIcon, DollarIcon, PackageIcon, CalendarIcon, TrendingIcon } from './components/Icons';
 import { fmt } from '@/lib/format';
 import { computeAging } from '@/lib/statement';
 import { StockLevel, DailySummary } from '@/lib/types';
@@ -18,9 +18,11 @@ import {
   generateCreditLedgerPdf,
   generateBillsPdf,
   printPdfBlob,
+  sharePdfViaWhatsApp,
 } from '@/lib/pdfShare';
 import { txnToBillData, type CreditLedgerEntry, type ShopProfile } from '@/lib/billPrint';
 import { fyStartISO, fyEndISO, currentFyStartYear, sliceCustomer, rangeLabel } from '@/lib/dateRange';
+import PrintShareMenu from './components/PrintShareMenu';
 
 interface FarmerSummary {
   farmer: string;
@@ -133,6 +135,44 @@ export default function Home() {
     }
   };
 
+  const shareOverview = async (kind: 'dues' | 'ledger' | 'bills') => {
+    setPrintError('');
+    try {
+      const sliced = customers.map((c) => sliceCustomer(c, from, to));
+      const period = rangeLabel(from, to);
+      const shopName = shop.shopName || 'RVC';
+      if (kind === 'dues') {
+        const blob = generateOutstandingListPdf(sliced, shop, uiLang, period);
+        await sharePdfViaWhatsApp(blob, `outstanding-${period}.pdf`, `${shopName} — Outstanding List (${period})`);
+        return;
+      }
+      if (kind === 'ledger') {
+        const entries: CreditLedgerEntry[] = sliced
+          .filter((c) => c.due > 0)
+          .sort((a, b) => formatCustomerName(a, uiLang).localeCompare(formatCustomerName(b, uiLang)))
+          .map((c, i) => ({
+            code: String(i + 1),
+            name: formatCustomerName(c, uiLang),
+            phone: c.phone || undefined,
+            amount: Math.round(c.due),
+            isCredit: false,
+          }));
+        if (entries.length === 0) throw new Error('No outstanding in this date range');
+        const blob = generateCreditLedgerPdf(entries, shop, period, 'All');
+        await sharePdfViaWhatsApp(blob, `credit-ledger-${period}.pdf`, `${shopName} — Credit Ledger (${period})`);
+        return;
+      }
+      const bills = sliced.flatMap((c) =>
+        c.txns.filter((tx) => tx.type === 'bill').map((tx) => txnToBillData(tx, formatCustomerName(c, uiLang))),
+      );
+      if (bills.length === 0) throw new Error('No customer bills in this date range');
+      const blob = generateBillsPdf(bills, shop, 'patti');
+      await sharePdfViaWhatsApp(blob, `customer-bills-${period}.pdf`, `${shopName} — Customer Bills (${period})`);
+    } catch (err: unknown) {
+      setPrintError(err instanceof Error ? err.message : 'Share failed');
+    }
+  };
+
   const lowStock = stock.filter((s) => s.qty > 0 && s.qty < 5);
   const outStock = stock.filter((s) => s.qty <= 0);
 
@@ -181,15 +221,28 @@ export default function Home() {
 
       <DateRangeBar from={from} to={to} onChange={(a, b) => { setFrom(a); setTo(b); }} />
       <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={() => printOverview('dues')} className="flex min-h-11 items-center gap-1.5 rounded-lg bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-on-primary)]">
-          <PrinterIcon size={14} /> {t('printDues')}
-        </button>
-        <button type="button" onClick={() => printOverview('ledger')} className="flex min-h-11 items-center gap-1.5 rounded-lg bg-[var(--bg-secondary)] px-3 text-sm text-[var(--text-on-primary)]">
-          <PrinterIcon size={14} /> {t('printLedger')}
-        </button>
-        <button type="button" onClick={() => printOverview('bills')} className="flex min-h-11 items-center gap-1.5 rounded-lg border border-[var(--border-input)] px-3 text-sm">
-          <PrinterIcon size={14} /> {t('printCustomerBills')}
-        </button>
+        <PrintShareMenu
+          options={[
+            {
+              key: 'dues',
+              label: t('printDues'),
+              onPrint: () => printOverview('dues'),
+              onShare: () => shareOverview('dues'),
+            },
+            {
+              key: 'ledger',
+              label: t('printLedger'),
+              onPrint: () => printOverview('ledger'),
+              onShare: () => shareOverview('ledger'),
+            },
+            {
+              key: 'bills',
+              label: t('printCustomerBills'),
+              onPrint: () => printOverview('bills'),
+              onShare: () => shareOverview('bills'),
+            },
+          ]}
+        />
       </div>
       {printError && (
         <p className="rounded-lg bg-[var(--bg-danger)] px-3 py-2 text-sm text-[var(--text-on-primary)]" role="alert">

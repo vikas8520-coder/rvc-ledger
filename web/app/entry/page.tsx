@@ -9,6 +9,17 @@ import { fmt } from '@/lib/format';
 import Autocomplete from '../components/Autocomplete';
 import { printFarmerPatti, type FarmerPattiData, type ShopProfile } from '@/lib/billPrint';
 import { PrinterIcon } from '../components/Icons';
+import PrintShareMenu from '../components/PrintShareMenu';
+import {
+  generateOutstandingListPdf,
+  generateCreditLedgerPdf,
+  generateBillsPdf,
+  printPdfBlob,
+  sharePdfViaWhatsApp,
+} from '@/lib/pdfShare';
+import { txnToBillData, type CreditLedgerEntry } from '@/lib/billPrint';
+import { sliceCustomer, rangeLabel } from '@/lib/dateRange';
+import type { Customer } from '@/lib/types';
 
 function today() {
   const d = new Date();
@@ -400,6 +411,112 @@ export default function EntryPage() {
     };
   };
 
+  // Fetch full customer data for dues/ledger/bills printing
+  const fetchDashboardCustomers = async (): Promise<Customer[]> => {
+    const res = await fetch('/api/dashboard');
+    const d = await res.json();
+    return d.customers || [];
+  };
+
+  const printDues = async () => {
+    try {
+      const fullCustomers = await fetchDashboardCustomers();
+      const sliced = fullCustomers.map((c) => sliceCustomer(c, date, date));
+      printPdfBlob(generateOutstandingListPdf(sliced, shop, uiLang, rangeLabel(date, date)));
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : 'Print failed');
+    }
+  };
+
+  const shareDues = async () => {
+    try {
+      const fullCustomers = await fetchDashboardCustomers();
+      const sliced = fullCustomers.map((c) => sliceCustomer(c, date, date));
+      const blob = generateOutstandingListPdf(sliced, shop, uiLang, rangeLabel(date, date));
+      await sharePdfViaWhatsApp(blob, `outstanding-${date}.pdf`, `${shop.shopName || 'RVC'} — Outstanding (${date})`);
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : 'Share failed');
+    }
+  };
+
+  const printLedger = async () => {
+    try {
+      const fullCustomers = await fetchDashboardCustomers();
+      const sliced = fullCustomers.map((c) => sliceCustomer(c, date, date));
+      const entries: CreditLedgerEntry[] = sliced
+        .filter((c) => c.due > 0)
+        .sort((a, b) => formatCustomerName(a, uiLang).localeCompare(formatCustomerName(b, uiLang)))
+        .map((c, i) => ({
+          code: String(i + 1),
+          name: formatCustomerName(c, uiLang),
+          phone: c.phone || undefined,
+          amount: Math.round(c.due),
+          isCredit: false,
+        }));
+      if (entries.length === 0) throw new Error('No outstanding on this date');
+      printPdfBlob(generateCreditLedgerPdf(entries, shop, rangeLabel(date, date), 'All'));
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : 'Print failed');
+    }
+  };
+
+  const shareLedger = async () => {
+    try {
+      const fullCustomers = await fetchDashboardCustomers();
+      const sliced = fullCustomers.map((c) => sliceCustomer(c, date, date));
+      const entries: CreditLedgerEntry[] = sliced
+        .filter((c) => c.due > 0)
+        .sort((a, b) => formatCustomerName(a, uiLang).localeCompare(formatCustomerName(b, uiLang)))
+        .map((c, i) => ({
+          code: String(i + 1),
+          name: formatCustomerName(c, uiLang),
+          phone: c.phone || undefined,
+          amount: Math.round(c.due),
+          isCredit: false,
+        }));
+      if (entries.length === 0) throw new Error('No outstanding on this date');
+      const blob = generateCreditLedgerPdf(entries, shop, rangeLabel(date, date), 'All');
+      await sharePdfViaWhatsApp(blob, `credit-ledger-${date}.pdf`, `${shop.shopName || 'RVC'} — Credit Ledger (${date})`);
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : 'Share failed');
+    }
+  };
+
+  const printBills = async () => {
+    try {
+      const fullCustomers = await fetchDashboardCustomers();
+      const sliced = fullCustomers.map((c) => sliceCustomer(c, date, date));
+      const bills = sliced.flatMap((c) =>
+        c.txns.filter((tx) => tx.type === 'bill').map((tx) => txnToBillData(tx, formatCustomerName(c, uiLang))),
+      );
+      if (bills.length === 0) throw new Error('No customer bills on this date');
+      printPdfBlob(generateBillsPdf(bills, shop, 'patti'));
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : 'Print failed');
+    }
+  };
+
+  const shareBills = async () => {
+    try {
+      const fullCustomers = await fetchDashboardCustomers();
+      const sliced = fullCustomers.map((c) => sliceCustomer(c, date, date));
+      const bills = sliced.flatMap((c) =>
+        c.txns.filter((tx) => tx.type === 'bill').map((tx) => txnToBillData(tx, formatCustomerName(c, uiLang))),
+      );
+      if (bills.length === 0) throw new Error('No customer bills on this date');
+      const blob = generateBillsPdf(bills, shop, 'patti');
+      await sharePdfViaWhatsApp(blob, `customer-bills-${date}.pdf`, `${shop.shopName || 'RVC'} — Customer Bills (${date})`);
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : 'Share failed');
+    }
+  };
+
+  const printAllPattis = () => {
+    for (const p of savedPattis) {
+      printFarmerPatti(p, shop);
+    }
+  };
+
   const ensureCatalog = async (names: string[]) => {
     const existing = new Set(catalog.map(itemKey));
     for (const name of names) {
@@ -617,6 +734,33 @@ export default function EntryPage() {
           </button>
           <span className="w-full text-xs text-[var(--text-muted)] sm:w-auto">{t('wholesaleHint')}</span>
         </div>
+        <PrintShareMenu
+          options={[
+            {
+              key: 'patti',
+              label: t('printFarmerPatti'),
+              onPrint: printAllPattis,
+            },
+            {
+              key: 'dues',
+              label: t('printDues'),
+              onPrint: printDues,
+              onShare: shareDues,
+            },
+            {
+              key: 'ledger',
+              label: t('printLedger'),
+              onPrint: printLedger,
+              onShare: shareLedger,
+            },
+            {
+              key: 'bills',
+              label: t('printCustomerBills'),
+              onPrint: printBills,
+              onShare: shareBills,
+            },
+          ]}
+        />
       </div>
 
       {/* Farmer tabs — browser-style */}
