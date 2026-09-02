@@ -29,6 +29,9 @@ test.describe('signed-in shop', () => {
     await expect(page.getByText('Farmer patti', { exact: true })).toBeVisible();
     await expect(page.getByText('Customer bills', { exact: true })).toBeVisible();
     await expect(page.getByText('Docket / gate pass', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: /Farmer patti/i }).click();
+    await expect(page).toHaveURL(/\/print/);
+    await expect(page.getByRole('heading', { name: 'Patti Book' })).toHaveCount(0);
   });
 
   test('payment form is ready to collect', async ({ page }) => {

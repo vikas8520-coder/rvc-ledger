@@ -568,6 +568,100 @@ export async function getFarmerSummary(shopId: string, fyStartYear: number): Pro
   });
 }
 
+export async function listFarmersOnDate(shopId: string, date: string): Promise<string[]> {
+  if (!isDbConfigured()) return [];
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql`
+    SELECT DISTINCT bi.farmer
+    FROM bill_items bi
+    JOIN transactions t ON t.id = bi.transaction_id
+    WHERE bi.shop_id = ${shopId}
+      AND t.date = ${date}
+      AND bi.farmer IS NOT NULL AND bi.farmer != ''
+      AND (bi.kind = 'item' OR bi.kind IS NULL)
+    ORDER BY bi.farmer
+  `;
+  return (rows as { farmer: string }[]).map((r) => r.farmer);
+}
+
+export async function getFarmerPatti(
+  shopId: string,
+  farmer: string,
+  date: string,
+): Promise<{
+  farmer: string;
+  date: string;
+  lines: {
+    commodity: string;
+    qty: string;
+    customer: string;
+    weight: string;
+    rate: string;
+    amount: number;
+    cash: boolean;
+  }[];
+  comm: number;
+  hamali: number;
+} | null> {
+  if (!isDbConfigured()) return null;
+  await ensureSchema();
+  const sql = getSql();
+  const name = farmer.trim();
+  if (!name) return null;
+
+  const rows = await sql`
+    SELECT
+      c.name as customer_name,
+      t.payment_method,
+      t.amount_paid,
+      t.bill_amount,
+      bi.confirmed_name,
+      bi.qty,
+      bi.rate,
+      bi.amount,
+      bi.bags,
+      bi.hamali
+    FROM bill_items bi
+    JOIN transactions t ON t.id = bi.transaction_id
+    JOIN customers c ON c.id = t.customer_id
+    WHERE bi.shop_id = ${shopId}
+      AND t.date = ${date}
+      AND bi.farmer = ${name}
+      AND (bi.kind = 'item' OR bi.kind IS NULL)
+    ORDER BY t.created_at, bi.created_at
+  `;
+  if (rows.length === 0) return null;
+
+  const commissionPctStr = await getSetting(shopId, 'commissionPct');
+  const commissionPct = commissionPctStr ? Number(commissionPctStr) : 0;
+
+  const lines = (rows as any[]).map((r) => {
+    const amount = Number(r.amount || 0);
+    const paid = Number(r.amount_paid || 0);
+    const billed = Number(r.bill_amount || 0);
+    const cash = r.payment_method === 'cash' || (paid > 0 && billed > 0 && paid >= billed);
+    return {
+      commodity: String(r.confirmed_name || ''),
+      qty: r.bags != null && r.bags !== '' ? String(r.bags) : '',
+      customer: String(r.customer_name || ''),
+      weight: r.qty != null ? String(r.qty) : '',
+      rate: r.rate != null ? String(r.rate) : '',
+      amount,
+      cash,
+    };
+  });
+  const gross = lines.reduce((s, l) => s + l.amount, 0);
+  const hamali = (rows as any[]).reduce((s, r) => s + Number(r.hamali || 0), 0);
+  return {
+    farmer: name,
+    date,
+    lines,
+    comm: (gross * commissionPct) / 100,
+    hamali,
+  };
+}
+
 function toDateOnly(value: unknown): string {
   if (!value) return '';
   if (typeof value === 'string') return value.slice(0, 10);
