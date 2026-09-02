@@ -54,7 +54,7 @@ export default defineConfig({
     {
       name: 'chromium',
       dependencies: ['setup'],
-      testMatch: /signed-in\.spec\.ts/,
+      testMatch: /signed-in\.spec\.ts|patti-demo\.spec\.ts/,
       use: {
         ...devices['Desktop Chrome'],
         storageState: authFile,
@@ -64,7 +64,7 @@ export default defineConfig({
     {
       name: 'mobile',
       dependencies: ['setup'],
-      testMatch: /signed-in\.spec\.ts/,
+      testMatch: /signed-in\.spec\.ts|patti-demo\.spec\.ts/,
       use: {
         ...devices['Pixel 5'],
         storageState: authFile,
