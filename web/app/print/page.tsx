@@ -145,7 +145,7 @@ export default function PrintPage() {
         shop,
       );
     } catch (err: unknown) {
-      setStatus(err instanceof Error ? err.message : 'Could not print farmer patti');
+      setStatus(err instanceof Error ? err.message : 'Could not print detailed bill');
     }
   };
 
