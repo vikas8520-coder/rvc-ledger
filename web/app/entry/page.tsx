@@ -1001,11 +1001,10 @@ export default function EntryPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          const name = cashCustomer?.name || 'CASH SALES';
                           patchLotLine(block.id, lot.id, line.id, (ln) =>
                             ln.cash
                               ? { ...ln, cash: false }
-                              : { ...ln, cash: true, customerName: name, customerId: cashCustomer?.id || null, commodity: lot.commodity },
+                              : { ...ln, cash: true, commodity: lot.commodity },
                           );
                         }}
                         className={`min-h-9 w-full rounded border px-1 py-1 text-[10px] font-medium ${
