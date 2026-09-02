@@ -699,30 +699,66 @@ export default function EntryPage() {
               </div>
             )}
 
-            {/* Single item + stock-in at top */}
+            {/* Item dropdown — switch items or add a new one */}
             <p className="pt-1 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">{t('farmerItems')}</p>
             <p className="text-xs text-[var(--text-muted)]">{t('stockInHint')}</p>
             {(() => {
-              const lot = block.lots[0];
+              const lot = block.lots.find((l) => l.id === selectedLotId) || block.lots[0];
               if (!lot) return null;
               const lotTally = tot.tally.find((r) => itemKey(r.item) === itemKey(lot.commodity));
               return (
                 <div className="space-y-2 rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] p-2">
-                  <Field label={`${t('item')} *`}>
-                    <Autocomplete
-                      options={catalog}
-                      value={lot.commodity}
-                      onChange={(v) => {
-                        rememberItem(v);
-                        patchLot(block.id, lot.id, (l) => ({
-                          ...l,
-                          commodity: v,
-                          lines: l.lines.map((ln) => ({ ...ln, commodity: v })),
-                        }));
+                  <div className="flex items-center gap-2">
+                    <Field label={`${t('item')} *`} className="flex-1">
+                      <Autocomplete
+                        options={catalog}
+                        value={lot.commodity}
+                        onChange={(v) => {
+                          rememberItem(v);
+                          patchLot(block.id, lot.id, (l) => ({
+                            ...l,
+                            commodity: v,
+                            lines: l.lines.map((ln) => ({ ...ln, commodity: v })),
+                          }));
+                        }}
+                        placeholder="CHILLI, BEANS…"
+                      />
+                    </Field>
+                    {block.lots.length > 1 && (
+                      <button
+                        type="button"
+                        className="mt-4 min-h-11 min-w-11 text-sm text-[var(--text-muted)]"
+                        onClick={() => {
+                          patchBlock(block.id, (b) => ({ ...b, lots: b.lots.filter((l) => l.id !== lot.id) }));
+                          setSelectedLotId(null);
+                        }}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  {block.lots.length > 1 && (
+                    <select
+                      value={lot.id}
+                      onChange={(e) => {
+                        if (e.target.value === '__add_new__') {
+                          const newLot = emptyLot();
+                          patchBlock(block.id, (b) => ({ ...b, lots: [...b.lots, newLot] }));
+                          setSelectedLotId(newLot.id);
+                        } else {
+                          setSelectedLotId(e.target.value);
+                        }
                       }}
-                      placeholder="CHILLI, BEANS…"
-                    />
-                  </Field>
+                      className={inputCls}
+                    >
+                      {block.lots.map((l, i) => (
+                        <option key={l.id} value={l.id}>
+                          {l.commodity.trim() || `${t('item')} ${i + 1}`}
+                        </option>
+                      ))}
+                      <option value="__add_new__">+ {t('addItem')}</option>
+                    </select>
+                  )}
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <Field label={`${t('bags')} in`}>
                       <input
@@ -777,10 +813,19 @@ export default function EntryPage() {
                 </div>
               );
             })()}
-
-            {/* Customer sale fields — one set, below the item */}
+            <button
+              type="button"
+              onClick={() => {
+                const newLot = emptyLot();
+                patchBlock(block.id, (b) => ({ ...b, lots: [...b.lots, newLot] }));
+                setSelectedLotId(newLot.id);
+              }}
+              className="text-xs text-[var(--text-muted)] underline"
+            >
+              + {t('addItem')}
+            </button>
             {(() => {
-              const lot = block.lots[0];
+              const lot = block.lots.find((l) => l.id === selectedLotId) || block.lots[0];
               if (!lot) return null;
               const line = lot.lines[0];
               if (!line) return null;

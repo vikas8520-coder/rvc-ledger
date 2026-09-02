@@ -45,6 +45,8 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
   test('fill two farmers with different products, bag weights, save, verify, edit', async ({ page }) => {
     // ── Navigate ──────────────────────────────────────────────────────────
     await page.goto('/entry');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
     await expect(page.getByRole('heading', { name: 'Patti Book' })).toBeVisible({ timeout: 30_000 });
 
     // ── Farmer 1: PWTEST_LOCAL with CHILLI ────────────────────────────────
@@ -80,17 +82,17 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
     await expect(f1.getByPlaceholder('LOCAL, RSB…')).toHaveValue(`PWTEST_LOCAL_${TS}`);
     await expect(f1.getByPlaceholder('CHILLI, BEANS…').first()).toHaveValue('PWTEST_CHILLI');
 
-    // Add second item as a new farmer tab: BEANS, Sale 3: Suresh
-    await page.getByRole('button', { name: '+', exact: true }).click();
-    let f1b = farmerCard(page, 2);
-    await fillAndBlur(f1b.getByPlaceholder('LOCAL, RSB…'), `PWTEST_LOCAL_${TS}`);
-    await fillAndBlur(f1b.getByPlaceholder('CHILLI, BEANS…').first(), 'PWTEST_BEANS');
-    await f1b.getByPlaceholder('200').first().fill('50');
-    await f1b.getByPlaceholder('3000').first().fill('1000');
-    await fillAndBlur(f1b.getByPlaceholder('Name or CASH SALES'), `PWTEST_SURESH_${TS}`);
-    await f1b.getByPlaceholder('20', { exact: true }).fill('1');
-    await f1b.getByPlaceholder('kg').fill('22');
-    await f1b.getByPlaceholder('220', { exact: true }).fill('180');
+    // Add second item to same farmer via "+ Add item" link
+    await f1.getByRole('button', { name: /\+ .*Add item/ }).click();
+    // New empty item is now selected — enter BEANS
+    await fillAndBlur(f1.getByPlaceholder('CHILLI, BEANS…').first(), 'PWTEST_BEANS');
+    await f1.getByPlaceholder('200').first().fill('50');
+    await f1.getByPlaceholder('3000').first().fill('1000');
+    // Sale 3: Suresh, 1 bag (22kg), ₹180/10kg
+    await fillAndBlur(f1.getByPlaceholder('Name or CASH SALES'), `PWTEST_SURESH_${TS}`);
+    await f1.getByPlaceholder('20', { exact: true }).fill('1');
+    await f1.getByPlaceholder('kg').fill('22');
+    await f1.getByPlaceholder('220', { exact: true }).fill('180');
     await saveAndWait(page, 3);
 
     // ── Farmer 2: PWTEST_RSB with TOMATO ──────────────────────────────────
@@ -184,6 +186,8 @@ test.describe('Data Entry — multi-farmer, multi-product, bag weights, save+edi
 
   test('verify leftover/oversold warning appears', async ({ page }) => {
     await page.goto('/entry');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
     await expect(page.getByRole('heading', { name: 'Patti Book' })).toBeVisible({ timeout: 30_000 });
 
     const f1 = farmerCard(page, 1);
