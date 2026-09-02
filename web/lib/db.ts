@@ -505,6 +505,7 @@ export async function getFYSummary(shopId: string, fyStartYear: number): Promise
 // Get farmer-wise summary for a FY: how much produce sold per farmer, commission, net payable.
 export async function getFarmerSummary(shopId: string, fyStartYear: number): Promise<{
   farmer: string;
+  phone: string | null;
   totalSales: number;
   totalBags: number;
   totalKgs: number;
@@ -527,6 +528,7 @@ export async function getFarmerSummary(shopId: string, fyStartYear: number): Pro
   const rows = await sql`
     SELECT
       bi.farmer,
+      s.phone,
       COALESCE(SUM(bi.amount), 0) as total_sales,
       COALESCE(SUM(COALESCE(bi.bags, 0)), 0) as total_bags,
       COALESCE(SUM(
@@ -541,11 +543,12 @@ export async function getFarmerSummary(shopId: string, fyStartYear: number): Pro
       COUNT(*) as line_count
     FROM bill_items bi
     JOIN transactions t ON t.id = bi.transaction_id
+    LEFT JOIN suppliers s ON s.name = bi.farmer AND s.shop_id = ${shopId}
     WHERE bi.shop_id = ${shopId}
       AND bi.farmer IS NOT NULL AND bi.farmer != ''
       AND t.date >= ${from} AND t.date <= ${to}
       AND (bi.kind = 'item' OR bi.kind IS NULL)
-    GROUP BY bi.farmer
+    GROUP BY bi.farmer, s.phone
     ORDER BY total_sales DESC
   `;
 
@@ -557,6 +560,7 @@ export async function getFarmerSummary(shopId: string, fyStartYear: number): Pro
     const netPayable = totalSales - commission - totalHamali;
     return {
       farmer: r.farmer,
+      phone: r.phone || null,
       totalSales,
       totalBags: Number(r.total_bags),
       totalKgs: Number(r.total_kgs),
@@ -1703,15 +1707,20 @@ export async function saveEntryBatch(
   }
 
   let supplierId: string | null = null;
-  let newSupplier: { id: string; name: string } | null = null;
+  let newSupplier: { id: string; name: string; phone: string | null } | null = null;
   if (purchase?.supplier?.trim()) {
     const sname = purchase.supplier.trim();
-    const found = await sql`SELECT id FROM suppliers WHERE name = ${sname} AND shop_id = ${shopId} LIMIT 1`;
-    const sup = found[0] as { id: string } | undefined;
+    const sphone = (purchase.supplierPhone || '').trim() || null;
+    const found = await sql`SELECT id, phone FROM suppliers WHERE name = ${sname} AND shop_id = ${shopId} LIMIT 1`;
+    const sup = found[0] as { id: string; phone: string | null } | undefined;
     if (sup) {
       supplierId = sup.id;
+      // Update phone if a new one was provided and differs from stored
+      if (sphone && sup.phone !== sphone) {
+        await sql`UPDATE suppliers SET phone = ${sphone} WHERE id = ${sup.id}`;
+      }
     } else {
-      newSupplier = { id: randomUUID(), name: sname };
+      newSupplier = { id: randomUUID(), name: sname, phone: sphone };
       supplierId = newSupplier.id;
     }
   }
@@ -1725,7 +1734,7 @@ export async function saveEntryBatch(
       q.push(txn`INSERT INTO customers (id, name, shop_id) VALUES (${c.id}, ${c.name}, ${shopId})`);
     }
     if (newSupplier) {
-      q.push(txn`INSERT INTO suppliers (id, name, shop_id) VALUES (${newSupplier.id}, ${newSupplier.name}, ${shopId})`);
+      q.push(txn`INSERT INTO suppliers (id, name, phone, shop_id) VALUES (${newSupplier.id}, ${newSupplier.name}, ${newSupplier.phone}, ${shopId})`);
     }
     for (const bill of bills) {
       const name = (bill.customerName || '').trim();

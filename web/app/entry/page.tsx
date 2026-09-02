@@ -132,6 +132,7 @@ interface Lot {
 interface FarmerBlock {
   id: string;
   farmerName: string;
+  farmerPhone: string;
   hundekari: string;
   lots: Lot[];
   commissionPct: string;
@@ -197,6 +198,7 @@ function emptyFarmer(commissionPct: string): FarmerBlock {
   return {
     id: newId(),
     farmerName: '',
+    farmerPhone: '',
     hundekari: '',
     lots: [],
     commissionPct,
@@ -242,6 +244,7 @@ export default function EntryPage() {
   const [customers, setCustomers] = useState<CustomerOpt[]>([]);
   const [catalog, setCatalog] = useState<string[]>([]);
   const [farmerNames, setFarmerNames] = useState<string[]>([]);
+  const [farmerPhones, setFarmerPhones] = useState<Record<string, string>>({});
   const [shop, setShop] = useState<ShopProfile>({});
   const [showAddFarmer, setShowAddFarmer] = useState<string | null>(null);
   const [newFarmerName, setNewFarmerName] = useState('');
@@ -259,7 +262,15 @@ export default function EntryPage() {
       .catch(() => {});
     fetch('/api/suppliers')
       .then((r) => r.json())
-      .then((d) => setFarmerNames((d.suppliers || []).map((s: { name: string }) => s.name)))
+      .then((d) => {
+        const sups = d.suppliers || [];
+        setFarmerNames(sups.map((s: { name: string }) => s.name).sort());
+        const phoneMap: Record<string, string> = {};
+        for (const s of sups) {
+          if (s.phone) phoneMap[s.name] = s.phone;
+        }
+        setFarmerPhones(phoneMap);
+      })
       .catch(() => {});
     fetch('/api/settings')
       .then((r) => r.json())
@@ -339,7 +350,10 @@ export default function EntryPage() {
       const d = await r.json();
       if (d.error) throw new Error(d.error);
       setFarmerNames((prev) => [...prev, newFarmerName.trim()].sort());
-      patchBlock(blockId, (b) => ({ ...b, farmerName: newFarmerName.trim() }));
+      if (newFarmerPhone.trim()) {
+        setFarmerPhones((prev) => ({ ...prev, [newFarmerName.trim()]: newFarmerPhone.trim() }));
+      }
+      patchBlock(blockId, (b) => ({ ...b, farmerName: newFarmerName.trim(), farmerPhone: newFarmerPhone.trim() }));
       setShowAddFarmer(null);
       setNewFarmerName('');
       setNewFarmerPhone('');
@@ -634,7 +648,7 @@ export default function EntryPage() {
           body: JSON.stringify({
             bills,
             purchase: purchaseItems.length
-              ? { date, supplier: block.farmerName.trim(), total: tot.gross, items: purchaseItems }
+              ? { date, supplier: block.farmerName.trim(), supplierPhone: block.farmerPhone.trim() || null, total: tot.gross, items: purchaseItems }
               : null,
           }),
         });
@@ -840,7 +854,7 @@ export default function EntryPage() {
         const tot = totalsOf(block);
         return (
           <section key={block.id} className="space-y-1.5 rounded-xl rounded-t-none border border-t-0 border-[var(--border-card)] bg-[var(--bg-card)] p-2 sm:p-3">
-            {/* Farmer + hundekari — compact single row */}
+            {/* Farmer + phone + hundekari — compact single row */}
             <div className="flex flex-wrap items-end gap-1.5">
               <div className="min-w-[8rem] flex-1">
                 <label className="mb-0.5 block text-[10px] text-[var(--text-muted)]">{t('farmer')} *</label>
@@ -848,8 +862,23 @@ export default function EntryPage() {
                   options={farmerNames}
                   value={block.farmerName}
                   onChange={(v) => patchBlock(block.id, (b) => ({ ...b, farmerName: v }))}
+                  onSubmit={(v) => {
+                    const name = v.trim();
+                    if (!name) return;
+                    const phone = farmerPhones[name] || '';
+                    patchBlock(block.id, (b) => ({ ...b, farmerName: name, farmerPhone: phone }));
+                  }}
                   placeholder="LOCAL, RSB…"
                   className="text-xs"
+                />
+              </div>
+              <div className="w-32">
+                <label className="mb-0.5 block text-[10px] text-[var(--text-muted)]">{t('phone')}</label>
+                <input
+                  value={block.farmerPhone}
+                  onChange={(e) => patchBlock(block.id, (b) => ({ ...b, farmerPhone: e.target.value }))}
+                  className={smInput}
+                  inputMode="tel"
                 />
               </div>
               <div className="w-32">

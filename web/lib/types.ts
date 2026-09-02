@@ -45,6 +45,7 @@ export interface PurchaseItem {
 export interface PurchaseData {
   date: string;
   supplier: string;
+  supplierPhone?: string | null;
   billNo?: string | null;
   total: number;
   items: PurchaseItem[];
