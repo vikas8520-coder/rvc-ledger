@@ -226,6 +226,7 @@ export default function EntryPage() {
   const [newItemName, setNewItemName] = useState('');
   const [editingLotId, setEditingLotId] = useState<string | null>(null);
   const [stockPopoverId, setStockPopoverId] = useState<string | null>(null);
+  const [weightsExpanded, setWeightsExpanded] = useState<Record<string, boolean>>({});
 
   const [customers, setCustomers] = useState<CustomerOpt[]>([]);
   const [catalog, setCatalog] = useState<string[]>([]);
@@ -1027,10 +1028,13 @@ export default function EntryPage() {
                     </div>
                   </div>
                   {/* Weight entry — per-bag or total toggle */}
-                  {line.bagWeights.length > 0 && (
+                  {line.bagWeights.length > 0 && (() => {
+                    const expanded = weightsExpanded[line.id] !== false; // default expanded
+                    const hasWeights = line.bagWeights.some((w) => w.trim() !== '');
+                    return (
                     <div className="flex flex-wrap items-center gap-1">
                       {/* Toggle: per-bag vs total */}
-                      <div className="flex rounded border border-[var(--border-input)] text-[9px]">
+                      <div className="flex shrink-0 rounded border border-[var(--border-input)] text-[9px]">
                         <button
                           type="button"
                           className={`px-1.5 py-0.5 ${line.weightMode !== 'total' ? 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]' : 'text-[var(--text-muted)]'}`}
@@ -1061,38 +1065,59 @@ export default function EntryPage() {
                             )
                           }
                         />
+                      ) : hasWeights && !expanded ? (
+                        /* Collapsed summary — show total + edit button */
+                        <button
+                          type="button"
+                          className="text-[10px] text-[var(--text-muted)] underline"
+                          onClick={() => setWeightsExpanded((s) => ({ ...s, [line.id]: true }))}
+                        >
+                          {line.bagWeights.filter((w) => w.trim()).length} bags · {line.weightKg}kg ✎
+                        </button>
                       ) : (
-                        /* Per-bag weight inputs — very small */
-                        line.bagWeights.map((w, wi) => (
-                          <input
-                            key={`${line.id}-w-${wi}`}
-                            type="number"
-                            inputMode="decimal"
-                            value={w}
-                            placeholder={`${wi + 1}kg`}
-                            aria-label={`${t('bag')} ${wi + 1} kg`}
-                            className={`${smInput} h-8 w-10 px-1 text-[10px]`}
-                            onChange={(e) =>
-                              patchLotLine(block.id, lot.id, line.id, (ln) =>
-                                fillLine(
-                                  ln,
-                                  {
-                                    commodity: lot.commodity,
-                                    bagWeights: ln.bagWeights.map((x, j) => (j === wi ? e.target.value : x)),
-                                  },
-                                  rateUnit,
-                                  'weight',
-                                ),
-                              )
-                            }
-                          />
-                        ))
+                        /* Per-bag weight inputs — tiny grid */
+                        <div className="flex flex-wrap gap-0.5">
+                          {line.bagWeights.map((w, wi) => (
+                            <input
+                              key={`${line.id}-w-${wi}`}
+                              type="number"
+                              inputMode="decimal"
+                              value={w}
+                              placeholder={`${wi + 1}`}
+                              aria-label={`${t('bag')} ${wi + 1} kg`}
+                              className="h-7 w-8 rounded border border-[var(--border-input)] bg-[var(--bg-base)] px-0.5 text-center text-[9px] tabular-nums"
+                              onChange={(e) =>
+                                patchLotLine(block.id, lot.id, line.id, (ln) =>
+                                  fillLine(
+                                    ln,
+                                    {
+                                      commodity: lot.commodity,
+                                      bagWeights: ln.bagWeights.map((x, j) => (j === wi ? e.target.value : x)),
+                                    },
+                                    rateUnit,
+                                    'weight',
+                                  ),
+                                )
+                              }
+                            />
+                          ))}
+                          {hasWeights && (
+                            <button
+                              type="button"
+                              className="ml-1 text-[9px] text-[var(--text-muted)] underline"
+                              onClick={() => setWeightsExpanded((s) => ({ ...s, [line.id]: false }))}
+                            >
+                              done
+                            </button>
+                          )}
+                        </div>
                       )}
-                      {num(line.weightKg) > 0 && (
+                      {num(line.weightKg) > 0 && (line.weightMode === 'total' || (hasWeights && !expanded)) && (
                         <span className="text-[10px] text-[var(--text-muted)]">= {line.weightKg}kg</span>
                       )}
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
               );
             })()}
