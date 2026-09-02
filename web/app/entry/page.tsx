@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { usePersistentState } from '../components/usePersistentState';
 import { useI18n } from '../components/I18nProvider';
 import { fmt } from '@/lib/format';
@@ -22,8 +23,10 @@ function num(s: string): number {
 }
 
 type RateUnit = 'per_kg' | 'per_10kg';
-type CalcField = 'bags' | 'weight' | 'kgBag' | 'rate' | 'amount';
+type CalcField = 'bags' | 'weight' | 'rate' | 'amount';
 type StockField = 'bags' | 'kg' | 'avg';
+
+const MAX_SALE_BAGS = 80;
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;
@@ -53,8 +56,28 @@ function fillStock(bags: string, kg: string, avg: string, changed: StockField): 
   };
 }
 
+function resizeWeights(existing: string[] | undefined, count: number): string[] {
+  const n = Math.max(0, Math.min(MAX_SALE_BAGS, Math.floor(count)));
+  const next = (existing || []).slice(0, n);
+  while (next.length < n) next.push('');
+  return next;
+}
+
+function weightsTotal(weights: string[] | undefined): number {
+  return round2((weights || []).reduce((s, w) => s + num(w), 0));
+}
+
 function fillLine(line: Line, patch: Partial<Line>, unit: RateUnit, changed: CalcField): Line {
-  const next: Line = { ...line, ...patch, bags: '1' };
+  const next: Line = { ...line, ...patch };
+  if (changed === 'bags') {
+    const count = Math.max(0, Math.min(MAX_SALE_BAGS, Math.floor(num(next.bags))));
+    next.bags = next.bags.trim() === '' ? '' : String(count);
+    next.bagWeights = resizeWeights(next.bagWeights, count);
+  } else {
+    next.bagWeights = next.bagWeights ? [...next.bagWeights] : [];
+  }
+  const total = weightsTotal(next.bagWeights);
+  next.weightKg = total > 0 ? String(total) : '';
   if (changed === 'amount') return next;
   const perKg = toPerKg(next.pricePerKg, unit);
   const w = num(next.weightKg);
@@ -66,6 +89,7 @@ interface Line {
   id: string;
   commodity: string;
   bags: string;
+  bagWeights: string[];
   customerName: string;
   customerId: string | null;
   weightKg: string;
@@ -103,11 +127,33 @@ interface CustomerOpt {
   name: string;
 }
 
+interface SavedSale {
+  txnId: string;
+  customerId: string;
+  farmer: string;
+  commodity: string;
+  customerName: string;
+  bags: string;
+  bagWeights: string[];
+  weightKg: string;
+  rate: string;
+  amount: number;
+  cash: boolean;
+  hamali: string;
+}
+
+interface SavedBundle {
+  pattis: FarmerPattiData[];
+  sales: SavedSale[];
+  purchaseIds: string[];
+}
+
 function emptyLine(commodity = '', price = ''): Line {
   return {
     id: newId(),
     commodity,
-    bags: '1',
+    bags: '',
+    bagWeights: [],
     customerName: '',
     customerId: null,
     weightKg: '',
@@ -160,7 +206,7 @@ export default function EntryPage() {
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
-  const [saved, setSaved] = useState<FarmerPattiData[] | null>(null);
+  const [saved, setSaved] = useState<SavedBundle | null>(null);
 
   const [customers, setCustomers] = useState<CustomerOpt[]>([]);
   const [catalog, setCatalog] = useState<string[]>([]);
@@ -339,6 +385,8 @@ export default function EntryPage() {
     setSaveError('');
     try {
       const savedPattis: FarmerPattiData[] = [];
+      const savedSales: SavedSale[] = [];
+      const purchaseIds: string[] = [];
       for (const block of ready) {
         const tot = totalsOf(block);
         const itemNames = [
@@ -363,7 +411,11 @@ export default function EntryPage() {
                 ? String(round2(toPerKg(sale.pricePerKg, rateUnit)))
                 : sale.pricePerKg || null,
               amount: num(sale.amount),
-              display: `${sale.bags || 0} bags${sale.weightKg ? `, ${sale.weightKg} kg` : ''} @ ₹${sale.pricePerKg}/${rateUnit === 'per_10kg' ? '10kg' : 'kg'}`,
+              display: `${sale.bags || 0} bags${sale.weightKg ? `, ${sale.weightKg} kg` : ''}${
+                sale.bagWeights.some((w) => num(w) > 0)
+                  ? ` [${sale.bagWeights.filter((w) => w.trim()).join('+')} kg]`
+                  : ''
+              } @ ₹${sale.pricePerKg}/${rateUnit === 'per_10kg' ? '10kg' : 'kg'}`,
               kind: 'item' as const,
               chargeCode: null,
               farmer: block.farmerName.trim(),
@@ -415,8 +467,26 @@ export default function EntryPage() {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || `Save failed for ${block.farmerName}`);
         savedPattis.push(toPatti(block));
+        const ids = (data.sales || []) as { txnId: string; customerId: string }[];
+        tot.validLines.forEach((sale, i) => {
+          savedSales.push({
+            txnId: ids[i]?.txnId || '',
+            customerId: ids[i]?.customerId || sale.customerId || '',
+            farmer: block.farmerName.trim(),
+            commodity: sale.commodity.trim(),
+            customerName: sale.customerName.trim(),
+            bags: sale.bags,
+            bagWeights: sale.bagWeights,
+            weightKg: sale.weightKg,
+            rate: sale.pricePerKg,
+            amount: num(sale.amount),
+            cash: sale.cash,
+            hamali: sale.hamali,
+          });
+        });
+        if (data.purchaseId) purchaseIds.push(data.purchaseId);
       }
-      setSaved(savedPattis);
+      setSaved({ pattis: savedPattis, sales: savedSales, purchaseIds });
     } catch (err: unknown) {
       setSaveError(err instanceof Error ? err.message : 'Save failed — nothing was written');
     } finally {
@@ -430,22 +500,168 @@ export default function EntryPage() {
     setSaveError('');
   };
 
+  const deleteSavedSale = async (txnId: string) => {
+    if (!txnId) return;
+    if (!confirm(t('confirmDelete'))) return;
+    const res = await fetch(`/api/transactions/${txnId}`, { method: 'DELETE' });
+    if (!res.ok) {
+      setSaveError('Could not delete this sale');
+      return;
+    }
+    setSaved((prev) => {
+      if (!prev) return prev;
+      const sales = prev.sales.filter((s) => s.txnId !== txnId);
+      const pattis = prev.pattis
+        .map((p) => ({
+          ...p,
+          lines: p.lines.filter((l) =>
+            sales.some((s) => s.farmer === p.farmer && s.customerName === l.customer && s.amount === l.amount),
+          ),
+        }))
+        .filter((p) => p.lines.length > 0);
+      return { ...prev, sales, pattis };
+    });
+  };
+
+  const editSavedPatti = async () => {
+    if (!saved) return;
+    for (const s of saved.sales) {
+      if (s.txnId) await fetch(`/api/transactions/${s.txnId}`, { method: 'DELETE' }).catch(() => {});
+    }
+    for (const id of saved.purchaseIds) {
+      await fetch(`/api/purchases/${id}`, { method: 'DELETE' }).catch(() => {});
+    }
+    setSaved(null);
+    setSaveError('');
+  };
+
   if (saved) {
-    const grossAll = saved.reduce((s, p) => s + p.lines.reduce((a, l) => a + l.amount, 0), 0);
+    const grossAll = saved.sales.reduce((s, l) => s + l.amount, 0);
+    const farmers = [...new Set(saved.sales.map((s) => s.farmer))];
+    const totalBags = saved.sales.reduce((s, l) => s + num(l.bags), 0);
+    const totalKgs = saved.sales.reduce((s, l) => s + num(l.weightKg), 0);
+    const cashTotal = saved.sales.filter((s) => s.cash).reduce((s, l) => s + l.amount, 0);
+    const creditTotal = saved.sales.filter((s) => !s.cash).reduce((s, l) => s + l.amount, 0);
     return (
-      <div className="mx-auto max-w-2xl space-y-4">
-        <div className="rounded-xl bg-[var(--bg-success)] p-5 text-center text-[var(--text-on-success)]">
-          <p className="text-xl font-bold">Patti saved</p>
-          <p className="mt-1 text-sm opacity-90">
-            {saved.map((p) => p.farmer).join(', ')} · {fmt(grossAll)}
+      <div className="space-y-3">
+        <div className="rounded-xl border border-[var(--border-card)] bg-[var(--bg-card)] p-4">
+          <p className="text-lg font-bold">{t('pattiSavedCheck')}</p>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            {farmers.join(', ')} · {fmt(grossAll)}
           </p>
         </div>
-        {saved.map((p) => (
+
+        {/* Day grid — table of all saved sales, like the old Sell page */}
+        <section className="rounded-2xl bg-[var(--bg-card)] p-3 sm:p-4">
+          <h2 className="mb-3 text-sm font-semibold text-[var(--text-muted)]">
+            {t('salesToday')} — {saved.sales.length} {t('lines')}
+          </h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--border-light)] text-left text-xs text-[var(--text-muted)]">
+                  <th className="py-1.5 pr-2">#</th>
+                  <th className="py-1.5 pr-2">{t('item')}</th>
+                  <th className="py-1.5 pr-2">{t('buyer')}</th>
+                  <th className="py-1.5 pr-2 text-right">{t('bags')}</th>
+                  <th className="py-1.5 pr-2 text-right">{t('kgs')}</th>
+                  <th className="py-1.5 pr-2 text-right">{t('rate')}</th>
+                  <th className="py-1.5 pr-2 text-right">{t('hamali')}</th>
+                  <th className="py-1.5 pr-2 text-right">{t('amount')}</th>
+                  <th className="py-1.5 pr-2">{t('farmer')}</th>
+                  <th className="py-1.5 pr-2 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {saved.sales.map((s, i) => (
+                  <tr
+                    key={s.txnId || `${s.customerName}-${i}`}
+                    className={`border-l-4 ${s.cash ? 'border-l-[var(--bg-success)]' : 'border-l-[var(--bg-primary)]'} border-b border-[var(--border-light)]`}
+                  >
+                    <td className="py-1.5 pr-2 text-xs text-[var(--text-muted)]">{i + 1}</td>
+                    <td className="py-1.5 pr-2 font-medium">{s.commodity}</td>
+                    <td className="py-1.5 pr-2">
+                      {s.customerName}
+                      <span className={`ml-1 rounded px-1 py-0.5 text-[10px] font-medium ${s.cash ? 'bg-[var(--bg-success)] text-[var(--text-on-primary)]' : 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'}`}>
+                        {s.cash ? t('cashSale') : t('creditSale')}
+                      </span>
+                    </td>
+                    <td className="py-1.5 pr-2 text-right">{s.bags || '—'}</td>
+                    <td className="py-1.5 pr-2 text-right">{s.weightKg || '—'}</td>
+                    <td className="py-1.5 pr-2 text-right">{s.rate}</td>
+                    <td className="py-1.5 pr-2 text-right">{num(s.hamali) > 0 ? s.hamali : '—'}</td>
+                    <td className="py-1.5 pr-2 text-right font-medium">{fmt(s.amount)}</td>
+                    <td className="py-1.5 pr-2 text-xs text-[var(--text-muted)]">{s.farmer}</td>
+                    <td className="py-1.5 pr-2">
+                      <div className="flex items-center justify-center gap-1">
+                        {s.customerId && (
+                          <Link
+                            href={`/customers/${s.customerId}`}
+                            className="rounded px-2 py-0.5 text-xs text-[var(--bg-primary)] hover:bg-[var(--bg-base)]"
+                            title={t('edit')}
+                          >
+                            ✎
+                          </Link>
+                        )}
+                        {s.txnId && (
+                          <button
+                            type="button"
+                            onClick={() => deleteSavedSale(s.txnId)}
+                            className="rounded px-2 py-0.5 text-xs text-red-500 hover:bg-red-50"
+                            title={t('delete')}
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Footer totals */}
+          <div className="mt-3 grid grid-cols-3 gap-2 border-t border-[var(--border-light)] pt-3 sm:gap-3">
+            <div className="text-center">
+              <p className="text-xs text-[var(--text-muted)]">{t('totalBags')}</p>
+              <p className="text-lg font-bold">{totalBags}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-[var(--text-muted)]">{t('totalKgs')}</p>
+              <p className="text-lg font-bold">{totalKgs > 0 ? totalKgs.toFixed(1) : '—'}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-[var(--text-muted)]">{t('totalAmount')}</p>
+              <p className="text-lg font-bold text-[var(--bg-primary)]">{fmt(grossAll)}</p>
+            </div>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-3">
+            <div className="rounded-lg border-l-4 border-l-[var(--bg-success)] bg-[var(--bg-base)] p-2 text-center">
+              <p className="text-xs text-[var(--text-muted)]">{t('cash')}</p>
+              <p className="text-sm font-bold">{fmt(cashTotal)}</p>
+            </div>
+            <div className="rounded-lg border-l-4 border-l-[var(--bg-primary)] bg-[var(--bg-base)] p-2 text-center">
+              <p className="text-xs text-[var(--text-muted)]">{t('credit')}</p>
+              <p className="text-sm font-bold">{fmt(creditTotal)}</p>
+            </div>
+          </div>
+        </section>
+
+        {/* Actions: edit all, print, new entry */}
+        <button
+          type="button"
+          onClick={editSavedPatti}
+          className="w-full min-h-11 rounded-lg border border-[var(--border-input)] text-sm"
+        >
+          {t('editPatti')}
+        </button>
+        {saved.pattis.map((p) => (
           <button
             key={p.farmer}
             type="button"
             onClick={() => printFarmerPatti(p, shop)}
-            className="w-full rounded-lg bg-[var(--bg-secondary)] py-3 text-sm font-medium text-[var(--text-on-primary)]"
+            className="w-full min-h-11 rounded-lg bg-[var(--bg-secondary)] text-sm font-medium text-[var(--text-on-primary)]"
           >
             {t('printPatti')} — {p.farmer}
           </button>
@@ -453,7 +669,7 @@ export default function EntryPage() {
         <button
           type="button"
           onClick={reset}
-          className="w-full rounded-lg bg-[var(--bg-primary)] py-3 text-sm font-medium text-[var(--text-on-primary)]"
+          className="w-full min-h-11 rounded-lg bg-[var(--bg-primary)] text-sm font-medium text-[var(--text-on-primary)]"
         >
           {t('newEntry')}
         </button>
@@ -665,7 +881,7 @@ export default function EntryPage() {
                         <div key={line.id} className="rounded-md border border-[var(--border-card)] bg-[var(--bg-card)] p-3">
                           <div className="mb-2 flex items-center justify-between">
                             <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
-                              {t('bag')} {i + 1}
+                              {t('customer')} #{i + 1}
                             </span>
                             {lot.lines.length > 1 && (
                               <button
@@ -701,16 +917,18 @@ export default function EntryPage() {
                                 placeholder="Name or CASH SALES"
                               />
                             </Field>
-                            <Field label={t('weightKg')} className="min-w-0 sm:w-24">
+                            <Field label={t('bags')} className="min-w-0 sm:w-20">
                               <input
                                 type="number"
-                                inputMode="decimal"
-                                value={line.weightKg}
-                                placeholder="0"
+                                inputMode="numeric"
+                                min={0}
+                                max={MAX_SALE_BAGS}
+                                value={line.bags}
+                                placeholder="20"
                                 className={inputCls}
                                 onChange={(e) =>
                                   patchLotLine(block.id, lot.id, line.id, (ln) =>
-                                    fillLine(ln, { weightKg: e.target.value, commodity: lot.commodity }, rateUnit, 'weight'),
+                                    fillLine(ln, { bags: e.target.value, commodity: lot.commodity }, rateUnit, 'bags'),
                                   )
                                 }
                               />
@@ -770,6 +988,41 @@ export default function EntryPage() {
                               />
                             </Field>
                           </div>
+                          {line.bagWeights.length > 0 && (
+                            <div className="mt-2">
+                              <p className="mb-1 text-[10px] text-[var(--text-muted)]">
+                                {t('eachBagKg')}
+                                {num(line.weightKg) > 0 ? ` · ${line.weightKg} kg` : ''}
+                              </p>
+                              <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 lg:grid-cols-8">
+                                {line.bagWeights.map((w, wi) => (
+                                  <Field key={`${line.id}-w-${wi}`} label={`${wi + 1}`}>
+                                    <input
+                                      type="number"
+                                      inputMode="decimal"
+                                      value={w}
+                                      placeholder="kg"
+                                      aria-label={`${t('bag')} ${wi + 1} kg`}
+                                      className={inputCls}
+                                      onChange={(e) =>
+                                        patchLotLine(block.id, lot.id, line.id, (ln) =>
+                                          fillLine(
+                                            ln,
+                                            {
+                                              commodity: lot.commodity,
+                                              bagWeights: ln.bagWeights.map((x, j) => (j === wi ? e.target.value : x)),
+                                            },
+                                            rateUnit,
+                                            'weight',
+                                          ),
+                                        )
+                                      }
+                                    />
+                                  </Field>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -777,15 +1030,14 @@ export default function EntryPage() {
                       type="button"
                       onClick={() => {
                         const last = lot.lines[lot.lines.length - 1];
-                        const next = emptyLine(lot.commodity, last?.pricePerKg || '');
-                        next.customerName = last?.customerName || '';
-                        next.customerId = last?.customerId ?? null;
-                        next.cash = last?.cash || false;
-                        patchLot(block.id, lot.id, (l) => ({ ...l, lines: [...l.lines, next] }));
+                        patchLot(block.id, lot.id, (l) => ({
+                          ...l,
+                          lines: [...l.lines, emptyLine(lot.commodity, last?.pricePerKg || '')],
+                        }));
                       }}
                       className="min-h-11 w-full rounded-md border border-dashed border-[var(--border-input)] text-sm text-[var(--text-muted)]"
                     >
-                      + {t('addBagLine')}
+                      + {t('addCustomerLine')}
                     </button>
                     {lotTally && lot.commodity.trim() ? (
                       <p className={`text-xs ${lotTally.oversold ? 'text-[var(--bg-danger)]' : 'text-[var(--text-muted)]'}`}>

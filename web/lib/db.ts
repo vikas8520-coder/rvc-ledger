@@ -1610,7 +1610,7 @@ export async function saveEntryBatch(
   shopId: string,
   bills: BillData[],
   purchase: PurchaseData | null,
-): Promise<void> {
+): Promise<{ sales: { txnId: string; customerId: string }[]; purchaseId: string | null }> {
   if (!bills.length) throw new Error('No sales to save');
   await ensureSchema();
   const sql = getSql();
@@ -1658,6 +1658,9 @@ export async function saveEntryBatch(
     }
   }
 
+  const sales: { txnId: string; customerId: string }[] = [];
+  let purchaseId: string | null = null;
+
   await sql.transaction((txn) => {
     const q: ReturnType<typeof txn>[] = [];
     for (const c of newCustomers) {
@@ -1671,6 +1674,7 @@ export async function saveEntryBatch(
       const customerId = resolved.get((bill.customerId || name).toLowerCase()) || resolved.get(name.toLowerCase());
       if (!customerId) throw new Error(`Could not resolve customer ${name}`);
       const txnId = randomUUID();
+      sales.push({ txnId, customerId });
       const isCash = bill.paymentType === 'cash';
       const amountPaid = isCash ? bill.total : 0;
       const notes = bill.market ? encodeMarketNotes(bill.market) : null;
@@ -1687,11 +1691,11 @@ export async function saveEntryBatch(
       }
     }
     if (purchase && purchase.items.length > 0) {
-      const purchaseId = randomUUID();
+      purchaseId = randomUUID();
       const notes = purchase.market ? encodeMarketNotes(purchase.market) : null;
       q.push(txn`
         INSERT INTO purchases (id, date, supplier, bill_no, total, notes, supplier_id, shop_id)
-        VALUES (${purchaseId}, ${purchase.date}, ${purchase.supplier || null}, ${purchase.billNo || null}, ${purchase.total}, ${notes}, ${supplierId}, ${shopId})
+        VALUES (${purchaseId!}, ${purchase.date}, ${purchase.supplier || null}, ${purchase.billNo || null}, ${purchase.total}, ${notes}, ${supplierId}, ${shopId})
       `);
       for (const it of purchase.items) {
         const hit = it.kind ? null : detectCharge(it.name || '');
@@ -1714,6 +1718,7 @@ export async function saveEntryBatch(
       await recalcFYBalances(shopId, billFY);
     }
   }
+  return { sales, purchaseId };
 }
 
 export async function deletePurchase(shopId: string, id: string): Promise<void> {

@@ -18,8 +18,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Each sale needs customer, date, and items' }, { status: 400 });
       }
     }
-    await saveEntryBatch(auth.shopId!, bills, body.purchase || null);
-    return NextResponse.json({ ok: true });
+    const saved = await saveEntryBatch(auth.shopId!, bills, body.purchase || null);
+    return NextResponse.json({ ok: true, ...saved });
   } catch (err: unknown) {
     if (err instanceof AuthError) return NextResponse.json({ error: err.message }, { status: err.status });
     console.error('Save entry batch error:', err);

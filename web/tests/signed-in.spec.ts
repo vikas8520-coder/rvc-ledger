@@ -36,8 +36,10 @@ test.describe('signed-in shop', () => {
     await page.getByPlaceholder('CHILLI, BEANS…').fill('CHILLI');
     await page.getByPlaceholder('Name or CASH SALES').fill('RAMESH');
     await expect(page.getByText('Item · CHILLI')).toBeVisible();
+    await page.getByPlaceholder('20', { exact: true }).fill('2');
+    await expect(page.getByPlaceholder('kg')).toHaveCount(2);
 
-    await page.getByRole('button', { name: '+ Add bag' }).click();
+    await page.getByRole('button', { name: '+ Add customer' }).click();
     await expect(page.getByPlaceholder('Name or CASH SALES')).toHaveCount(2);
     await expect(page.getByPlaceholder('CHILLI, BEANS…')).toHaveCount(1);
 
