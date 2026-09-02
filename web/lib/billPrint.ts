@@ -76,6 +76,7 @@ const SIMPLE_STYLES = `
   .r-footer { text-align: center; font-size: 10px; color: #888; margin-top: 12px; }
   .r-sign { margin-top: 30px; font-size: 11px; text-align: center; border-top: 1px solid #999; padding-top: 4px; }
   .print-btn { display: block; margin: 12px auto 0; padding: 6px 18px; background: #333; color: #fff; border: none; font-size: 12px; cursor: pointer; }
+  @page { size: A4; margin: 12mm; }
   @media print { body { padding: 0; } .no-print { display: none; } }
 `;
 
@@ -159,6 +160,7 @@ const ITEMIZED_STYLES = `
   .inv-sig-line { border-top: 1px solid #aaa; padding-top: 4px; min-width: 200px; text-align: center; }
   .inv-footer { text-align: center; font-size: 10px; color: #aaa; margin-top: 20px; border-top: 1px solid #eee; padding-top: 8px; }
   .print-btn { display: block; margin: 16px auto 0; padding: 8px 24px; background: #2c3e50; color: #fff; border: none; border-radius: 4px; font-size: 14px; cursor: pointer; }
+  @page { size: A4; margin: 12mm; }
   @media print { body { padding: 0; } .no-print { display: none; } }
 `;
 
@@ -271,6 +273,7 @@ const MARKET_STYLES = `
   .mandi-sig-line { border-top: 1px solid #aaa; padding-top: 4px; min-width: 180px; text-align: center; }
   .mandi-footer { text-align: center; font-size: 10px; color: #aaa; margin-top: 16px; }
   .print-btn { display: block; margin: 16px auto 0; padding: 8px 24px; background: #5a7a3a; color: #fff; border: none; border-radius: 4px; font-size: 14px; cursor: pointer; }
+  @page { size: A4; margin: 12mm; }
   @media print { body { padding: 0; } .no-print { display: none; } }
 `;
 
@@ -516,6 +519,7 @@ export function renderBillsHtml(bills: BillPrintData[], shop: ShopProfile, forma
   <style>${allStyles}
     .bill-page { min-height: 100vh; }
     .no-print { display: none; }
+    @page { size: A4; margin: 12mm; }
     @media print { .bill-page { page-break-after: always; } .bill-page:last-child { page-break-after: auto; } }
   </style></head><body>
   ${pages}
@@ -594,6 +598,7 @@ const LEDGER_STYLES = `
   .page-footer { text-align: center; font-size: 10px; color: #888; margin-top: 8px; padding-top: 4px; border-top: 1px dashed #ccc; }
   .print-btn { display: block; margin: 10px auto 0; padding: 6px 20px; background: #8b2e2e; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; }
   .print-btn:hover { background: #6b2222; }
+  @page { size: A4; margin: 12mm; }
   @media print {
     body { padding: 5px; font-size: 10px; }
     .ledger { max-width: 100%; }
@@ -746,6 +751,7 @@ export function printFarmerPatti(data: FarmerPattiData, shop: ShopProfile): void
   .net { display: flex; justify-content: space-between; border-top: 2px solid #000; margin-top: 10px; padding-top: 8px; font-size: 16px; font-weight: bold; }
   .sign { margin-top: 28px; text-align: right; font-size: 11px; }
   .print-btn { display: block; margin: 12px auto 0; padding: 8px 20px; background: #333; color: #fff; border: none; cursor: pointer; }
+  @page { size: A4; margin: 12mm; }
   @media print { .print-btn { display: none; } body { padding: 0; } }
 </style></head><body>
 <div class="sheet">
@@ -800,6 +806,7 @@ export function printDocket(data: DocketData, shop: ShopProfile): void {
   h1 { text-align: center; font-size: 16px; letter-spacing: 2px; }
   .row { display: flex; justify-content: space-between; margin: 6px 0; font-size: 13px; border-bottom: 1px dotted #999; padding-bottom: 4px; }
   .print-btn { display: block; margin: 12px auto 0; padding: 8px 20px; background: #333; color: #fff; border: none; cursor: pointer; }
+  @page { size: A4; margin: 12mm; }
   @media print { .print-btn { display: none; } }
 </style></head><body>
 <div class="docket">

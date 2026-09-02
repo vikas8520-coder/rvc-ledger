@@ -863,19 +863,29 @@ export async function sharePdfViaWhatsApp(
 /**
  * Print a PDF blob by opening it in a new window and triggering print.
  */
-export function printPdfBlob(blob: Blob): void {
+export function printPdfBlob(blob: Blob, filename = 'rvc-print.pdf'): void {
   const url = URL.createObjectURL(blob);
   const win = window.open(url, '_blank');
   if (!win) {
-    alert('Please allow popups to print');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    alert(
+      'Allow popups to print from the browser, or open the downloaded PDF and print.\n\nAny printer in the Print dialog works (HP, Canon, Brother, Save as PDF).',
+    );
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
     return;
   }
-  // The browser's PDF viewer has its own print button, but we can
-  // try to trigger print automatically after a short delay
   setTimeout(() => {
-    try { win.print(); } catch { /* user can print manually */ }
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-  }, 1000);
+    try {
+      win.focus();
+      win.print();
+    } catch {
+      /* PDF viewer has its own Print */
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 120_000);
+  }, 800);
 }
 
 /**
