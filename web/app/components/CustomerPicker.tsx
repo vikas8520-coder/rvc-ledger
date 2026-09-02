@@ -51,15 +51,23 @@ export default function CustomerPicker({ customers, value, onChange, onAddNew, p
     if (!el) return;
     const r = el.getBoundingClientRect();
     const gap = 4;
-    const spaceBelow = window.innerHeight - r.bottom - gap - 8;
-    const spaceAbove = r.top - gap - 8;
+    // Use visualViewport when available (accounts for mobile keyboard)
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    const vh = vv ? vv.height : window.innerHeight;
+    const vw = vv ? vv.width : window.innerWidth;
+    const vvTop = vv ? vv.offsetTop : 0;
+    const vvBottom = vvTop + vh;
+    const spaceBelow = vvBottom - r.bottom - gap - 8;
+    const spaceAbove = r.top - vvTop - gap - 8;
     const openUp = spaceBelow < 180 && spaceAbove > spaceBelow;
     const maxH = Math.max(140, Math.min(280, openUp ? spaceAbove : spaceBelow));
     const top = openUp ? r.top - gap - maxH : r.bottom + gap;
+    const minW = vw < 640 ? Math.max(240, Math.min(vw - 16, r.width * 1.5)) : Math.max(r.width, 220);
+    const width = Math.min(minW, vw - 16);
     setPos({
-      top: Math.max(8, top),
-      left: Math.min(r.left, window.innerWidth - Math.max(r.width, 220) - 8),
-      width: Math.max(r.width, 220),
+      top: Math.max(vvTop + 8, Math.min(top, vvBottom - maxH - 8)),
+      left: Math.max(8, Math.min(r.left, vw - width - 8)),
+      width,
       maxH,
     });
   };
@@ -70,9 +78,18 @@ export default function CustomerPicker({ customers, value, onChange, onAddNew, p
     const onWin = () => place();
     window.addEventListener('resize', onWin);
     window.addEventListener('scroll', onWin, true);
+    const vv = window.visualViewport;
+    if (vv) {
+      vv.addEventListener('resize', onWin);
+      vv.addEventListener('scroll', onWin);
+    }
     return () => {
       window.removeEventListener('resize', onWin);
       window.removeEventListener('scroll', onWin, true);
+      if (vv) {
+        vv.removeEventListener('resize', onWin);
+        vv.removeEventListener('scroll', onWin);
+      }
     };
   }, [open, filtered.length, query]);
 
