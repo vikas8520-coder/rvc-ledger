@@ -13,6 +13,7 @@ import PrintShareMenu from '../components/PrintShareMenu';
 import { recognizeBill, type OcrProgress } from '@/lib/ocr';
 import { recognizeWithPaddle, type PaddleProgress, type OcrLine as PaddleOcrLine } from '@/lib/paddleOcr';
 import { parseBillSmart, type SmartBillItem } from '@/lib/billParser';
+import { setRuntimeAliases } from '@/lib/catalog';
 import {
   generateOutstandingListPdf,
   generateCreditLedgerPdf,
@@ -261,6 +262,11 @@ export default function EntryPage() {
   const [addingFarmer, setAddingFarmer] = useState(false);
   const [ocrProgress, setOcrProgress] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Self-learning: track OCR-imported lines so we can auto-save corrections
+  const ocrImportRef = useRef<{
+    commodityRawToConfirmed: Map<string, string>; // raw → confirmed name
+    customerRawToConfirmed: Map<string, { name: string; id: string | null }>;
+  }>({ commodityRawToConfirmed: new Map(), customerRawToConfirmed: new Map() });
 
   // Day rollover for when the app is left open overnight: check when the
   // page regains focus and reset the date + form if a new day has started.
@@ -313,6 +319,13 @@ export default function EntryPage() {
             prev.map((b) => (b.commissionPct === '10' ? { ...b, commissionPct: String(s.commissionPct) } : b)),
           );
         }
+      })
+      .catch(() => {});
+    // Self-learning: load commodity aliases so the smart parser can use them
+    fetch('/api/catalog/aliases')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.aliases) setRuntimeAliases(d.aliases);
       })
       .catch(() => {});
   }, []);
@@ -755,6 +768,80 @@ export default function EntryPage() {
         });
         if (data.purchaseId) purchaseIds.push(data.purchaseId);
       }
+      // ── Self-learning: auto-save corrections and rates ──
+      // When the user uploads a bill and then edits the commodity/customer
+      // names before saving, we learn from those corrections so future
+      // OCR imports are more accurate. We also save the rates used.
+      // This runs in the background — it must NOT block the UI or the
+      // saved-sales refresh, since the test waits for the table to update.
+      const learnedRef = ocrImportRef.current;
+      (async () => {
+        try {
+          const learnedPromises: Promise<void>[] = [];
+          for (const block of ready) {
+            const tot = totalsOf(block);
+            for (const sale of tot.validLines) {
+              const commodityRaw = sale.commodity.trim();
+              if (!commodityRaw) continue;
+              // Check if the user changed the commodity name from what OCR imported
+              const imported = learnedRef.commodityRawToConfirmed.get(commodityRaw.toLowerCase().trim());
+              if (imported && imported !== commodityRaw) {
+                learnedPromises.push(
+                  fetch('/api/catalog/aliases', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ alias: commodityRaw, itemName: imported }),
+                  }).then(() => {}),
+                );
+              }
+              // Save the rate for this commodity (for rate suggestions later)
+              const rateNum = num(sale.pricePerKg);
+              if (rateNum > 0 && sale.commodity.trim()) {
+                learnedPromises.push(
+                  fetch('/api/rates', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      commodity: sale.commodity.trim(),
+                      rate: rateNum,
+                      rateUnit,
+                      date,
+                    }),
+                  }).then(() => {}),
+                );
+              }
+              // Save customer name alias if we have one
+              const customerRaw = sale.customerName.trim();
+              if (customerRaw && sale.customerId) {
+                learnedPromises.push(
+                  fetch('/api/customers/aliases', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      rawName: customerRaw,
+                      customerName: customerRaw,
+                      customerId: sale.customerId,
+                    }),
+                  }).then(() => {}),
+                );
+              }
+            }
+          }
+          await Promise.all(learnedPromises);
+          // Refresh aliases in memory for next OCR import
+          const aliasRes = await fetch('/api/catalog/aliases');
+          const aliasData = await aliasRes.json();
+          if (aliasData.aliases) setRuntimeAliases(aliasData.aliases);
+        } catch (e) {
+          console.warn('Self-learning save failed:', e);
+        }
+      })();
+      // Clear the OCR import tracking immediately
+      ocrImportRef.current = {
+        commodityRawToConfirmed: new Map(),
+        customerRawToConfirmed: new Map(),
+      };
+
       // Re-fetch saved sales from DB so the list is always accurate
       // (includes sales from this session AND any saved by other devices)
       fetchSavedSales(date);
@@ -840,6 +927,17 @@ export default function EntryPage() {
 
       // Set customer name into the first sale line if found
       const customerName = parsed.customerName;
+
+      // Track what was imported so we can auto-save corrections when the
+      // user edits commodity/customer names before saving
+      ocrImportRef.current = {
+        commodityRawToConfirmed: new Map(
+          parsed.items.map((it) => [it.commodity.toLowerCase().trim(), it.commodityConfirmed]),
+        ),
+        customerRawToConfirmed: new Map(
+          customerName ? [[customerName.toLowerCase().trim(), { name: customerName, id: null as string | null }]] : [],
+        ),
+      };
 
       if (parsed.items.length === 0) {
         setOcrProgress(null);
@@ -1304,7 +1402,24 @@ export default function EntryPage() {
                       }));
                     }}
                     onBlur={() => {
-                      if (lot.commodity.trim()) rememberItem(lot.commodity.trim());
+                      if (lot.commodity.trim()) {
+                        rememberItem(lot.commodity.trim());
+                        // Self-learning: suggest the last known rate for this commodity
+                        fetch(`/api/rates?commodity=${encodeURIComponent(lot.commodity.trim())}&latest=true`)
+                          .then((r) => r.json())
+                          .then((d) => {
+                            if (d.rate && d.rate.rate > 0) {
+                              const suggestedRate = String(d.rate.rate);
+                              patchLot(block.id, lot.id, (l) => ({
+                                ...l,
+                                lines: l.lines.map((ln) =>
+                                  !ln.pricePerKg ? { ...ln, pricePerKg: suggestedRate } : ln,
+                                ),
+                              }));
+                            }
+                          })
+                          .catch(() => {});
+                      }
                       setEditingLotId(null);
                     }}
                     onKeyDown={(e) => {

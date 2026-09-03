@@ -168,6 +168,32 @@ async function ensureSchema() {
   await sql`ALTER TABLE expenses ADD COLUMN IF NOT EXISTS shop_id UUID`;
   await sql`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS shop_id UUID`;
 
+  // ---- Self-learning: customer name aliases ----
+  await sql`
+    CREATE TABLE IF NOT EXISTS customer_aliases (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      shop_id UUID NOT NULL,
+      raw_name TEXT NOT NULL,
+      customer_id UUID REFERENCES customers(id) ON DELETE CASCADE,
+      customer_name TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE (shop_id, raw_name)
+    )
+  `;
+
+  // ---- Self-learning: commodity rate history ----
+  await sql`
+    CREATE TABLE IF NOT EXISTS rate_history (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      shop_id UUID NOT NULL,
+      commodity TEXT NOT NULL,
+      rate NUMERIC(12,2) NOT NULL,
+      rate_unit TEXT DEFAULT 'per_kg',
+      date DATE NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `;
+
   // ---- Financial year opening balances ----
   await sql`
     CREATE TABLE IF NOT EXISTS fy_opening_balances (
@@ -2154,6 +2180,98 @@ export async function saveAlias(shopId: string, alias: string, itemName: string)
   await sql`INSERT INTO catalog_aliases (item_id, alias, shop_id) VALUES (${itemId}, ${cleanAlias}, ${shopId})`;
 }
 
+/* ---- Customer name aliases (self-learning) ---- */
+
+export async function getCustomerAliasMap(shopId: string): Promise<Record<string, { name: string; id: string | null }>> {
+  if (!isDbConfigured()) return {};
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql`
+    SELECT raw_name, customer_name, customer_id
+    FROM customer_aliases
+    WHERE shop_id = ${shopId}
+  `;
+  const map: Record<string, { name: string; id: string | null }> = {};
+  for (const r of rows as any[]) {
+    map[(r.raw_name as string).toLowerCase().trim()] = {
+      name: r.customer_name as string,
+      id: r.customer_id as string | null,
+    };
+  }
+  return map;
+}
+
+export async function saveCustomerAlias(
+  shopId: string,
+  rawName: string,
+  customerName: string,
+  customerId: string | null = null,
+): Promise<void> {
+  if (!isDbConfigured()) return;
+  await ensureSchema();
+  const sql = getSql();
+  const cleanRaw = rawName.trim();
+  const cleanName = customerName.trim();
+  if (!cleanRaw || !cleanName) return;
+  // Upsert: if the raw_name already exists for this shop, update it
+  await sql`
+    INSERT INTO customer_aliases (shop_id, raw_name, customer_name, customer_id)
+    VALUES (${shopId}, ${cleanRaw}, ${cleanName}, ${customerId})
+    ON CONFLICT (shop_id, raw_name)
+    DO UPDATE SET customer_name = ${cleanName}, customer_id = ${customerId}
+  `;
+}
+
+/* ---- Rate history (self-learning) ---- */
+
+export async function saveRate(
+  shopId: string,
+  commodity: string,
+  rate: number,
+  rateUnit: string,
+  date: string,
+): Promise<void> {
+  if (!isDbConfigured()) return;
+  await ensureSchema();
+  const sql = getSql();
+  const cleanCommodity = commodity.trim();
+  if (!cleanCommodity || !rate || !date) return;
+  await sql`
+    INSERT INTO rate_history (shop_id, commodity, rate, rate_unit, date)
+    VALUES (${shopId}, ${cleanCommodity}, ${rate}, ${rateUnit}, ${date})
+  `;
+}
+
+export async function getRecentRates(
+  shopId: string,
+  commodity: string,
+  limit = 5,
+): Promise<{ rate: number; rateUnit: string; date: string }[]> {
+  if (!isDbConfigured()) return [];
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql`
+    SELECT rate, rate_unit, date
+    FROM rate_history
+    WHERE shop_id = ${shopId} AND commodity = ${commodity.trim()}
+    ORDER BY date DESC, created_at DESC
+    LIMIT ${limit}
+  `;
+  return (rows as any[]).map((r) => ({
+    rate: parseFloat(r.rate),
+    rateUnit: r.rate_unit,
+    date: typeof r.date === 'string' ? r.date : (r.date as Date).toISOString().slice(0, 10),
+  }));
+}
+
+export async function getLatestRate(
+  shopId: string,
+  commodity: string,
+): Promise<{ rate: number; rateUnit: string; date: string } | null> {
+  const rates = await getRecentRates(shopId, commodity, 1);
+  return rates[0] || null;
+}
+
 /* ---- Stock levels ---- */
 
 export async function getStock(shopId: string): Promise<StockLevel[]> {
@@ -2279,7 +2397,7 @@ export async function setCustomerCreditLimit(shopId: string, id: string, limit: 
 export async function exportAllData(shopId: string) {
   await ensureSchema();
   const sql = getSql();
-  const [customers, transactions, billItems, purchases, purchaseItems, suppliers, supplierPayments, wastage, catalogItems, catalogAliases, expenses] = await Promise.all([
+  const [customers, transactions, billItems, purchases, purchaseItems, suppliers, supplierPayments, wastage, catalogItems, catalogAliases, expenses, customerAliases, rateHistory] = await Promise.all([
     sql`SELECT id, name, english_name, telugu_name, hindi_name, phone, credit_limit FROM customers WHERE shop_id = ${shopId} ORDER BY name`,
     sql`SELECT * FROM transactions WHERE shop_id = ${shopId} ORDER BY date, created_at`,
     sql`SELECT * FROM bill_items WHERE shop_id = ${shopId} ORDER BY transaction_id, id`,
@@ -2291,6 +2409,8 @@ export async function exportAllData(shopId: string) {
     sql`SELECT * FROM catalog_items WHERE shop_id = ${shopId} ORDER BY name`,
     sql`SELECT * FROM catalog_aliases WHERE shop_id = ${shopId} ORDER BY item_id, id`,
     sql`SELECT * FROM expenses WHERE shop_id = ${shopId} ORDER BY date, created_at`,
+    sql`SELECT * FROM customer_aliases WHERE shop_id = ${shopId} ORDER BY raw_name`,
+    sql`SELECT * FROM rate_history WHERE shop_id = ${shopId} ORDER BY commodity, date DESC`,
   ]);
   return {
     exportedAt: new Date().toISOString(),
@@ -2305,6 +2425,8 @@ export async function exportAllData(shopId: string) {
     catalogItems,
     catalogAliases,
     expenses,
+    customerAliases,
+    rateHistory,
   };
 }
 
@@ -2355,6 +2477,8 @@ export async function restoreAllData(shopId: string, data: any): Promise<{ resto
   }
 
   // Wipe existing data for this shop only, in dependency order
+  await sql`DELETE FROM rate_history WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM customer_aliases WHERE shop_id = ${shopId}`;
   await sql`DELETE FROM catalog_aliases WHERE shop_id = ${shopId}`;
   await sql`DELETE FROM catalog_items WHERE shop_id = ${shopId}`;
   await sql`DELETE FROM wastage WHERE shop_id = ${shopId}`;
@@ -2453,6 +2577,22 @@ export async function restoreAllData(shopId: string, data: any): Promise<{ resto
       await sql`INSERT INTO expenses (id, date, category, description, amount, shop_id) VALUES (${e.id}, ${e.date}, ${e.category}, ${e.description ?? null}, ${e.amount}, ${shopId}) ON CONFLICT (id) DO NOTHING`;
     }
     restored.push(`expenses (${data.expenses.length})`);
+  }
+
+  // Customer aliases (self-learning)
+  if (Array.isArray(data.customerAliases)) {
+    for (const ca of data.customerAliases) {
+      await sql`INSERT INTO customer_aliases (id, shop_id, raw_name, customer_name, customer_id) VALUES (${ca.id}, ${shopId}, ${ca.raw_name}, ${ca.customer_name}, ${ca.customer_id ?? null}) ON CONFLICT (id) DO NOTHING`;
+    }
+    restored.push(`customer_aliases (${data.customerAliases.length})`);
+  }
+
+  // Rate history (self-learning)
+  if (Array.isArray(data.rateHistory)) {
+    for (const rh of data.rateHistory) {
+      await sql`INSERT INTO rate_history (id, shop_id, commodity, rate, rate_unit, date) VALUES (${rh.id}, ${shopId}, ${rh.commodity}, ${rh.rate}, ${rh.rate_unit ?? 'per_kg'}, ${rh.date}) ON CONFLICT (id) DO NOTHING`;
+    }
+    restored.push(`rate_history (${data.rateHistory.length})`);
   }
 
   return { restored };
@@ -2844,6 +2984,8 @@ export async function deleteShop(shopId: string): Promise<void> {
   await sql`DELETE FROM wastage WHERE shop_id = ${shopId}`;
   await sql`DELETE FROM catalog_aliases WHERE shop_id = ${shopId}`;
   await sql`DELETE FROM catalog_items WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM customer_aliases WHERE shop_id = ${shopId}`;
+  await sql`DELETE FROM rate_history WHERE shop_id = ${shopId}`;
   await sql`DELETE FROM expenses WHERE shop_id = ${shopId}`;
   await sql`DELETE FROM customers WHERE shop_id = ${shopId}`;
   await sql`DELETE FROM shop_users WHERE shop_id = ${shopId}`;
