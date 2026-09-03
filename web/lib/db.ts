@@ -1466,6 +1466,7 @@ export async function getCustomers(shopId: string, fyStartYear?: number): Promis
         amount,
         balanceAfter: balance,
         date: toDateStr(t.date),
+        createdAt: t.created_at ? new Date(t.created_at as string).toISOString() : null,
         billNo: t.bill_no,
         items: txnItems,
         market: decodeMarketNotes(t.notes),
@@ -1863,6 +1864,7 @@ export async function getSalesForDate(shopId: string, date: string): Promise<{
   amount: number;
   cash: boolean;
   hamali: string;
+  createdAt: string | null;
 }[]> {
   if (!isDbConfigured()) return [];
   await ensureSchema();
@@ -1873,6 +1875,7 @@ export async function getSalesForDate(shopId: string, date: string): Promise<{
       t.customer_id,
       t.bill_amount,
       t.payment_method,
+      t.created_at,
       c.name as customer_name,
       bi.farmer,
       bi.confirmed_name,
@@ -1902,6 +1905,7 @@ export async function getSalesForDate(shopId: string, date: string): Promise<{
     amount: Number(r.amount),
     cash: r.payment_method === 'cash',
     hamali: r.hamali != null ? String(r.hamali) : '',
+    createdAt: r.created_at ? new Date(r.created_at).toISOString() : null,
   }));
 }
 

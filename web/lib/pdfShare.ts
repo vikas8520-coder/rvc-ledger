@@ -22,19 +22,24 @@ export function generateCreditLedgerPdf(
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const margin = 15;
-  const colGap = 18.5; // gap between the two columns (matches reference PDF)
-  const colW = (pageW - margin * 2 - colGap) / 2;
-  let y = margin;
+  const colGap = 10; // gap between the two columns (matches reference PDF)
+  const colW = (pageW - margin * 2 - colGap) / 2; // ≈85mm per column
+  let y = 10;
 
-  // Header — all 3 lines at 16pt Courier-Bold, centered (matches reference PDF)
+  // Header — 3 lines at 16pt Courier-Bold, centered (matches reference PDF)
   doc.setFont('courier', 'bold');
   doc.setFontSize(16);
   doc.text((shop.shopName || 'RVC').toUpperCase(), pageW / 2, y, { align: 'center' });
-  y += 7;
+  y += 8.5;
   doc.text(title.toUpperCase(), pageW / 2, y, { align: 'center' });
-  y += 7;
+  y += 5.5;
   doc.text(`Date: ${date}`, pageW / 2, y, { align: 'center' });
-  y += 8;
+  y += 6;
+
+  // Horizontal line after header
+  doc.setLineWidth(0.5);
+  doc.line(margin, y, pageW - margin, y);
+  y += 4;
 
   const mid = Math.ceil(entries.length / 2);
   const leftCol = entries.slice(0, mid);
@@ -47,8 +52,7 @@ export function generateCreditLedgerPdf(
     for (const e of col) {
       if (cy > pageH - 25) { doc.addPage(); cy = margin; }
       const code = (e.code || '').padEnd(4).slice(0, 4);
-      const amtStr = String(e.amount); // no "Cr" suffix — matches reference
-      // Name with phone inline (e.g. "VENKATREDDY ERRAGADD 98486")
+      const amtStr = String(e.amount);
       let name = e.name.toUpperCase();
       if (e.phone) name += ` ${e.phone}`;
       const maxNameLen = 30;
@@ -68,13 +72,23 @@ export function generateCreditLedgerPdf(
   y = Math.max(leftEnd, rightEnd) + 4;
 
   if (y > pageH - 20) { doc.addPage(); y = margin; }
-  // Total — no lines around it, just "Total :" and amount (matches reference)
+  // Horizontal line before total
+  doc.setLineWidth(0.5);
+  doc.line(margin, y, pageW - margin, y);
+  y += 7;
+
+  // Total
   const total = entries.reduce((s, e) => s + (e.isCredit ? -e.amount : e.amount), 0);
   const totalStr = total.toLocaleString('en-IN');
   doc.setFont('courier', 'bold');
   doc.setFontSize(14);
   doc.text('Total :', pageW - margin - 50, y, { align: 'right' });
   doc.text(totalStr, pageW - margin, y, { align: 'right' });
+  y += 4;
+
+  // Horizontal line after total
+  doc.setLineWidth(0.5);
+  doc.line(margin, y, pageW - margin, y);
 
   // Footer
   doc.setFont('courier', 'normal');

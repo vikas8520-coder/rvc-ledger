@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Customer } from '@/lib/types';
 import { localizeName } from '@/lib/catalog';
 import { yardById } from '@/lib/market';
-import { fmt, fmtDate } from '@/lib/format';
+import { fmt, fmtDate, fmtTime } from '@/lib/format';
 import { getUiLang } from '@/lib/i18n';
 import { useI18n } from './I18nProvider';
 import DeleteButton from './DeleteButton';
@@ -40,7 +40,7 @@ export default function TxnCard({
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <span className="text-[11px] leading-none text-[var(--text-muted)]">
-            {fmtDate(txn.date)}
+            {fmtDate(txn.date)}{fmtTime(txn.createdAt) ? ` · ${fmtTime(txn.createdAt)}` : ''}
             {txn.market?.marketYard
               ? ` · ${yardById(txn.market.marketYard)?.name || txn.market.marketYard}`
               : ''}

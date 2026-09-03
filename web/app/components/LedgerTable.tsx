@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Customer, TxnView } from '@/lib/types';
 import { localizeName } from '@/lib/catalog';
 import { yardById } from '@/lib/market';
-import { fmt, fmtDate } from '@/lib/format';
+import { fmt, fmtDate, fmtTime } from '@/lib/format';
 import { getUiLang, formatCustomerName } from '@/lib/i18n';
 import { useI18n } from './I18nProvider';
 import DeleteButton from './DeleteButton';
@@ -42,6 +42,7 @@ export default function LedgerTable({
   type Row = {
     txnId: string;
     date: string;
+    time: string;
     particulars: string;
     qty: string;
     rate: string;
@@ -62,6 +63,7 @@ export default function LedgerTable({
     rows.push({
       txnId: '__opening__',
       date: '',
+      time: '',
       particulars: t('openingBalance'),
       qty: '',
       rate: '',
@@ -90,6 +92,7 @@ export default function LedgerTable({
       rows.push({
         txnId: txn.id,
         date: fmtDate(txn.date),
+        time: fmtTime(txn.createdAt),
         particulars: t('paymentReceived'),
         qty: '—',
         rate: '—',
@@ -111,6 +114,7 @@ export default function LedgerTable({
           rows.push({
             txnId: txn.id,
             date: idx === 0 ? fmtDate(txn.date) : '',
+            time: idx === 0 ? fmtTime(txn.createdAt) : '',
             particulars: idx === 0 ? `${title}${yard}` : localizeName(it.name, uiLang),
             qty: it.qty || '—',
             rate: it.rate || '—',
@@ -128,6 +132,7 @@ export default function LedgerTable({
         rows.push({
           txnId: txn.id,
           date: '',
+          time: '',
           particulars: t('billTotal'),
           qty: '',
           rate: '',
@@ -145,6 +150,7 @@ export default function LedgerTable({
         rows.push({
           txnId: txn.id,
           date: fmtDate(txn.date),
+          time: fmtTime(txn.createdAt),
           particulars: `${title}${yard}`,
           qty: '—',
           rate: '—',
@@ -177,7 +183,7 @@ export default function LedgerTable({
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="bg-[var(--bg-primary)] text-[var(--text-on-primary)]">
-            <th className="w-[65px] px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">{t('date')}</th>
+            <th className="w-[95px] px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">{t('date')}</th>
             <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide">{t('particulars')}</th>
             <th className="w-[70px] px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">{t('qty')}</th>
             <th className="w-[70px] px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">{t('rate')}</th>
@@ -196,7 +202,9 @@ export default function LedgerTable({
               // Total/subtotal row — bold, tinted background
               return (
                 <tr key={i} className={`${borderClass} ${r.isOpening ? 'bg-[var(--bg-base)] italic' : 'bg-[var(--bg-base)] font-semibold'}`}>
-                  <td className="px-3 py-1.5 text-xs text-[var(--text-secondary)]">{r.date}</td>
+                  <td className="px-3 py-1.5 text-xs text-[var(--text-secondary)]">
+                    {r.date}{r.time ? <><br/><span className="text-[10px] text-[var(--text-faint)]">{r.time}</span></> : ''}
+                  </td>
                   <td className={`px-3 py-1.5 ${r.isPayment ? 'text-[var(--bg-success)]' : r.isOpening ? 'text-[var(--text-muted)]' : 'text-[var(--text-primary)]'}`}>
                     {r.particulars}
                   </td>
@@ -277,7 +285,9 @@ export default function LedgerTable({
             // Regular item row
             return (
               <tr key={i} className={`${borderClass} ${r.isCharge ? 'italic text-[#6b5344]' : ''}`}>
-                <td className="px-3 py-1 text-xs text-[var(--text-secondary)]">{r.date}</td>
+                <td className="px-3 py-1 text-xs text-[var(--text-secondary)]">
+                  {r.date}{r.time ? <><br/><span className="text-[10px] text-[var(--text-faint)]">{r.time}</span></> : ''}
+                </td>
                 <td className="px-3 py-1 text-[var(--text-primary)]">
                   {r.isFirst ? <span className="font-semibold">{r.particulars}</span> : r.particulars}
                 </td>

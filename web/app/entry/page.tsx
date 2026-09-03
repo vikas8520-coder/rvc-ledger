@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePersistentState } from '../components/usePersistentState';
 import { useI18n } from '../components/I18nProvider';
 import { formatCustomerName, getUiLang } from '@/lib/i18n';
-import { fmt } from '@/lib/format';
+import { fmt, fmtTime } from '@/lib/format';
 import Autocomplete from '../components/Autocomplete';
 import { printFarmerPatti, type FarmerPattiData, type ShopProfile } from '@/lib/billPrint';
 import { PrinterIcon } from '../components/Icons';
@@ -169,6 +169,7 @@ interface SavedSale {
   amount: number;
   cash: boolean;
   hamali: string;
+  createdAt?: string | null;
 }
 
 function emptyLine(commodity = '', price = ''): Line {
@@ -871,6 +872,7 @@ export default function EntryPage() {
             amount: num(sale.amount),
             cash: sale.cash,
             hamali: sale.hamali,
+            createdAt: new Date().toISOString(),
           });
         });
         if (data.purchaseId) purchaseIds.push(data.purchaseId);
@@ -1852,6 +1854,7 @@ export default function EntryPage() {
                   <th className="py-1.5 pr-2 text-right">{t('hamali')}</th>
                   <th className="py-1.5 pr-2 text-right">{t('amount')}</th>
                   <th className="py-1.5 pr-2">{t('farmer')}</th>
+                  <th className="py-1.5 pr-2 text-right">Time</th>
                   <th className="py-1.5 pr-2 text-center">Actions</th>
                 </tr>
               </thead>
@@ -1875,6 +1878,7 @@ export default function EntryPage() {
                     <td className="py-1.5 pr-2 text-right">{num(s.hamali) > 0 ? s.hamali : '—'}</td>
                     <td className="py-1.5 pr-2 text-right font-medium">{fmt(s.amount)}</td>
                     <td className="py-1.5 pr-2 text-xs text-[var(--text-muted)]">{s.farmer}</td>
+                    <td className="py-1.5 pr-2 text-right text-xs text-[var(--text-muted)] whitespace-nowrap">{fmtTime(s.createdAt)}</td>
                     <td className="py-1.5 pr-2">
                       <div className="flex items-center justify-center gap-1">
                         <span className="relative" data-share-dropdown>

@@ -160,6 +160,7 @@ export interface TxnView {
   amount: number;
   balanceAfter: number;
   date: string;
+  createdAt?: string | null;
   billNo?: string | null;
   items: TxnItemView[];
   market?: Partial<MarketMeta>;
