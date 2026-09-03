@@ -903,8 +903,13 @@ export default function EntryPage() {
         const result = await recognizeWithPaddle(f, (p: PaddleProgress) => {
           if (p.status === 'loading_model') {
             setOcrProgress(`${t('ocrLocal')} — loading model...`);
+          } else if (p.status === 'loading_pdf') {
+            setOcrProgress(`${t('ocrLocal')} — opening PDF...`);
+          } else if (p.status === 'rendering_pdf') {
+            setOcrProgress(`${t('ocrLocal')} — rendering PDF ${Math.round((p.progress || 0) * 100)}%...`);
           } else if (p.status === 'recognizing') {
-            setOcrProgress(`${t('ocrLocal')} — reading bill...`);
+            const pct = Math.round((p.progress || 0) * 100);
+            setOcrProgress(`${t('ocrLocal')} — reading bill${pct > 0 ? ` ${pct}%` : ''}...`);
           }
         });
         ocrText = result.text;
@@ -1071,8 +1076,7 @@ export default function EntryPage() {
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
-          capture="environment"
+          accept="image/*,application/pdf,.pdf,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.avif,.tiff,.tif"
           onChange={handleBillUpload}
           className="hidden"
         />
