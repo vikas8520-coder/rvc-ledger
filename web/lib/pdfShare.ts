@@ -24,54 +24,102 @@ export function generateCreditLedgerPdf(
   const margin = 15;
   const colGap = 10; // gap between the two columns (matches reference PDF)
   const colW = (pageW - margin * 2 - colGap) / 2; // ≈85mm per column
-  let y = 10;
-
-  // Header — 3 lines at 16pt Courier-Bold, centered (matches reference PDF)
-  doc.setFont('courier', 'bold');
-  doc.setFontSize(16);
-  doc.text((shop.shopName || 'RVC').toUpperCase(), pageW / 2, y, { align: 'center' });
-  y += 8.5;
-  doc.text(title.toUpperCase(), pageW / 2, y, { align: 'center' });
-  y += 5.5;
-  doc.text(`Date: ${date}`, pageW / 2, y, { align: 'center' });
-  y += 6;
-
-  // Horizontal line after header
-  doc.setLineWidth(0.5);
-  doc.line(margin, y, pageW - margin, y);
-  y += 4;
-
-  const mid = Math.ceil(entries.length / 2);
-  const leftCol = entries.slice(0, mid);
-  const rightCol = entries.slice(mid);
-  const startY = y;
   const lineH = 5.5;
+  const bottomLimit = pageH - 25; // stop before footer
 
-  const drawColumn = (col: CreditLedgerEntry[], x: number, sy: number) => {
-    let cy = sy;
-    for (const e of col) {
-      if (cy > pageH - 25) { doc.addPage(); cy = margin; }
-      const code = (e.code || '').padEnd(4).slice(0, 4);
-      const amtStr = String(e.amount);
-      let name = e.name.toUpperCase();
-      if (e.phone) name += ` ${e.phone}`;
-      const maxNameLen = 30;
-      const displayName = name.length > maxNameLen ? name.slice(0, maxNameLen) : name;
-      doc.setFont('courier', 'normal');
-      doc.setFontSize(10);
-      doc.text(code, x, cy);
-      doc.text(displayName, x + 9, cy);
-      doc.text(amtStr, x + colW, cy, { align: 'right' });
-      cy += lineH;
-    }
-    return cy;
+  // ── Page 1: draw header, then fill both columns ──
+  const drawHeader = () => {
+    let y = 10;
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(16);
+    doc.text((shop.shopName || 'RVC').toUpperCase(), pageW / 2, y, { align: 'center' });
+    y += 8.5;
+    doc.text(title.toUpperCase(), pageW / 2, y, { align: 'center' });
+    y += 5.5;
+    doc.text(`Date: ${date}`, pageW / 2, y, { align: 'center' });
+    y += 6;
+    doc.setLineWidth(0.5);
+    doc.line(margin, y, pageW - margin, y);
+    y += 4;
+    return y;
   };
 
-  const leftEnd = drawColumn(leftCol, margin, startY);
-  const rightEnd = drawColumn(rightCol, margin + colW + colGap, startY);
-  y = Math.max(leftEnd, rightEnd) + 4;
+  const drawEntry = (e: CreditLedgerEntry, x: number, cy: number) => {
+    const code = (e.code || '').padEnd(4).slice(0, 4);
+    const amtStr = String(e.amount);
+    let name = e.name.toUpperCase();
+    if (e.phone) name += ` ${e.phone}`;
+    const maxNameLen = 30;
+    const displayName = name.length > maxNameLen ? name.slice(0, maxNameLen) : name;
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(10);
+    doc.text(code, x, cy);
+    doc.text(displayName, x + 9, cy);
+    doc.text(amtStr, x + colW, cy, { align: 'right' });
+  };
+
+  // Calculate how many entries fit per column on the first page
+  // (first page has header, so less room)
+  const firstPageStartY = 33.5; // approximate Y after header
+  const firstPageEntries = Math.floor((bottomLimit - firstPageStartY) / lineH);
+  // Subsequent pages start at top margin
+  const contPageEntries = Math.floor((bottomLimit - margin) / lineH);
+  // Entries per page = left column + right column
+  const firstPageTotal = firstPageEntries * 2;
+  const contPageTotal = contPageEntries * 2;
+
+  // Draw page 1
+  let startY = drawHeader();
+  let idx = 0;
+
+  // Page 1: fill left column then right column
+  const page1Left = entries.slice(0, firstPageEntries);
+  const page1Right = entries.slice(firstPageEntries, firstPageEntries * 2);
+  let cy = startY;
+  for (const e of page1Left) {
+    drawEntry(e, margin, cy);
+    cy += lineH;
+  }
+  cy = startY;
+  for (const e of page1Right) {
+    drawEntry(e, margin + colW + colGap, cy);
+    cy += lineH;
+  }
+  idx = page1Left.length + page1Right.length;
+
+  // Subsequent pages
+  while (idx < entries.length) {
+    doc.addPage();
+    const pageEntries = entries.slice(idx, idx + contPageTotal);
+    const half = Math.ceil(pageEntries.length / 2);
+    const leftEntries = pageEntries.slice(0, half);
+    const rightEntries = pageEntries.slice(half);
+
+    cy = margin;
+    for (const e of leftEntries) {
+      drawEntry(e, margin, cy);
+      cy += lineH;
+    }
+    cy = margin;
+    for (const e of rightEntries) {
+      drawEntry(e, margin + colW + colGap, cy);
+      cy += lineH;
+    }
+    idx += pageEntries.length;
+  }
+
+  // ── Total (on last page, after the last entry row) ──
+  // Figure out where the last entry ended
+  const isLastPageFirstPage = idx === page1Left.length + page1Right.length;
+  const remainingAfterPage1 = entries.length - (page1Left.length + page1Right.length);
+  const lastPageEntries = isLastPageFirstPage
+    ? Math.max(page1Left.length, page1Right.length)
+    : Math.ceil((remainingAfterPage1 % contPageTotal) / 2) || contPageEntries;
+  const lastEntryY = (isLastPageFirstPage ? startY : margin) + lastPageEntries * lineH;
+  let y = lastEntryY + 4;
 
   if (y > pageH - 20) { doc.addPage(); y = margin; }
+
   // Horizontal line before total
   doc.setLineWidth(0.5);
   doc.line(margin, y, pageW - margin, y);
@@ -90,13 +138,17 @@ export function generateCreditLedgerPdf(
   doc.setLineWidth(0.5);
   doc.line(margin, y, pageW - margin, y);
 
-  // Footer
-  doc.setFont('courier', 'normal');
-  doc.setFontSize(8);
-  doc.text(
-    `${shop.shopName || 'RVC Ledger'} | ${entries.length} customers | Generated ${new Date().toLocaleString('en-IN')}`,
-    pageW / 2, pageH - 8, { align: 'center' }
-  );
+  // Footer on every page
+  const pageCount = doc.getNumberOfPages();
+  for (let p = 1; p <= pageCount; p++) {
+    doc.setPage(p);
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(8);
+    doc.text(
+      `${shop.shopName || 'RVC Ledger'} | ${entries.length} customers | Generated ${new Date().toLocaleString('en-IN')}`,
+      pageW / 2, pageH - 8, { align: 'center' }
+    );
+  }
 
   return doc.output('blob');
 }
