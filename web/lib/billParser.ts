@@ -41,6 +41,9 @@ export interface SmartBillCharge {
 
 export interface SmartBillResult {
   customerName: string | null;
+  customerPhone: string | null;
+  farmerName: string | null;
+  farmerPhone: string | null;
   date: string | null;
   billNo: string | null;
   total: number;
@@ -129,28 +132,77 @@ function classifyLine(text: string, index: number, allLines: string[]): LineType
 
 // ── Customer name extraction ─────────────────────────────────────────
 
-function extractCustomerName(lines: ClassifiedLine[]): string | null {
+function extractCustomerNameAndPhone(lines: ClassifiedLine[]): { name: string | null; phone: string | null } {
   // Look for explicitly labeled customer lines
   for (const ln of lines) {
     if (ln.type !== 'customer') continue;
-    let name = ln.text;
+    let text = ln.text;
     // Strip labels
-    name = name.replace(/^(to|customer|name|buyer|party|consignee|కు|नाम|ग्राहक)\s*[:.\-]\s*/i, '');
-    name = name.replace(/^(to|కు|नाम|ग्राहक)\s+/i, '');
-    name = name.trim();
+    text = text.replace(/^(to|customer|name|buyer|party|consignee|కు|नाम|ग्राहक)\s*[:.\-]\s*/i, '');
+    text = text.replace(/^(to|కు|नाम|ग्राहक)\s+/i, '');
+    // Extract phone number if present (10+ digits)
+    const phoneMatch = text.match(/(\d{10,})/);
+    const phone = phoneMatch ? phoneMatch[1] : null;
+    let name = text.replace(/(\d{10,})/, '').trim();
     if (name && name.length >= 2 && name.length <= 60) {
-      return toTitle(name);
+      return { name: toTitle(name), phone };
     }
   }
 
   // Fallback: first text-only line (no digits) that's not a header
   for (const ln of lines) {
     if (ln.type === 'customer' && ln.text.trim().length >= 2) {
-      return toTitle(ln.text.trim());
+      const text = ln.text.trim();
+      const phoneMatch = text.match(/(\d{10,})/);
+      const phone = phoneMatch ? phoneMatch[1] : null;
+      const name = text.replace(/(\d{10,})/, '').trim();
+      if (name.length >= 2) {
+        return { name: toTitle(name), phone };
+      }
     }
   }
 
-  return null;
+  return { name: null, phone: null };
+}
+
+// Extract farmer/supplier name from bill text.
+// On market bills, the supplier name often appears with labels like
+// "From:", "Supplier:", "Farmer:", "నుండి", "किसान" etc.
+// Also checks for phone numbers near the name.
+function extractFarmerName(lines: ClassifiedLine[]): { name: string | null; phone: string | null } {
+  // Look for explicitly labeled farmer/supplier lines
+  const farmerLabels = /^(from|supplier|farmer|vendor|grower|నుండి|రైతు|किसान|आपूर्तिकर्ता|से)\s*[:.\-]\s*/i;
+  for (const ln of lines) {
+    if (ln.type === 'header' || ln.type === 'item' || ln.type === 'charge') continue;
+    const match = ln.text.match(farmerLabels);
+    if (match) {
+      let name = ln.text.slice(match[0].length).trim();
+      // Extract phone if present
+      const phoneMatch = name.match(/(\d{10,})/);
+      const phone = phoneMatch ? phoneMatch[1] : null;
+      name = name.replace(/(\d{10,})/, '').trim();
+      if (name && name.length >= 2 && name.length <= 60) {
+        return { name: toTitle(name), phone };
+      }
+    }
+  }
+
+  // Fallback: look for lines with "From" or supplier-like keywords
+  for (const ln of lines) {
+    if (ln.type === 'header' || ln.type === 'item' || ln.type === 'charge') continue;
+    const lower = ln.text.toLowerCase();
+    if (lower.startsWith('from ') || lower.startsWith('supplier ') || lower.startsWith('farmer ')) {
+      let name = ln.text.replace(/^(from|supplier|farmer)\s+/i, '').trim();
+      const phoneMatch = name.match(/(\d{10,})/);
+      const phone = phoneMatch ? phoneMatch[1] : null;
+      name = name.replace(/(\d{10,})/, '').trim();
+      if (name && name.length >= 2 && name.length <= 60) {
+        return { name: toTitle(name), phone };
+      }
+    }
+  }
+
+  return { name: null, phone: null };
 }
 
 // ── Commodity matching ───────────────────────────────────────────────
@@ -278,7 +330,9 @@ export function parseBillSmart(
   }
 
   // Extract structured data
-  const customerName = extractCustomerName(lines);
+  const customerInfo = extractCustomerNameAndPhone(lines);
+  const customerName = customerInfo.name;
+  const farmerInfo = extractFarmerName(lines);
   const date = extractDate(ocrText);
   const total = extractTotal(ocrText);
 
@@ -356,6 +410,9 @@ export function parseBillSmart(
 
   return {
     customerName,
+    customerPhone: customerInfo.phone,
+    farmerName: farmerInfo.name,
+    farmerPhone: farmerInfo.phone,
     date,
     billNo: null,
     total: finalTotal,

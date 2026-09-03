@@ -154,6 +154,7 @@ interface CustomerOpt {
   englishName?: string | null;
   teluguName?: string | null;
   hindiName?: string | null;
+  phone?: string | null;
 }
 
 interface SavedSale {
@@ -1042,6 +1043,56 @@ export default function EntryPage() {
       // Set customer name into the first sale line if found
       const customerName = parsed.customerName;
 
+      // ── Auto-match customer to existing DB customers ──
+      // Match by exact name first, then by phone, then by fuzzy name
+      let matchedCustomerId: string | null = null;
+      if (customerName) {
+        const lowerName = customerName.toLowerCase().trim();
+        // 1. Exact name match (including localized names)
+        const exactMatch = customers.find(
+          (c) =>
+            c.name.toLowerCase() === lowerName ||
+            (c.englishName?.toLowerCase() === lowerName) ||
+            (c.teluguName?.toLowerCase() === lowerName) ||
+            (c.hindiName?.toLowerCase() === lowerName),
+        );
+        if (exactMatch) {
+          matchedCustomerId = exactMatch.id;
+        } else if (parsed.customerPhone) {
+          // 2. Match by phone number
+          const phoneMatch = customers.find(
+            (c) => c.phone && c.phone.replace(/\D/g, '').endsWith(parsed.customerPhone!.replace(/\D/g, '').slice(-10)),
+          );
+          if (phoneMatch) matchedCustomerId = phoneMatch.id;
+        }
+        // 3. Fuzzy name match (case-insensitive contains)
+        if (!matchedCustomerId) {
+          const fuzzyMatch = customers.find(
+            (c) =>
+              c.name.toLowerCase().includes(lowerName) ||
+              lowerName.includes(c.name.toLowerCase()),
+          );
+          if (fuzzyMatch) matchedCustomerId = fuzzyMatch.id;
+        }
+      }
+
+      // ── Auto-match farmer to existing suppliers ──
+      // If OCR found a farmer name, match it to existing supplier names
+      let matchedFarmerName = '';
+      if (parsed.farmerName) {
+        const lowerFarmer = parsed.farmerName.toLowerCase().trim();
+        const exactFarmer = farmerNames.find((n) => n.toLowerCase() === lowerFarmer);
+        if (exactFarmer) {
+          matchedFarmerName = exactFarmer;
+        } else {
+          // Fuzzy: check if any existing farmer name contains the OCR name or vice versa
+          const fuzzyFarmer = farmerNames.find(
+            (n) => n.toLowerCase().includes(lowerFarmer) || lowerFarmer.includes(n.toLowerCase()),
+          );
+          matchedFarmerName = fuzzyFarmer || parsed.farmerName;
+        }
+      }
+
       // Track what was imported so we can auto-save corrections when the
       // user edits commodity/customer names before saving
       ocrImportRef.current = {
@@ -1049,7 +1100,7 @@ export default function EntryPage() {
           parsed.items.map((it) => [it.commodity.toLowerCase().trim(), it.commodityConfirmed]),
         ),
         customerRawToConfirmed: new Map(
-          customerName ? [[customerName.toLowerCase().trim(), { name: customerName, id: null as string | null }]] : [],
+          customerName ? [[customerName.toLowerCase().trim(), { name: customerName, id: matchedCustomerId }]] : [],
         ),
       };
 
@@ -1076,7 +1127,7 @@ export default function EntryPage() {
           bags: it.bags !== null ? String(it.bags) : '',
           bagWeights: [],
           customerName: customerName || '',
-          customerId: null,
+          customerId: matchedCustomerId,
           weightKg: it.weightKg !== null ? String(it.weightKg) : '',
           weightMode: 'per_bag' as const,
           pricePerKg: it.rate !== null ? String(it.rate) : '',
@@ -1096,8 +1147,18 @@ export default function EntryPage() {
 
       // Set into the first farmer block (or replace blocks with one farmer)
       setBlocks((prev) => {
+        // If we have a matched farmer name, use it
+        const farmerName = matchedFarmerName || '';
+        // Look up phone from existing farmer phones, or use OCR-extracted phone
+        const farmerPhone = farmerName ? (farmerPhones[farmerName] || parsed.farmerPhone || '') : '';
         if (prev.length === 0 || (prev.length === 1 && !prev[0].farmerName.trim() && prev[0].lots.length === 0)) {
-          return [{ ...emptyFarmer(commissionPct), lots }];
+          return [{ ...emptyFarmer(commissionPct), farmerName, farmerPhone, lots }];
+        }
+        // If OCR found a farmer name and the first block is empty, set it
+        if (farmerName && !prev[0].farmerName.trim()) {
+          const next = [...prev];
+          next[0] = { ...next[0], farmerName, farmerPhone, lots: [...next[0].lots, ...lots] };
+          return next;
         }
         // Append lots to the first block
         const next = [...prev];
