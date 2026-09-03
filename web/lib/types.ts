@@ -61,6 +61,7 @@ export interface Supplier {
   id: string;
   name: string;
   phone?: string | null;
+  commissionPct?: string | null;
   purchased: number;
   paid: number;
   balance: number;

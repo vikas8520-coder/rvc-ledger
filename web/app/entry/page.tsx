@@ -257,6 +257,8 @@ export default function EntryPage() {
   const [catalog, setCatalog] = useState<string[]>([]);
   const [farmerNames, setFarmerNames] = useState<string[]>([]);
   const [farmerPhones, setFarmerPhones] = useState<Record<string, string>>({});
+  const [farmerCommissions, setFarmerCommissions] = useState<Record<string, string>>({});
+  const [farmerIds, setFarmerIds] = useState<Record<string, string>>({});
   const [shop, setShop] = useState<ShopProfile>({});
   const [showAddFarmer, setShowAddFarmer] = useState<string | null>(null);
   const [newFarmerName, setNewFarmerName] = useState('');
@@ -265,6 +267,9 @@ export default function EntryPage() {
   const [ocrProgress, setOcrProgress] = useState<string | null>(null);
   const [ocrSuccess, setOcrSuccess] = useState<string | null>(null);
   const [showShareFor, setShowShareFor] = useState<string | null>(null);
+  const [showCommissionEditor, setShowCommissionEditor] = useState(false);
+  const [commissionEditName, setCommissionEditName] = useState('');
+  const [commissionEditValue, setCommissionEditValue] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formTopRef = useRef<HTMLDivElement>(null);
   // Self-learning: track OCR-imported lines so we can auto-save corrections
@@ -320,10 +325,16 @@ export default function EntryPage() {
         const sups = d.suppliers || [];
         setFarmerNames(sups.map((s: { name: string }) => s.name).sort());
         const phoneMap: Record<string, string> = {};
+        const commMap: Record<string, string> = {};
+        const idMap: Record<string, string> = {};
         for (const s of sups) {
           if (s.phone) phoneMap[s.name] = s.phone;
+          if (s.commissionPct) commMap[s.name] = s.commissionPct;
+          if (s.id) idMap[s.name] = s.id;
         }
         setFarmerPhones(phoneMap);
+        setFarmerCommissions(commMap);
+        setFarmerIds(idMap);
       })
       .catch(() => {});
     fetch('/api/settings')
@@ -461,11 +472,15 @@ export default function EntryPage() {
       });
       const d = await r.json();
       if (d.error) throw new Error(d.error);
-      setFarmerNames((prev) => [...prev, newFarmerName.trim()].sort());
+      const trimmedName = newFarmerName.trim();
+      setFarmerNames((prev) => [...prev, trimmedName].sort());
       if (newFarmerPhone.trim()) {
-        setFarmerPhones((prev) => ({ ...prev, [newFarmerName.trim()]: newFarmerPhone.trim() }));
+        setFarmerPhones((prev) => ({ ...prev, [trimmedName]: newFarmerPhone.trim() }));
       }
-      patchBlock(blockId, (b) => ({ ...b, farmerName: newFarmerName.trim(), farmerPhone: newFarmerPhone.trim() }));
+      if (d.supplier?.id) {
+        setFarmerIds((prev) => ({ ...prev, [trimmedName]: d.supplier.id }));
+      }
+      patchBlock(blockId, (b) => ({ ...b, farmerName: trimmedName, farmerPhone: newFarmerPhone.trim() }));
       setShowAddFarmer(null);
       setNewFarmerName('');
       setNewFarmerPhone('');
@@ -1514,7 +1529,8 @@ export default function EntryPage() {
                     const name = v.trim();
                     if (!name) return;
                     const phone = farmerPhones[name] || '';
-                    patchBlock(block.id, (b) => ({ ...b, farmerName: name, farmerPhone: phone }));
+                    const comm = farmerCommissions[name] || commissionPct;
+                    patchBlock(block.id, (b) => ({ ...b, farmerName: name, farmerPhone: phone, commissionPct: comm }));
                   }}
                   placeholder="LOCAL, RSB…"
                   className="text-xs"
@@ -1985,7 +2001,29 @@ export default function EntryPage() {
 
             {/* Charges — compact single row */}
             <div className="flex flex-wrap items-end gap-1.5 rounded-lg bg-[var(--bg-base)] p-1.5 text-xs">
-              <ChargeBox label={`${t('commission')}%`} value={block.commissionPct} onChange={(v) => patchBlock(block.id, (b) => ({ ...b, commissionPct: v }))} suffix={`₹${fmt(tot.comm)}`} />
+              {/* Commission — hidden percentage, only shows calculated amount to employees.
+                  Long-press the label to open the hidden commission editor. */}
+              <div className="flex flex-col gap-0.5">
+                <label
+                  className="text-[10px] text-[var(--text-muted)] select-none cursor-default"
+                  onPointerDown={(e) => {
+                    // Long-press (800ms) on the commission label opens hidden editor
+                    const target = e.currentTarget;
+                    const timer = setTimeout(() => {
+                      if (block.farmerName.trim()) {
+                        setCommissionEditName(block.farmerName.trim());
+                        setCommissionEditValue(block.commissionPct);
+                        setShowCommissionEditor(true);
+                      }
+                    }, 800);
+                    const cancel = () => clearTimeout(timer);
+                    target.addEventListener('pointerup', cancel, { once: true });
+                    target.addEventListener('pointerleave', cancel, { once: true });
+                  }}
+                >
+                  {t('commission')} <span className="text-[var(--text-faint)]">₹{fmt(tot.comm)}</span>
+                </label>
+              </div>
               <ChargeBox label={t('hamali')} value={block.hamaliTotal} onChange={(v) => patchBlock(block.id, (b) => ({ ...b, hamaliTotal: v }))} placeholder={tot.validLines.length ? String(tot.validLines.reduce((s, l) => s + num(l.hamali), 0) || '') : '0'} />
               <ChargeBox label={t('chargesBardan')} value={block.bardan} onChange={(v) => patchBlock(block.id, (b) => ({ ...b, bardan: v }))} />
               <ChargeBox label={t('chargesFreight')} value={block.freight} onChange={(v) => patchBlock(block.id, (b) => ({ ...b, freight: v }))} />
@@ -2014,6 +2052,73 @@ export default function EntryPage() {
         <p className="rounded-lg bg-[var(--bg-danger)] px-3 py-2 text-sm text-[var(--text-on-primary)]" role="alert">
           {saveError}
         </p>
+      )}
+
+      {/* Hidden commission editor — opened by long-pressing the commission label */}
+      {showCommissionEditor && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setShowCommissionEditor(false)}
+        >
+          <div
+            className="w-80 rounded-xl border border-[var(--border-card)] bg-[var(--bg-card)] p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">Commission %</h3>
+            <p className="mb-3 text-xs text-[var(--text-muted)]">
+              Set commission percentage for <b>{commissionEditName}</b>. This is saved per farmer and auto-applied when selected. Employees cannot see or change this.
+            </p>
+            <input
+              type="number"
+              step="0.5"
+              min="0"
+              max="100"
+              value={commissionEditValue}
+              onChange={(e) => setCommissionEditValue(e.target.value)}
+              className="mb-3 w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] px-3 py-2 text-sm"
+              placeholder="e.g. 10"
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  // Save to DB
+                  const farmerId = farmerIds[commissionEditName];
+                  if (farmerId) {
+                    try {
+                      await fetch(`/api/suppliers/${farmerId}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ commissionPct: commissionEditValue }),
+                      });
+                    } catch (e) { /* ignore — will retry on save */ }
+                  }
+                  // Update local maps
+                  const val = commissionEditValue.trim();
+                  setFarmerCommissions((prev) => ({ ...prev, [commissionEditName]: val }));
+                  // Update the active block
+                  setBlocks((prev) => prev.map((b) =>
+                    b.farmerName.trim() === commissionEditName
+                      ? { ...b, commissionPct: val || commissionPct }
+                      : b
+                  ));
+                  setShowCommissionEditor(false);
+                }}
+                className="flex-1 rounded-lg bg-[var(--bg-primary)] px-3 py-2 text-sm font-medium text-[var(--text-on-primary)]"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCommissionEditor(false)}
+                className="flex-1 rounded-lg border border-[var(--border-input)] px-3 py-2 text-sm text-[var(--text-muted)]"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Live transactions — saved sales appear here on the same page */}

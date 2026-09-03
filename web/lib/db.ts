@@ -161,6 +161,7 @@ async function ensureSchema() {
   await sql`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS shop_id UUID`;
   await sql`ALTER TABLE purchase_items ADD COLUMN IF NOT EXISTS shop_id UUID`;
   await sql`ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS shop_id UUID`;
+  await sql`ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS commission_pct NUMERIC(5,2) DEFAULT NULL`;
   await sql`ALTER TABLE supplier_payments ADD COLUMN IF NOT EXISTS shop_id UUID`;
   await sql`ALTER TABLE wastage ADD COLUMN IF NOT EXISTS shop_id UUID`;
   await sql`ALTER TABLE catalog_items ADD COLUMN IF NOT EXISTS shop_id UUID`;
@@ -1931,7 +1932,7 @@ export async function getSuppliers(shopId: string): Promise<Supplier[]> {
   await ensureSchema();
   const sql = getSql();
 
-  const suppliers = await sql`SELECT id, name, phone FROM suppliers WHERE shop_id = ${shopId} ORDER BY name`;
+  const suppliers = await sql`SELECT id, name, phone, commission_pct FROM suppliers WHERE shop_id = ${shopId} ORDER BY name`;
   const purchases = await sql`SELECT id, supplier_id, date, bill_no, total FROM purchases WHERE supplier_id IS NOT NULL AND shop_id = ${shopId} ORDER BY date, created_at`;
   const payments = await sql`SELECT * FROM supplier_payments WHERE shop_id = ${shopId} ORDER BY date, created_at`;
   const items = await sql`SELECT * FROM purchase_items WHERE shop_id = ${shopId}`;
@@ -1995,6 +1996,7 @@ export async function getSuppliers(shopId: string): Promise<Supplier[]> {
       id: sid,
       name: s.name as string,
       phone: (s.phone as string | null) ?? null,
+      commissionPct: s.commission_pct != null ? String(s.commission_pct) : null,
       purchased,
       paid,
       balance: purchased - paid,
@@ -2027,6 +2029,13 @@ export async function setSupplierPhone(shopId: string, id: string, phone: string
   await ensureSchema();
   const sql = getSql();
   await sql`UPDATE suppliers SET phone = ${phone || null} WHERE id = ${id} AND shop_id = ${shopId}`;
+}
+
+export async function setSupplierCommission(shopId: string, id: string, commissionPct: string): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  const val = commissionPct.trim() === '' ? null : Number(commissionPct);
+  await sql`UPDATE suppliers SET commission_pct = ${val} WHERE id = ${id} AND shop_id = ${shopId}`;
 }
 
 /* ---- Wastage ---- */
