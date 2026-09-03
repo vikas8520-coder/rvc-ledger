@@ -288,6 +288,19 @@ export default function EntryPage() {
     return () => window.removeEventListener('focus', onFocus);
   }, []);
 
+  // Close per-transaction share dropdown when clicking outside
+  useEffect(() => {
+    if (!showShareFor) return;
+    function handlePointerDown(e: PointerEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-share-dropdown]')) {
+        setShowShareFor(null);
+      }
+    }
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [showShareFor]);
+
   useEffect(() => {
     fetch('/api/customers')
       .then((r) => r.json())
@@ -1783,29 +1796,13 @@ export default function EntryPage() {
               <PrintShareMenu
                 label={t('printShare')}
                 options={[
-                  // Per-farmer patti
-                  ...savedPattis.map((p) => ({
-                    key: `patti-${p.farmer}`,
-                    label: `${t('printFarmerPatti')} — ${p.farmer}`,
-                    onPrint: () => printFarmerPatti(p, shop),
-                  })),
+                  // Consolidated options only — per-transaction share
+                  // is already available beside each row
                   {
                     key: 'all-pattis',
                     label: t('printAllPattis'),
                     onPrint: printAllPattis,
                   },
-                  // Per-customer patti (all sales for that customer today)
-                  ...Array.from(salesByCustomer.keys()).map((custKey) => {
-                    const sales = salesByCustomer.get(custKey)!;
-                    const custName = sales[0].customerName;
-                    return {
-                      key: `cust-${custKey}`,
-                      label: `${t('printCustomerBills')} — ${custName} (${sales.length})`,
-                      onPrint: () => printCustomerSales(custName),
-                      onShare: () => shareCustomerSales(custName),
-                    };
-                  }),
-                  // All customer patti for today
                   {
                     key: 'bills',
                     label: `${t('printCustomerBills')} — ALL (${date})`,
@@ -1880,17 +1877,44 @@ export default function EntryPage() {
                     <td className="py-1.5 pr-2 text-xs text-[var(--text-muted)]">{s.farmer}</td>
                     <td className="py-1.5 pr-2">
                       <div className="flex items-center justify-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => setShowShareFor(s.txnId)}
-                          className="rounded px-1.5 py-0.5 text-xs text-[var(--bg-primary)] hover:bg-[var(--bg-base)]"
-                          title={t('printShare')}
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline-block',verticalAlign:'middle'}}>
-                            <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
-                            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-                          </svg>
-                        </button>
+                        <span className="relative" data-share-dropdown>
+                          <button
+                            type="button"
+                            onClick={() => setShowShareFor(showShareFor === s.txnId ? null : s.txnId)}
+                            className="rounded px-1.5 py-0.5 text-xs text-[var(--bg-primary)] hover:bg-[var(--bg-base)]"
+                            title={t('printShare')}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline-block',verticalAlign:'middle'}}>
+                              <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                            </svg>
+                          </button>
+                          {showShareFor === s.txnId && (
+                            <div className="absolute right-0 top-full z-50 mt-1 flex flex-col gap-1 rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] p-1 shadow-lg">
+                              <button
+                                type="button"
+                                onClick={() => { setShowShareFor(null); printSale(s); }}
+                                className="whitespace-nowrap rounded-md bg-[var(--bg-base)] px-3 py-1.5 text-xs hover:bg-[var(--bg-card-hover)]"
+                              >
+                                🖨 Print
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { setShowShareFor(null); shareSale(s); }}
+                                className="whitespace-nowrap rounded-md bg-[var(--bg-base)] px-3 py-1.5 text-xs hover:bg-[var(--bg-card-hover)]"
+                              >
+                                <span style={{color:'#25D366'}}>WhatsApp</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setShowShareFor(null)}
+                                className="whitespace-nowrap rounded-md bg-[var(--bg-base)] px-3 py-1 text-xs text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)]"
+                              >
+                                ✕ Cancel
+                              </button>
+                            </div>
+                          )}
+                        </span>
                         {s.customerId && (
                           <Link
                             href={`/customers/${s.customerId}`}
@@ -1911,31 +1935,6 @@ export default function EntryPage() {
                           </button>
                         )}
                       </div>
-                      {showShareFor === s.txnId && (
-                        <div className="absolute z-50 mt-1 flex flex-col gap-1 rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] p-1 shadow-lg" style={{right:0}}>
-                          <button
-                            type="button"
-                            onClick={() => { setShowShareFor(null); printSale(s); }}
-                            className="rounded-md bg-[var(--bg-base)] px-3 py-1.5 text-xs hover:bg-[var(--bg-card-hover)]"
-                          >
-                            🖨 Print
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setShowShareFor(null); shareSale(s); }}
-                            className="rounded-md bg-[var(--bg-base)] px-3 py-1.5 text-xs hover:bg-[var(--bg-card-hover)]"
-                          >
-                            <span style={{color:'#25D366'}}>WhatsApp</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setShowShareFor(null)}
-                            className="rounded-md bg-[var(--bg-base)] px-3 py-1 text-xs text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)]"
-                          >
-                            ✕ Cancel
-                          </button>
-                        </div>
-                      )}
                     </td>
                   </tr>
                 ))}
