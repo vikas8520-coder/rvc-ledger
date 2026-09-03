@@ -423,3 +423,198 @@ export function parseBillSmart(
     confidence: avgConfidence,
   };
 }
+
+// ── Multi-bill PDF parser (for generated patti PDFs) ─────────────────
+
+import type { PdfTextItem } from './paddleOcr';
+
+export interface ParsedBill {
+  customerName: string;
+  billNo: string | null;
+  commodity: string;
+  date: string | null;
+  qty: string;
+  rate: string;
+  amount: number;
+  total: number;
+}
+
+/**
+ * Parse a generated multi-bill patti PDF using text positions.
+ * Each page has up to 6 bills in a 2x3 grid. Text items are grouped
+ * by position into bill clusters, then each cluster is parsed.
+ */
+export function parseMultiBillPdf(items: PdfTextItem[]): ParsedBill[] {
+  if (items.length === 0) return [];
+
+  // Group items by page
+  const byPage = new Map<number, PdfTextItem[]>();
+  for (const item of items) {
+    if (!byPage.has(item.page)) byPage.set(item.page, []);
+    byPage.get(item.page)!.push(item);
+  }
+
+  const bills: ParsedBill[] = [];
+
+  for (const [pageNum, pageItems] of byPage) {
+    // Find "No:" markers — each one starts a new bill
+    const noMarkers = pageItems.filter((i) => /^no\s*[:.]/i.test(i.text));
+    if (noMarkers.length === 0) continue;
+
+    // For each "No:" marker, find the bill region around it
+    // Bills in a 2x3 grid: the "No:" marker is at the top-left of each bill
+    for (const marker of noMarkers) {
+      const billItems = findBillItems(marker, pageItems);
+      if (billItems.length === 0) continue;
+
+      const bill = parseBillCluster(billItems);
+      if (bill) bills.push(bill);
+    }
+  }
+
+  // Deduplicate — the PDF may have duplicate text layers
+  const seen = new Set<string>();
+  return bills.filter((b) => {
+    const key = `${b.customerName}|${b.commodity}|${b.amount}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+// Find all text items that belong to the same bill as the given "No:" marker.
+// A bill occupies a rectangular region. We find the region by looking at
+// nearby text items.
+function findBillItems(marker: PdfTextItem, allItems: PdfTextItem[]): PdfTextItem[] {
+  // Sort items by distance from the marker
+  // A bill region is roughly 280x380 pts in a 6-per-page A4 layout
+  // But we'll be more generous and cluster by proximity
+  const billWidth = 280;
+  const billHeight = 380;
+
+  return allItems.filter((item) => {
+    // Same page
+    if (item.page !== marker.page) return false;
+    // Within the bill region (marker is top-left)
+    const dx = item.x - marker.x;
+    const dy = marker.y - item.y; // PDF y is bottom-up, bill goes down from marker
+    return dx >= -10 && dx <= billWidth && dy >= -10 && dy <= billHeight;
+  }).sort((a, b) => {
+    // Sort top to bottom, left to right
+    const yDiff = b.y - a.y;
+    if (Math.abs(yDiff) > 5) return yDiff;
+    return a.x - b.x;
+  });
+}
+
+// Parse a cluster of text items (one bill) into structured data.
+function parseBillCluster(items: PdfTextItem[]): ParsedBill | null {
+  if (items.length === 0) return null;
+
+  const texts = items.map((i) => i.text);
+
+  // Find customer name — it's the text right after "No:" line
+  // Pattern: "No:" "—" "Customer Name" or "No:" "C17-19" "Customer Name"
+  let customerName = '';
+  let billNo: string | null = null;
+  const noIdx = texts.findIndex((t) => /^no\s*[:.]/i.test(t));
+  if (noIdx >= 0) {
+    // Next non-dash text after "No:" is the bill number or customer name
+    let idx = noIdx + 1;
+    // Skip dash or empty
+    while (idx < texts.length && /^[-—]+$/.test(texts[idx])) idx++;
+    // If next text looks like a bill number (alphanumeric with dashes), it's billNo
+    if (idx < texts.length && /^[A-Z0-9][-A-Z0-9]*$/i.test(texts[idx]) && texts[idx].length <= 10) {
+      billNo = texts[idx];
+      idx++;
+    }
+    // Next text is the customer name
+    if (idx < texts.length) {
+      customerName = texts[idx];
+      // Skip if it's a label like "Item"
+      if (/^(item|qty|rate|amt|total|produce)$/i.test(customerName)) {
+        customerName = '';
+      }
+    }
+  }
+
+  // Find commodity — text after "Item" label
+  let commodity = '';
+  const itemIdx = texts.findIndex((t) => /^item$/i.test(t));
+  if (itemIdx >= 0 && itemIdx + 1 < texts.length) {
+    commodity = texts[itemIdx + 1];
+    // Skip if it's "Produce" — use next text if available
+    if (/^produce$/i.test(commodity) && itemIdx + 2 < texts.length) {
+      // Check if the next text is a real commodity (not "Qty", "Rate", etc.)
+      const next = texts[itemIdx + 2];
+      if (!/^(qty|rate|amt|total|authorized|signatory|rvc|vegetable)$/i.test(next)) {
+        commodity = next;
+      }
+    }
+  }
+
+  // Find date — text that looks like a date
+  let date: string | null = null;
+  for (const t of texts) {
+    const d = parseDate(t);
+    if (d) { date = d; break; }
+  }
+
+  // Find quantity — text after "Qty" label
+  let qty = '';
+  const qtyIdx = texts.findIndex((t) => /^qty$/i.test(t));
+  if (qtyIdx >= 0 && qtyIdx + 1 < texts.length) {
+    qty = texts[qtyIdx + 1];
+  }
+
+  // Find rate — text after "Rate" label
+  let rate = '';
+  const rateIdx = texts.findIndex((t) => /^rate$/i.test(t));
+  if (rateIdx >= 0 && rateIdx + 1 < texts.length) {
+    rate = texts[rateIdx + 1];
+  }
+
+  // Find amount — text after "Amt" label, or "Rs X,XXX" pattern
+  let amount = 0;
+  const amtIdx = texts.findIndex((t) => /^amt$/i.test(t));
+  if (amtIdx >= 0 && amtIdx + 1 < texts.length) {
+    amount = parseAmount(texts[amtIdx + 1]);
+  }
+  if (amount === 0) {
+    // Fallback: look for "Rs X,XXX" pattern
+    for (const t of texts) {
+      if (/rs\.?\s*[\d,]+/i.test(t)) {
+        amount = parseAmount(t);
+        if (amount > 0) break;
+      }
+    }
+  }
+
+  // Find total — text after "TOTAL" label
+  let total = 0;
+  const totalIdx = texts.findIndex((t) => /^total$/i.test(t));
+  if (totalIdx >= 0 && totalIdx + 1 < texts.length) {
+    total = parseAmount(texts[totalIdx + 1]);
+  }
+  if (total === 0) total = amount;
+
+  if (!customerName && amount === 0) return null;
+
+  return {
+    customerName: customerName || 'Unknown',
+    billNo,
+    commodity: commodity || 'Produce',
+    date,
+    qty,
+    rate,
+    amount,
+    total,
+  };
+}
+
+function parseAmount(str: string): number {
+  let cleaned = str.replace(/[₹$€£\s]/g, '');
+  cleaned = cleaned.replace(/rs\.?/i, '');
+  cleaned = cleaned.replace(/,/g, '');
+  return parseFloat(cleaned) || 0;
+}

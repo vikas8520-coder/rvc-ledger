@@ -11,8 +11,8 @@ import { printFarmerPatti, type FarmerPattiData, type ShopProfile } from '@/lib/
 import { PrinterIcon } from '../components/Icons';
 import PrintShareMenu from '../components/PrintShareMenu';
 import { recognizeBill, type OcrProgress } from '@/lib/ocr';
-import { recognizeWithPaddle, type PaddleProgress, type OcrLine as PaddleOcrLine } from '@/lib/paddleOcr';
-import { parseBillSmart, type SmartBillItem } from '@/lib/billParser';
+import { recognizeWithPaddle, type PaddleProgress, type OcrLine as PaddleOcrLine, extractPdfTextDirect } from '@/lib/paddleOcr';
+import { parseBillSmart, parseMultiBillPdf, type SmartBillItem, type ParsedBill } from '@/lib/billParser';
 import { setRuntimeAliases } from '@/lib/catalog';
 import {
   generateOutstandingListPdf,
@@ -998,13 +998,50 @@ export default function EntryPage() {
     setSaveError('');
   };
 
-  // Upload bill → PaddleOCR (primary) / Tesseract (fallback) → smart parse → fill form
+  // Upload bill → try direct PDF text extraction first → fall back to OCR → smart parse → fill form
   const handleBillUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
     setOcrProgress(t('ocrLocal'));
     setSaveError('');
     try {
+      // ── Step 1: For PDFs, try direct text extraction first (no OCR needed) ──
+      // Generated PDFs (like our own patti/bill PDFs) have embedded text.
+      // This is faster and more accurate than OCR.
+      const isPdf = f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf');
+      if (isPdf) {
+        setOcrProgress(`${t('ocrLocal')} — reading PDF...`);
+        try {
+          const pdfResult = await extractPdfTextDirect(f);
+          if (pdfResult.hasText && pdfResult.items.length > 10) {
+            // Check if this is a multi-bill patti PDF (has "No:" markers)
+            const hasNoMarkers = pdfResult.items.some((i) => /^no\s*[:.]/i.test(i.text));
+            if (hasNoMarkers) {
+              // Parse as multi-bill patti PDF
+              const bills = parseMultiBillPdf(pdfResult.items);
+              if (bills.length > 0) {
+                // Fill the form with all parsed bills
+                fillFormFromBills(bills);
+                setOcrProgress(null);
+                if (fileInputRef.current) fileInputRef.current.value = '';
+                return;
+              }
+            }
+            // Not a multi-bill PDF — use the extracted text with the smart parser
+            const parsed = parseBillSmart(pdfResult.text);
+            if (parsed.items.length > 0) {
+              fillFormFromParsed(parsed);
+              setOcrProgress(null);
+              if (fileInputRef.current) fileInputRef.current.value = '';
+              return;
+            }
+          }
+        } catch (directErr) {
+          console.warn('Direct PDF text extraction failed, falling back to OCR:', directErr);
+        }
+      }
+
+      // ── Step 2: Fall back to OCR (PaddleOCR → Tesseract) ──
       let ocrText = '';
       let ocrLines: PaddleOcrLine[] | undefined;
 
@@ -1036,162 +1073,7 @@ export default function EntryPage() {
       // Smart parse — understands bill structure, extracts customer names,
       // commodities, bags/kg, rates, amounts, charges
       const parsed = parseBillSmart(ocrText, ocrLines);
-
-      // Set date if found
-      if (parsed.date) setDate(parsed.date);
-
-      // Set customer name into the first sale line if found
-      const customerName = parsed.customerName;
-
-      // ── Auto-match customer to existing DB customers ──
-      // Match by exact name first, then by phone, then by fuzzy name
-      let matchedCustomerId: string | null = null;
-      if (customerName) {
-        const lowerName = customerName.toLowerCase().trim();
-        // 1. Exact name match (including localized names)
-        const exactMatch = customers.find(
-          (c) =>
-            c.name.toLowerCase() === lowerName ||
-            (c.englishName?.toLowerCase() === lowerName) ||
-            (c.teluguName?.toLowerCase() === lowerName) ||
-            (c.hindiName?.toLowerCase() === lowerName),
-        );
-        if (exactMatch) {
-          matchedCustomerId = exactMatch.id;
-        } else if (parsed.customerPhone) {
-          // 2. Match by phone number
-          const phoneMatch = customers.find(
-            (c) => c.phone && c.phone.replace(/\D/g, '').endsWith(parsed.customerPhone!.replace(/\D/g, '').slice(-10)),
-          );
-          if (phoneMatch) matchedCustomerId = phoneMatch.id;
-        }
-        // 3. Fuzzy name match (case-insensitive contains)
-        if (!matchedCustomerId) {
-          const fuzzyMatch = customers.find(
-            (c) =>
-              c.name.toLowerCase().includes(lowerName) ||
-              lowerName.includes(c.name.toLowerCase()),
-          );
-          if (fuzzyMatch) matchedCustomerId = fuzzyMatch.id;
-        }
-      }
-
-      // ── Auto-match farmer to existing suppliers ──
-      // If OCR found a farmer name, match it to existing supplier names
-      let matchedFarmerName = '';
-      if (parsed.farmerName) {
-        const lowerFarmer = parsed.farmerName.toLowerCase().trim();
-        const exactFarmer = farmerNames.find((n) => n.toLowerCase() === lowerFarmer);
-        if (exactFarmer) {
-          matchedFarmerName = exactFarmer;
-        } else {
-          // Fuzzy: check if any existing farmer name contains the OCR name or vice versa
-          const fuzzyFarmer = farmerNames.find(
-            (n) => n.toLowerCase().includes(lowerFarmer) || lowerFarmer.includes(n.toLowerCase()),
-          );
-          matchedFarmerName = fuzzyFarmer || parsed.farmerName;
-        }
-      }
-
-      // Track what was imported so we can auto-save corrections when the
-      // user edits commodity/customer names before saving
-      ocrImportRef.current = {
-        commodityRawToConfirmed: new Map(
-          parsed.items.map((it) => [it.commodity.toLowerCase().trim(), it.commodityConfirmed]),
-        ),
-        customerRawToConfirmed: new Map(
-          customerName ? [[customerName.toLowerCase().trim(), { name: customerName, id: matchedCustomerId }]] : [],
-        ),
-      };
-
-      if (parsed.items.length === 0) {
-        setOcrProgress(null);
-        setSaveError(t('ocrCouldNotRead'));
-        return;
-      }
-
-      // Group items by commodity into lots
-      const byCommodity = new Map<string, SmartBillItem[]>();
-      for (const it of parsed.items) {
-        const name = it.commodityConfirmed || it.commodity || 'Item';
-        if (!byCommodity.has(name)) byCommodity.set(name, []);
-        byCommodity.get(name)!.push(it);
-      }
-
-      // Build lots from grouped items
-      const lots: Lot[] = [];
-      for (const [commodity, groupItems] of byCommodity) {
-        const lines: Line[] = groupItems.map((it) => ({
-          id: newId(),
-          commodity,
-          bags: it.bags !== null ? String(it.bags) : '',
-          bagWeights: [],
-          customerName: customerName || '',
-          customerId: matchedCustomerId,
-          weightKg: it.weightKg !== null ? String(it.weightKg) : '',
-          weightMode: 'per_bag' as const,
-          pricePerKg: it.rate !== null ? String(it.rate) : '',
-          amount: String(it.amount || ''),
-          cash: false,
-          hamali: '',
-        }));
-        lots.push({
-          id: newId(),
-          commodity,
-          bags: '',
-          kg: '',
-          avg: '',
-          lines,
-        });
-      }
-
-      // Set into the first farmer block (or replace blocks with one farmer)
-      setBlocks((prev) => {
-        // If we have a matched farmer name, use it
-        const farmerName = matchedFarmerName || '';
-        // Look up phone from existing farmer phones, or use OCR-extracted phone
-        const farmerPhone = farmerName ? (farmerPhones[farmerName] || parsed.farmerPhone || '') : '';
-        if (prev.length === 0 || (prev.length === 1 && !prev[0].farmerName.trim() && prev[0].lots.length === 0)) {
-          return [{ ...emptyFarmer(commissionPct), farmerName, farmerPhone, lots }];
-        }
-        // If OCR found a farmer name and the first block is empty, set it
-        if (farmerName && !prev[0].farmerName.trim()) {
-          const next = [...prev];
-          next[0] = { ...next[0], farmerName, farmerPhone, lots: [...next[0].lots, ...lots] };
-          return next;
-        }
-        // Append lots to the first block
-        const next = [...prev];
-        next[0] = { ...next[0], lots: [...next[0].lots, ...lots] };
-        return next;
-      });
-
-      // Apply charges if found (hamali, commission, etc.)
-      if (parsed.charges.length > 0) {
-        setBlocks((prev) => {
-          if (prev.length === 0) return prev;
-          const next = [...prev];
-          const block = { ...next[0] };
-          for (const ch of parsed.charges) {
-            const lowName = ch.name.toLowerCase();
-            if (lowName.includes('hamali') || lowName.includes('loading')) {
-              block.hamaliTotal = String(ch.amount);
-            } else if (lowName.includes('commission')) {
-              block.commissionPct = String(ch.amount);
-            } else if (lowName.includes('bardan') || lowName.includes('bardana')) {
-              block.bardan = String(ch.amount);
-            } else if (lowName.includes('freight') || lowName.includes('transport')) {
-              block.freight = String(ch.amount);
-            } else if (lowName.includes('advance')) {
-              block.advance = String(ch.amount);
-            } else {
-              block.other = String(ch.amount);
-            }
-          }
-          next[0] = block;
-          return next;
-        });
-      }
+      fillFormFromParsed(parsed);
 
       setOcrProgress(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -1201,6 +1083,191 @@ export default function EntryPage() {
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
+
+  // ── Helper: match a customer name to existing DB customers ──
+  function matchCustomer(name: string, phone?: string | null): string | null {
+    const lowerName = name.toLowerCase().trim();
+    // 1. Exact name match (including localized names)
+    const exactMatch = customers.find(
+      (c) =>
+        c.name.toLowerCase() === lowerName ||
+        (c.englishName?.toLowerCase() === lowerName) ||
+        (c.teluguName?.toLowerCase() === lowerName) ||
+        (c.hindiName?.toLowerCase() === lowerName),
+    );
+    if (exactMatch) return exactMatch.id;
+    // 2. Match by phone number
+    if (phone) {
+      const phoneMatch = customers.find(
+        (c) => c.phone && c.phone.replace(/\D/g, '').endsWith(phone.replace(/\D/g, '').slice(-10)),
+      );
+      if (phoneMatch) return phoneMatch.id;
+    }
+    // 3. Fuzzy name match (case-insensitive contains)
+    const fuzzyMatch = customers.find(
+      (c) =>
+        c.name.toLowerCase().includes(lowerName) ||
+        lowerName.includes(c.name.toLowerCase()),
+    );
+    return fuzzyMatch?.id || null;
+  }
+
+  // ── Helper: match a farmer name to existing suppliers ──
+  function matchFarmer(name: string): string {
+    const lowerFarmer = name.toLowerCase().trim();
+    const exactFarmer = farmerNames.find((n) => n.toLowerCase() === lowerFarmer);
+    if (exactFarmer) return exactFarmer;
+    const fuzzyFarmer = farmerNames.find(
+      (n) => n.toLowerCase().includes(lowerFarmer) || lowerFarmer.includes(n.toLowerCase()),
+    );
+    return fuzzyFarmer || name;
+  }
+
+  // ── Fill form from a single parsed bill (OCR or direct text) ──
+  function fillFormFromParsed(parsed: ReturnType<typeof parseBillSmart>) {
+    if (parsed.date) setDate(parsed.date);
+    const customerName = parsed.customerName;
+    const matchedCustomerId = customerName ? matchCustomer(customerName, parsed.customerPhone) : null;
+    let matchedFarmerName = '';
+    if (parsed.farmerName) matchedFarmerName = matchFarmer(parsed.farmerName);
+
+    ocrImportRef.current = {
+      commodityRawToConfirmed: new Map(
+        parsed.items.map((it) => [it.commodity.toLowerCase().trim(), it.commodityConfirmed]),
+      ),
+      customerRawToConfirmed: new Map(
+        customerName ? [[customerName.toLowerCase().trim(), { name: customerName, id: matchedCustomerId }]] : [],
+      ),
+    };
+
+    if (parsed.items.length === 0) {
+      setOcrProgress(null);
+      setSaveError(t('ocrCouldNotRead'));
+      return;
+    }
+
+    const byCommodity = new Map<string, SmartBillItem[]>();
+    for (const it of parsed.items) {
+      const name = it.commodityConfirmed || it.commodity || 'Item';
+      if (!byCommodity.has(name)) byCommodity.set(name, []);
+      byCommodity.get(name)!.push(it);
+    }
+
+    const lots: Lot[] = [];
+    for (const [commodity, groupItems] of byCommodity) {
+      const lines: Line[] = groupItems.map((it) => ({
+        id: newId(),
+        commodity,
+        bags: it.bags !== null ? String(it.bags) : '',
+        bagWeights: [],
+        customerName: customerName || '',
+        customerId: matchedCustomerId,
+        weightKg: it.weightKg !== null ? String(it.weightKg) : '',
+        weightMode: 'per_bag' as const,
+        pricePerKg: it.rate !== null ? String(it.rate) : '',
+        amount: String(it.amount || ''),
+        cash: false,
+        hamali: '',
+      }));
+      lots.push({ id: newId(), commodity, bags: '', kg: '', avg: '', lines });
+    }
+
+    setBlocks((prev) => {
+      const farmerName = matchedFarmerName || '';
+      const farmerPhone = farmerName ? (farmerPhones[farmerName] || parsed.farmerPhone || '') : '';
+      if (prev.length === 0 || (prev.length === 1 && !prev[0].farmerName.trim() && prev[0].lots.length === 0)) {
+        return [{ ...emptyFarmer(commissionPct), farmerName, farmerPhone, lots }];
+      }
+      if (farmerName && !prev[0].farmerName.trim()) {
+        const next = [...prev];
+        next[0] = { ...next[0], farmerName, farmerPhone, lots: [...next[0].lots, ...lots] };
+        return next;
+      }
+      const next = [...prev];
+      next[0] = { ...next[0], lots: [...next[0].lots, ...lots] };
+      return next;
+    });
+
+    if (parsed.charges.length > 0) {
+      setBlocks((prev) => {
+        if (prev.length === 0) return prev;
+        const next = [...prev];
+        const block = { ...next[0] };
+        for (const ch of parsed.charges) {
+          const lowName = ch.name.toLowerCase();
+          if (lowName.includes('hamali') || lowName.includes('loading')) block.hamaliTotal = String(ch.amount);
+          else if (lowName.includes('commission')) block.commissionPct = String(ch.amount);
+          else if (lowName.includes('bardan') || lowName.includes('bardana')) block.bardan = String(ch.amount);
+          else if (lowName.includes('freight') || lowName.includes('transport')) block.freight = String(ch.amount);
+          else if (lowName.includes('advance')) block.advance = String(ch.amount);
+          else block.other = String(ch.amount);
+        }
+        next[0] = block;
+        return next;
+      });
+    }
+  }
+
+  // ── Fill form from multiple parsed bills (multi-bill patti PDF) ──
+  function fillFormFromBills(bills: ParsedBill[]) {
+    // Set date from first bill that has one
+    const firstDate = bills.find((b) => b.date)?.date;
+    if (firstDate) setDate(firstDate);
+
+    // Build lots — each bill becomes a line
+    const lines: Line[] = bills.map((b) => {
+      const matchedId = matchCustomer(b.customerName);
+      const isCash = b.customerName.toUpperCase().includes('CASH');
+      return {
+        id: newId(),
+        commodity: b.commodity || 'Produce',
+        bags: '',
+        bagWeights: [],
+        customerName: b.customerName,
+        customerId: matchedId,
+        weightKg: b.qty || '',
+        weightMode: 'per_bag' as const,
+        pricePerKg: b.rate || '',
+        amount: String(b.amount || ''),
+        cash: isCash,
+        hamali: '',
+      };
+    });
+
+    // Group by commodity
+    const byCommodity = new Map<string, Line[]>();
+    for (const ln of lines) {
+      const key = ln.commodity;
+      if (!byCommodity.has(key)) byCommodity.set(key, []);
+      byCommodity.get(key)!.push(ln);
+    }
+
+    const lots: Lot[] = [];
+    for (const [commodity, groupLines] of byCommodity) {
+      lots.push({ id: newId(), commodity, bags: '', kg: '', avg: '', lines: groupLines });
+    }
+
+    // Set into the first farmer block
+    setBlocks((prev) => {
+      if (prev.length === 0 || (prev.length === 1 && !prev[0].farmerName.trim() && prev[0].lots.length === 0)) {
+        return [{ ...emptyFarmer(commissionPct), lots }];
+      }
+      const next = [...prev];
+      next[0] = { ...next[0], lots: [...next[0].lots, ...lots] };
+      return next;
+    });
+
+    // Track for self-learning
+    ocrImportRef.current = {
+      commodityRawToConfirmed: new Map(),
+      customerRawToConfirmed: new Map(
+        bills.map((b) => [b.customerName.toLowerCase().trim(), {
+          name: b.customerName,
+          id: matchCustomer(b.customerName),
+        }]),
+      ),
+    };
+  }
 
   const anySales = blocks.some((b) => totalsOf(b).validLines.length > 0);
 

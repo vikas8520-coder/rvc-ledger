@@ -225,3 +225,70 @@ export function isPaddleReady(): boolean {
 export function isSupportedFile(file: File): boolean {
   return isImage(file) || isPdf(file);
 }
+
+// ── Direct PDF text extraction (for generated PDFs) ──────────────────
+
+export interface PdfTextItem {
+  text: string;
+  x: number;
+  y: number;  // PDF coordinates (origin bottom-left)
+  width: number;
+  height: number;
+  page: number;
+  pageWidth: number;
+  pageHeight: number;
+}
+
+export interface PdfTextResult {
+  items: PdfTextItem[];
+  text: string;
+  hasText: boolean;
+}
+
+/**
+ * Try to extract text directly from a PDF (without OCR).
+ * Works for generated PDFs that have embedded text.
+ * Returns text items with position info for layout-aware parsing.
+ * If the PDF has no extractable text (scanned), hasText will be false.
+ */
+export async function extractPdfTextDirect(file: File): Promise<PdfTextResult> {
+  const pdfjs = await import('pdfjs-dist/build/pdf.mjs');
+  pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+  const numPages = Math.min(pdf.numPages, 10);
+  const items: PdfTextItem[] = [];
+  const textParts: string[] = [];
+
+  for (let p = 1; p <= numPages; p++) {
+    const page = await pdf.getPage(p);
+    const viewport = page.getViewport({ scale: 1 });
+    const textContent = await (page as any).getTextContent();
+
+    for (const item of textContent.items as any[]) {
+      if (!item.str || !item.str.trim()) continue;
+      const transform = item.transform || [1, 0, 0, 1, 0, 0];
+      items.push({
+        text: item.str.trim(),
+        x: transform[4],
+        y: transform[5],
+        width: item.width || 0,
+        height: item.height || 0,
+        page: p,
+        pageWidth: viewport.width,
+        pageHeight: viewport.height,
+      });
+    }
+    // Also build plain text for fallback
+    const pageText = items
+      .filter((i) => i.page === p)
+      .sort((a, b) => b.y - a.y || a.x - b.x)
+      .map((i) => i.text)
+      .join(' ');
+    textParts.push(pageText);
+  }
+
+  const text = textParts.join('\n\n');
+  return { items, text, hasText: items.length > 0 };
+}
