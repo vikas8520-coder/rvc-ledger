@@ -11,6 +11,7 @@ import { printFarmerPatti, type FarmerPattiData, type ShopProfile } from '@/lib/
 import { PrinterIcon } from '../components/Icons';
 import PrintShareMenu from '../components/PrintShareMenu';
 import { recognizeBill, type OcrProgress } from '@/lib/ocr';
+import { recognizeWithPaddle, type PaddleProgress } from '@/lib/paddleOcr';
 import { parseBillText } from '@/lib/parser';
 import {
   generateOutstandingListPdf,
@@ -800,21 +801,37 @@ export default function EntryPage() {
     setSaveError('');
   };
 
-  // Upload bill → Tesseract OCR → parse → fill form fields
+  // Upload bill → PaddleOCR (primary) / Tesseract (fallback) → parse → fill form
   const handleBillUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
     setOcrProgress(t('ocrLocal'));
     setSaveError('');
     try {
-      const text = await recognizeBill(f, ocrLangs, (m: OcrProgress) => {
-        setOcrProgress(`${t('ocrLocal')} — ${Math.round((m.progress || 0) * 100)}%`);
-      });
+      let text = '';
+      // Try PaddleOCR first (PP-OCRv6, supports Telugu/Hindi/English)
+      try {
+        const result = await recognizeWithPaddle(f, (p: PaddleProgress) => {
+          if (p.status === 'loading_model') {
+            setOcrProgress(`${t('ocrLocal')} — loading model...`);
+          } else if (p.status === 'recognizing') {
+            setOcrProgress(`${t('ocrLocal')} — reading bill...`);
+          }
+        });
+        text = result.text;
+      } catch (paddleErr) {
+        // Fallback to Tesseract if PaddleOCR fails
+        console.warn('PaddleOCR failed, falling back to Tesseract:', paddleErr);
+        setOcrProgress(`${t('ocrLocal')} (Tesseract) — 0%`);
+        text = await recognizeBill(f, ocrLangs, (m: OcrProgress) => {
+          setOcrProgress(`${t('ocrLocal')} (Tesseract) — ${Math.round((m.progress || 0) * 100)}%`);
+        });
+      }
+
       const parsed = parseBillText(text);
       // Set date if found
       if (parsed.date) setDate(parsed.date);
       // Map parsed items into the first farmer block
-      // Group items by commodity (confirmed_name) into lots
       const items = parsed.items.filter((it) => it.amount > 0 || it.qty);
       if (items.length === 0) {
         setOcrProgress(null);
@@ -870,7 +887,6 @@ export default function EntryPage() {
         return next;
       });
       setOcrProgress(null);
-      // Reset file input so the same file can be uploaded again
       if (fileInputRef.current) fileInputRef.current.value = '';
     } catch (err: any) {
       setOcrProgress(null);
