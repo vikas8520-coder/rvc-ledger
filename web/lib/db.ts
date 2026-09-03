@@ -195,6 +195,25 @@ async function ensureSchema() {
     )
   `;
 
+  // ---- Hamali rates (Bowenpally market yard, 2024) ----
+  // Stores the official hamali charges per commodity/weight bracket.
+  // Total hamali = seller_share + purchaser_share (both deducted from farmer).
+  await sql`
+    CREATE TABLE IF NOT EXISTS hamali_rates (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      shop_id UUID,
+      sl_no INT NOT NULL,
+      label TEXT NOT NULL,
+      match_keywords TEXT[] DEFAULT '{}',
+      weight_min_kg NUMERIC DEFAULT NULL,
+      weight_max_kg NUMERIC DEFAULT NULL,
+      seller_share NUMERIC(10,2) NOT NULL DEFAULT 0,
+      purchaser_share NUMERIC(10,2) NOT NULL DEFAULT 0,
+      unit TEXT DEFAULT 'per_bag',
+      sort_order INT DEFAULT 0
+    )
+  `;
+
   // ---- Financial year opening balances ----
   await sql`
     CREATE TABLE IF NOT EXISTS fy_opening_balances (
@@ -2275,6 +2294,130 @@ export async function getRecentRates(
     rateUnit: r.rate_unit,
     date: typeof r.date === 'string' ? r.date : (r.date as Date).toISOString().slice(0, 10),
   }));
+}
+
+// ---- Hamali rates (Bowenpally market yard, 2024) ----
+
+export interface HamaliRate {
+  id: string;
+  slNo: number;
+  label: string;
+  matchKeywords: string[];
+  weightMinKg: number | null;
+  weightMaxKg: number | null;
+  sellerShare: number;
+  purchaserShare: number;
+  unit: string;
+}
+
+const DEFAULT_HAMALI_RATES: Omit<HamaliRate, 'id'>[] = [
+  { slNo: 1, label: '25kg to 70kg boxes/bags', matchKeywords: ['vegetable', 'produce', 'generic'], weightMinKg: 25, weightMaxKg: 70, sellerShare: 5.95, purchaserShare: 11.83, unit: 'per_bag' },
+  { slNo: 2, label: '5kg to 25kg', matchKeywords: ['vegetable', 'produce', 'generic'], weightMinKg: 5, weightMaxKg: 25, sellerShare: 4.80, purchaserShare: 11.23, unit: 'per_bag' },
+  { slNo: 3, label: 'Tomato per box (Bangalore, Sholapur, Pune, Nanded, Madanapalli)', matchKeywords: ['tomato', 'tamatar'], weightMinKg: null, weightMaxKg: null, sellerShare: 4.14, purchaserShare: 6.83, unit: 'per_box' },
+  { slNo: 4, label: 'Tomato open (per box)', matchKeywords: ['tomato', 'tamatar', 'open'], weightMinKg: null, weightMaxKg: null, sellerShare: 3.56, purchaserShare: 4.32, unit: 'per_box' },
+  { slNo: 5, label: 'Onion/Green peas/Mango — All baskets and Bejwada snake vegetables', matchKeywords: ['onion', 'peas', 'mango', 'snake', 'basket', 'bejwada'], weightMinKg: null, weightMaxKg: null, sellerShare: 4.80, purchaserShare: 11.23, unit: 'per_bag' },
+  { slNo: 6, label: 'Heaps of Bottle Gourd / Cauliflower and Beetroot bags', matchKeywords: ['bottle gourd', 'cauliflower', 'beetroot', 'heap'], weightMinKg: null, weightMaxKg: null, sellerShare: 3.56, purchaserShare: 8.64, unit: 'per_bag' },
+  { slNo: 7, label: 'Potato per bag (50kg to 70kg)', matchKeywords: ['potato', 'aloo'], weightMinKg: 50, weightMaxKg: 70, sellerShare: 5.95, purchaserShare: 11.23, unit: 'per_bag' },
+  { slNo: 8, label: 'Green Plantain (Banana)', matchKeywords: ['banana', 'plantain', 'arati'], weightMinKg: null, weightMaxKg: null, sellerShare: 2.97, purchaserShare: 9.94, unit: 'per_bag' },
+  { slNo: 9, label: 'Own purchased chillies — vehicle crossing for one bag', matchKeywords: ['chilli', 'chili', 'mirchi'], weightMinKg: null, weightMaxKg: null, sellerShare: 0, purchaserShare: 7.43, unit: 'per_bag' },
+  { slNo: 10, label: 'Up to 5 tonnes vehicle (DCM vans)', matchKeywords: ['dcm', 'van', 'vehicle'], weightMinKg: null, weightMaxKg: null, sellerShare: 0, purchaserShare: 198.72, unit: 'per_vehicle' },
+  { slNo: 11, label: 'Big lorries up to 10 tonnes', matchKeywords: ['lorry', 'truck', 'big'], weightMinKg: null, weightMaxKg: null, sellerShare: 0, purchaserShare: 349.06, unit: 'per_vehicle' },
+];
+
+export async function getHamaliRates(shopId: string): Promise<HamaliRate[]> {
+  if (!isDbConfigured()) return DEFAULT_HAMALI_RATES.map((r, i) => ({ ...r, id: `default-${i}` }));
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql`SELECT * FROM hamali_rates WHERE (shop_id = ${shopId} OR shop_id IS NULL) ORDER BY sort_order, sl_no`;
+  if (rows.length === 0) {
+    // Seed default rates on first access
+    for (const r of DEFAULT_HAMALI_RATES) {
+      await sql`
+        INSERT INTO hamali_rates (shop_id, sl_no, label, match_keywords, weight_min_kg, weight_max_kg, seller_share, purchaser_share, unit, sort_order)
+        VALUES (${shopId}, ${r.slNo}, ${r.label}, ${r.matchKeywords}, ${r.weightMinKg}, ${r.weightMaxKg}, ${r.sellerShare}, ${r.purchaserShare}, ${r.unit}, ${r.slNo})
+      `;
+    }
+    const seeded = await sql`SELECT * FROM hamali_rates WHERE shop_id = ${shopId} ORDER BY sort_order, sl_no`;
+    return (seeded as any[]).map(toHamaliRate);
+  }
+  return (rows as any[]).map(toHamaliRate);
+}
+
+function toHamaliRate(r: any): HamaliRate {
+  return {
+    id: r.id as string,
+    slNo: r.sl_no as number,
+    label: r.label as string,
+    matchKeywords: (r.match_keywords as string[]) || [],
+    weightMinKg: r.weight_min_kg != null ? parseFloat(r.weight_min_kg) : null,
+    weightMaxKg: r.weight_max_kg != null ? parseFloat(r.weight_max_kg) : null,
+    sellerShare: parseFloat(r.seller_share),
+    purchaserShare: parseFloat(r.purchaser_share),
+    unit: r.unit as string,
+  };
+}
+
+/**
+ * Calculate hamali for a given commodity and weight.
+ * Returns the total hamali (seller + purchaser share) per bag/box.
+ * Uses keyword matching to find the right rate, then weight bracket if applicable.
+ */
+export function calculateHamali(
+  commodity: string,
+  weightKg: number | null,
+  rates: HamaliRate[],
+  bags: number = 1,
+): { total: number; seller: number; purchaser: number; label: string } {
+  const lowerCommodity = commodity.toLowerCase().trim();
+  
+  // 1. Try keyword match first (specific commodities like tomato, potato, etc.)
+  let bestMatch: HamaliRate | null = null;
+  for (const r of rates) {
+    if (r.matchKeywords.some((kw) => lowerCommodity.includes(kw.toLowerCase()))) {
+      // Check weight bracket if the rate has one
+      if (r.weightMinKg != null && r.weightMaxKg != null && weightKg != null) {
+        if (weightKg >= r.weightMinKg && weightKg <= r.weightMaxKg) {
+          bestMatch = r;
+          break;
+        }
+      } else {
+        bestMatch = r;
+        break;
+      }
+    }
+  }
+
+  // 2. Fall back to generic weight-based rates
+  if (!bestMatch && weightKg != null) {
+    for (const r of rates) {
+      if (r.matchKeywords.includes('generic') || r.matchKeywords.includes('vegetable') || r.matchKeywords.includes('produce')) {
+        if (r.weightMinKg != null && r.weightMaxKg != null) {
+          if (weightKg >= r.weightMinKg && weightKg <= r.weightMaxKg) {
+            bestMatch = r;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // 3. Fall back to first rate
+  if (!bestMatch && rates.length > 0) {
+    bestMatch = rates[0];
+  }
+
+  if (!bestMatch) {
+    return { total: 0, seller: 0, purchaser: 0, label: 'No rate found' };
+  }
+
+  const seller = bestMatch.sellerShare * bags;
+  const purchaser = bestMatch.purchaserShare * bags;
+  return {
+    total: Math.round((seller + purchaser) * 100) / 100,
+    seller,
+    purchaser,
+    label: bestMatch.label,
+  };
 }
 
 export async function getLatestRate(

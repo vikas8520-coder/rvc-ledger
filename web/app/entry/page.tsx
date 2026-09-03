@@ -14,6 +14,7 @@ import { recognizeBill, type OcrProgress } from '@/lib/ocr';
 import { recognizeWithPaddle, type PaddleProgress, type OcrLine as PaddleOcrLine, extractPdfTextDirect } from '@/lib/paddleOcr';
 import { parseBillSmart, parseMultiBillPdf, parseCreditLedgerPdf, type SmartBillItem, type ParsedBill, type ParsedLedgerEntry } from '@/lib/billParser';
 import { setRuntimeAliases } from '@/lib/catalog';
+import { calculateHamali, type HamaliRate } from '@/lib/db';
 import {
   generateOutstandingListPdf,
   generateCreditLedgerPdf,
@@ -259,6 +260,7 @@ export default function EntryPage() {
   const [farmerPhones, setFarmerPhones] = useState<Record<string, string>>({});
   const [farmerCommissions, setFarmerCommissions] = useState<Record<string, string>>({});
   const [farmerIds, setFarmerIds] = useState<Record<string, string>>({});
+  const [hamaliRates, setHamaliRates] = useState<HamaliRate[]>([]);
   const [shop, setShop] = useState<ShopProfile>({});
   const [showAddFarmer, setShowAddFarmer] = useState<string | null>(null);
   const [newFarmerName, setNewFarmerName] = useState('');
@@ -355,6 +357,13 @@ export default function EntryPage() {
       .then((r) => r.json())
       .then((d) => {
         if (d.aliases) setRuntimeAliases(d.aliases);
+      })
+      .catch(() => {});
+    // Load hamali rates for auto-calculation
+    fetch('/api/hamali')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.rates) setHamaliRates(d.rates);
       })
       .catch(() => {});
   }, []);
@@ -496,7 +505,16 @@ export default function EntryPage() {
     const gross = validLines.reduce((s, l) => s + num(l.amount), 0);
     const lineHamali = validLines.reduce((s, l) => s + num(l.hamali), 0);
     const comm = (gross * num(block.commissionPct)) / 100;
-    const hamali = num(block.hamaliTotal) || lineHamali;
+    // Auto-calculate hamali from rates if no manual hamali is entered
+    let hamali = num(block.hamaliTotal) || lineHamali;
+    if (!hamali && hamaliRates.length > 0 && validLines.length > 0) {
+      hamali = validLines.reduce((s, l) => {
+        const w = num(l.weightKg) || null;
+        const b = num(l.bags) || 1;
+        const calc = calculateHamali(l.commodity, w, hamaliRates, b);
+        return s + calc.total;
+      }, 0);
+    }
     const exp = comm + hamali + num(block.bardan) + num(block.freight) + num(block.advance) + num(block.packing) + num(block.other);
     const itemNames = new Set<string>();
     for (const lot of block.lots) if (lot.commodity.trim()) itemNames.add(itemKey(lot.commodity));
