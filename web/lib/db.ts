@@ -2359,8 +2359,9 @@ function toHamaliRate(r: any): HamaliRate {
 
 /**
  * Calculate hamali for a given commodity and weight.
- * Returns the total hamali (seller + purchaser share) per bag/box.
- * Uses keyword matching to find the right rate, then weight bracket if applicable.
+ * Returns the total hamali (seller + purchaser share) for all bags.
+ * Weight brackets in the rate table are PER BAG (e.g. 25-70kg per bag),
+ * so we divide total weight by bag count to find the per-bag weight.
  */
 export function calculateHamali(
   commodity: string,
@@ -2369,30 +2370,33 @@ export function calculateHamali(
   bags: number = 1,
 ): { total: number; seller: number; purchaser: number; label: string } {
   const lowerCommodity = commodity.toLowerCase().trim();
-  
+  // Per-bag weight for bracket matching (weight brackets are per bag)
+  const perBagKg = weightKg != null && bags > 0 ? weightKg / bags : null;
+
   // 1. Try keyword match first (specific commodities like tomato, potato, etc.)
   let bestMatch: HamaliRate | null = null;
   for (const r of rates) {
     if (r.matchKeywords.some((kw) => lowerCommodity.includes(kw.toLowerCase()))) {
-      // Check weight bracket if the rate has one
-      if (r.weightMinKg != null && r.weightMaxKg != null && weightKg != null) {
-        if (weightKg >= r.weightMinKg && weightKg <= r.weightMaxKg) {
+      // Check weight bracket if the rate has one (using per-bag weight)
+      if (r.weightMinKg != null && r.weightMaxKg != null && perBagKg != null) {
+        if (perBagKg >= r.weightMinKg && perBagKg <= r.weightMaxKg) {
           bestMatch = r;
           break;
         }
-      } else {
+      } else if (r.weightMinKg == null && r.weightMaxKg == null) {
+        // No weight bracket on this rate — match by keyword alone
         bestMatch = r;
         break;
       }
     }
   }
 
-  // 2. Fall back to generic weight-based rates
-  if (!bestMatch && weightKg != null) {
+  // 2. Fall back to generic weight-based rates (using per-bag weight)
+  if (!bestMatch && perBagKg != null) {
     for (const r of rates) {
       if (r.matchKeywords.includes('generic') || r.matchKeywords.includes('vegetable') || r.matchKeywords.includes('produce')) {
         if (r.weightMinKg != null && r.weightMaxKg != null) {
-          if (weightKg >= r.weightMinKg && weightKg <= r.weightMaxKg) {
+          if (perBagKg >= r.weightMinKg && perBagKg <= r.weightMaxKg) {
             bestMatch = r;
             break;
           }
@@ -2401,7 +2405,19 @@ export function calculateHamali(
     }
   }
 
-  // 3. Fall back to first rate
+  // 3. Fall back to generic rate ignoring weight bracket (e.g. very heavy bags > 70kg)
+  if (!bestMatch) {
+    for (const r of rates) {
+      if (r.matchKeywords.includes('generic') || r.matchKeywords.includes('vegetable') || r.matchKeywords.includes('produce')) {
+        if (r.weightMinKg == null && r.weightMaxKg == null) {
+          bestMatch = r;
+          break;
+        }
+      }
+    }
+  }
+
+  // 4. Fall back to first rate (25-70kg bracket as default)
   if (!bestMatch && rates.length > 0) {
     bestMatch = rates[0];
   }

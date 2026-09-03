@@ -1969,20 +1969,34 @@ export default function EntryPage() {
                         </button>
                       </div>
                       {line.weightMode === 'total' ? (
-                        /* Single total weight input */
-                        <input
-                          type="number"
-                          inputMode="decimal"
-                          value={line.weightKg}
-                          placeholder="total kg"
-                          aria-label="Total weight kg"
-                          className={`${smInput} w-20`}
-                          onChange={(e) =>
-                            patchLotLine(block.id, lot.id, line.id, (ln) =>
-                              fillLine(ln, { commodity: lot.commodity, weightKg: e.target.value }, rateUnit, 'totalWeight'),
-                            )
-                          }
-                        />
+                        /* Single total weight input — small like per-bag, with Done button */
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            value={line.weightKg}
+                            placeholder="total kg"
+                            aria-label="Total weight kg"
+                            className="h-7 w-16 rounded border border-[var(--border-input)] bg-[var(--bg-base)] px-1 text-center text-[10px] text-[var(--text-primary)] tabular-nums"
+                            onChange={(e) =>
+                              patchLotLine(block.id, lot.id, line.id, (ln) =>
+                                fillLine(ln, { commodity: lot.commodity, weightKg: e.target.value }, rateUnit, 'totalWeight'),
+                              )
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                            }}
+                          />
+                          {num(line.weightKg) > 0 && (
+                            <button
+                              type="button"
+                              className="text-[9px] text-[var(--text-muted)] underline"
+                              onClick={() => setWeightsExpanded((s) => ({ ...s, [line.id]: false }))}
+                            >
+                              done
+                            </button>
+                          )}
+                        </div>
                       ) : hasWeights && !expanded ? (
                         /* Collapsed summary — show total + edit button */
                         <button
