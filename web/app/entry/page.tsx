@@ -505,15 +505,24 @@ export default function EntryPage() {
     const gross = validLines.reduce((s, l) => s + num(l.amount), 0);
     const lineHamali = validLines.reduce((s, l) => s + num(l.hamali), 0);
     const comm = (gross * num(block.commissionPct)) / 100;
-    // Auto-calculate hamali from rates if no manual hamali is entered
+    // Auto-calculate hamali from Bowenpally market rates if no manual hamali is entered.
+    // Hamali is charged per bag/box received from the farmer — use the LOT's bags
+    // (stock entry), not individual sale line bags.
     let hamali = num(block.hamaliTotal) || lineHamali;
     if (!hamali && hamaliRates.length > 0 && validLines.length > 0) {
-      hamali = validLines.reduce((s, l) => {
-        const w = num(l.weightKg) || null;
-        const b = num(l.bags) || 1;
-        const calc = calculateHamali(l.commodity, w, hamaliRates, b);
+      // Calculate per lot (each lot = one commodity with its own bags/weight)
+      const lotHamali = block.lots.reduce((s, lot) => {
+        if (!lot.commodity.trim()) return s;
+        const lotBags = num(lot.bags);
+        const lotKg = num(lot.kg);
+        // Only calculate if this lot has stock entered
+        if (lotBags <= 0 && lotKg <= 0) return s;
+        const b = lotBags > 0 ? lotBags : 1;
+        const w = lotKg > 0 ? lotKg : null;
+        const calc = calculateHamali(lot.commodity, w, hamaliRates, b);
         return s + calc.total;
       }, 0);
+      hamali = lotHamali;
     }
     const exp = comm + hamali + num(block.bardan) + num(block.freight) + num(block.advance) + num(block.packing) + num(block.other);
     const itemNames = new Set<string>();
@@ -2041,10 +2050,14 @@ export default function EntryPage() {
                 onChange={(v) => patchBlock(block.id, (b) => ({ ...b, hamaliTotal: v }))}
                 placeholder={
                   !num(block.hamaliTotal) && hamaliRates.length > 0 && tot.validLines.length > 0
-                    ? String(Math.round(tot.validLines.reduce((s, l) => {
-                        const w = num(l.weightKg) || null;
-                        const b = num(l.bags) || 1;
-                        return s + calculateHamali(l.commodity, w, hamaliRates, b).total;
+                    ? String(Math.round(block.lots.reduce((s, lot) => {
+                        if (!lot.commodity.trim()) return s;
+                        const lotBags = num(lot.bags);
+                        const lotKg = num(lot.kg);
+                        if (lotBags <= 0 && lotKg <= 0) return s;
+                        const b = lotBags > 0 ? lotBags : 1;
+                        const w = lotKg > 0 ? lotKg : null;
+                        return s + calculateHamali(lot.commodity, w, hamaliRates, b).total;
                       }, 0)))
                     : '0'
                 }
