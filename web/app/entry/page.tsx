@@ -2033,7 +2033,22 @@ export default function EntryPage() {
 
             {/* Charges — compact single row */}
             <div className="flex flex-wrap items-end gap-1.5 rounded-lg bg-[var(--bg-base)] p-1.5 text-xs">
-              <ChargeBox label={t('hamali')} value={block.hamaliTotal} onChange={(v) => patchBlock(block.id, (b) => ({ ...b, hamaliTotal: v }))} placeholder={tot.validLines.length ? String(tot.validLines.reduce((s, l) => s + num(l.hamali), 0) || '') : '0'} />
+              {/* Hamali — auto-calculated from Bowenpally market rates.
+                  Shows the auto value as placeholder; owner can override by typing. */}
+              <ChargeBox
+                label={t('hamali')}
+                value={block.hamaliTotal}
+                onChange={(v) => patchBlock(block.id, (b) => ({ ...b, hamaliTotal: v }))}
+                placeholder={
+                  !num(block.hamaliTotal) && hamaliRates.length > 0 && tot.validLines.length > 0
+                    ? String(Math.round(tot.validLines.reduce((s, l) => {
+                        const w = num(l.weightKg) || null;
+                        const b = num(l.bags) || 1;
+                        return s + calculateHamali(l.commodity, w, hamaliRates, b).total;
+                      }, 0)))
+                    : '0'
+                }
+              />
               <ChargeBox label={t('chargesBardan')} value={block.bardan} onChange={(v) => patchBlock(block.id, (b) => ({ ...b, bardan: v }))} />
               <ChargeBox label={t('chargesFreight')} value={block.freight} onChange={(v) => patchBlock(block.id, (b) => ({ ...b, freight: v }))} />
               <ChargeBox label={t('chargesAdvance')} value={block.advance} onChange={(v) => patchBlock(block.id, (b) => ({ ...b, advance: v }))} />
