@@ -1201,11 +1201,14 @@ export default function EntryPage() {
       lots.push({ id: newId(), commodity, bags: '', kg: '', avg: '', lines });
     }
 
+    let newBlockId: string | null = null;
     setBlocks((prev) => {
       const farmerName = matchedFarmerName || '';
       const farmerPhone = farmerName ? (farmerPhones[farmerName] || parsed.farmerPhone || '') : '';
       if (prev.length === 0 || (prev.length === 1 && !prev[0].farmerName.trim() && prev[0].lots.length === 0)) {
-        return [{ ...emptyFarmer(commissionPct), farmerName, farmerPhone, lots }];
+        const newBlock = { ...emptyFarmer(commissionPct), farmerName, farmerPhone, lots };
+        newBlockId = newBlock.id;
+        return [newBlock];
       }
       if (farmerName && !prev[0].farmerName.trim()) {
         const next = [...prev];
@@ -1216,6 +1219,7 @@ export default function EntryPage() {
       next[0] = { ...next[0], lots: [...next[0].lots, ...lots] };
       return next;
     });
+    if (newBlockId) setActiveTabId(newBlockId);
 
     if (parsed.charges.length > 0) {
       setBlocks((prev) => {
@@ -1277,14 +1281,18 @@ export default function EntryPage() {
     }
 
     // Set into the first farmer block
+    let newBlockId: string | null = null;
     setBlocks((prev) => {
       if (prev.length === 0 || (prev.length === 1 && !prev[0].farmerName.trim() && prev[0].lots.length === 0)) {
-        return [{ ...emptyFarmer(commissionPct), lots }];
+        const newBlock = { ...emptyFarmer(commissionPct), lots };
+        newBlockId = newBlock.id;
+        return [newBlock];
       }
       const next = [...prev];
       next[0] = { ...next[0], lots: [...next[0].lots, ...lots] };
       return next;
     });
+    if (newBlockId) setActiveTabId(newBlockId);
 
     // Track for self-learning
     ocrImportRef.current = {
@@ -1322,14 +1330,18 @@ export default function EntryPage() {
     // Group into one lot
     const lots: Lot[] = [{ id: newId(), commodity: 'Produce', bags: '', kg: '', avg: '', lines }];
 
+    let newBlockId: string | null = null;
     setBlocks((prev) => {
       if (prev.length === 0 || (prev.length === 1 && !prev[0].farmerName.trim() && prev[0].lots.length === 0)) {
-        return [{ ...emptyFarmer(commissionPct), lots }];
+        const newBlock = { ...emptyFarmer(commissionPct), lots };
+        newBlockId = newBlock.id;
+        return [newBlock];
       }
       const next = [...prev];
       next[0] = { ...next[0], lots: [...next[0].lots, ...lots] };
       return next;
     });
+    if (newBlockId) setActiveTabId(newBlockId);
 
     ocrImportRef.current = {
       commodityRawToConfirmed: new Map(),
