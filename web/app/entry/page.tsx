@@ -506,23 +506,44 @@ export default function EntryPage() {
     const lineHamali = validLines.reduce((s, l) => s + num(l.hamali), 0);
     const comm = (gross * num(block.commissionPct)) / 100;
     // Auto-calculate hamali from Bowenpally market rates if no manual hamali is entered.
-    // Hamali is charged per bag/box received from the farmer — use the LOT's bags
-    // (stock entry), not individual sale line bags.
+    // Hamali is charged per bag/box received from the farmer.
+    // Use LOT stock bags/kg if entered; otherwise fall back to sale line bags/weight.
     let hamali = num(block.hamaliTotal) || lineHamali;
     if (!hamali && hamaliRates.length > 0 && validLines.length > 0) {
-      // Calculate per lot (each lot = one commodity with its own bags/weight)
-      const lotHamali = block.lots.reduce((s, lot) => {
-        if (!lot.commodity.trim()) return s;
+      // Group sale lines by commodity to sum up bags and weight
+      const saleByCommodity = new Map<string, { bags: number; weightKg: number; commodity: string }>();
+      for (const l of validLines) {
+        const key = itemKey(l.commodity);
+        const cur = saleByCommodity.get(key) || { bags: 0, weightKg: 0, commodity: l.commodity };
+        cur.bags += num(l.bags);
+        cur.weightKg += num(l.weightKg);
+        saleByCommodity.set(key, cur);
+      }
+      // For each lot, calculate hamali using lot stock data or fall back to sale line data
+      let autoHamali = 0;
+      const coveredCommodities = new Set<string>();
+      for (const lot of block.lots) {
+        if (!lot.commodity.trim()) continue;
+        const key = itemKey(lot.commodity);
+        coveredCommodities.add(key);
         const lotBags = num(lot.bags);
         const lotKg = num(lot.kg);
-        // Only calculate if this lot has stock entered
-        if (lotBags <= 0 && lotKg <= 0) return s;
-        const b = lotBags > 0 ? lotBags : 1;
-        const w = lotKg > 0 ? lotKg : null;
-        const calc = calculateHamali(lot.commodity, w, hamaliRates, b);
-        return s + calc.total;
-      }, 0);
-      hamali = lotHamali;
+        const saleData = saleByCommodity.get(key);
+        // Prefer lot stock; fall back to sale line data
+        const bags = lotBags > 0 ? lotBags : (saleData?.bags || 0);
+        const weight = lotKg > 0 ? lotKg : (saleData?.weightKg || null);
+        if (bags <= 0 && (weight == null || weight <= 0)) continue;
+        const calc = calculateHamali(lot.commodity, weight, hamaliRates, bags > 0 ? bags : 1);
+        autoHamali += calc.total;
+      }
+      // Handle commodities that only exist on sale lines (no lot stock row with data)
+      for (const [key, data] of saleByCommodity) {
+        if (coveredCommodities.has(key)) continue;
+        if (data.bags <= 0 && data.weightKg <= 0) continue;
+        const calc = calculateHamali(data.commodity, data.weightKg > 0 ? data.weightKg : null, hamaliRates, data.bags > 0 ? data.bags : 1);
+        autoHamali += calc.total;
+      }
+      hamali = autoHamali;
     }
     const exp = comm + hamali + num(block.bardan) + num(block.freight) + num(block.advance) + num(block.packing) + num(block.other);
     const itemNames = new Set<string>();
@@ -2064,15 +2085,36 @@ export default function EntryPage() {
                 onChange={(v) => patchBlock(block.id, (b) => ({ ...b, hamaliTotal: v }))}
                 placeholder={
                   !num(block.hamaliTotal) && hamaliRates.length > 0 && tot.validLines.length > 0
-                    ? String(Math.round(block.lots.reduce((s, lot) => {
-                        if (!lot.commodity.trim()) return s;
-                        const lotBags = num(lot.bags);
-                        const lotKg = num(lot.kg);
-                        if (lotBags <= 0 && lotKg <= 0) return s;
-                        const b = lotBags > 0 ? lotBags : 1;
-                        const w = lotKg > 0 ? lotKg : null;
-                        return s + calculateHamali(lot.commodity, w, hamaliRates, b).total;
-                      }, 0)))
+                    ? String(Math.round((() => {
+                        const saleMap = new Map<string, { bags: number; weightKg: number; commodity: string }>();
+                        for (const l of tot.validLines) {
+                          const key = itemKey(l.commodity);
+                          const cur = saleMap.get(key) || { bags: 0, weightKg: 0, commodity: l.commodity };
+                          cur.bags += num(l.bags);
+                          cur.weightKg += num(l.weightKg);
+                          saleMap.set(key, cur);
+                        }
+                        let total = 0;
+                        const covered = new Set<string>();
+                        for (const lot of block.lots) {
+                          if (!lot.commodity.trim()) continue;
+                          const key = itemKey(lot.commodity);
+                          covered.add(key);
+                          const lotBags = num(lot.bags);
+                          const lotKg = num(lot.kg);
+                          const sd = saleMap.get(key);
+                          const bags = lotBags > 0 ? lotBags : (sd?.bags || 0);
+                          const weight = lotKg > 0 ? lotKg : (sd?.weightKg || null);
+                          if (bags <= 0 && (weight == null || weight <= 0)) continue;
+                          total += calculateHamali(lot.commodity, weight, hamaliRates, bags > 0 ? bags : 1).total;
+                        }
+                        for (const [key, data] of saleMap) {
+                          if (covered.has(key)) continue;
+                          if (data.bags <= 0 && data.weightKg <= 0) continue;
+                          total += calculateHamali(data.commodity, data.weightKg > 0 ? data.weightKg : null, hamaliRates, data.bags > 0 ? data.bags : 1).total;
+                        }
+                        return total;
+                      })()))
                     : '0'
                 }
               />
