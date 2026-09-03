@@ -1474,6 +1474,14 @@ export default function EntryPage() {
               <button
                 type="button"
                 onClick={() => setActiveTabId(block.id)}
+                onDoubleClick={() => {
+                  // Hidden: double-click the farmer tab name to open commission editor
+                  const name = block.farmerName.trim();
+                  if (!name) return;
+                  setCommissionEditName(name);
+                  setCommissionEditValue(block.commissionPct);
+                  setShowCommissionEditor(true);
+                }}
                 className="max-w-[8rem] truncate text-left"
                 title={label}
               >
@@ -2001,26 +2009,10 @@ export default function EntryPage() {
 
             {/* Charges — compact single row */}
             <div className="flex flex-wrap items-end gap-1.5 rounded-lg bg-[var(--bg-base)] p-1.5 text-xs">
-              {/* Commission — hidden percentage, only shows calculated amount to employees.
-                  Long-press the label to open the hidden commission editor. */}
+              {/* Commission — read-only label showing calculated amount.
+                  The percentage is hidden, set via double-clicking the farmer tab. */}
               <div className="flex flex-col gap-0.5">
-                <label
-                  className="text-[10px] text-[var(--text-muted)] select-none cursor-default"
-                  onPointerDown={(e) => {
-                    // Long-press (800ms) on the commission label opens hidden editor
-                    const target = e.currentTarget;
-                    const timer = setTimeout(() => {
-                      if (block.farmerName.trim()) {
-                        setCommissionEditName(block.farmerName.trim());
-                        setCommissionEditValue(block.commissionPct);
-                        setShowCommissionEditor(true);
-                      }
-                    }, 800);
-                    const cancel = () => clearTimeout(timer);
-                    target.addEventListener('pointerup', cancel, { once: true });
-                    target.addEventListener('pointerleave', cancel, { once: true });
-                  }}
-                >
+                <label className="text-[10px] text-[var(--text-muted)] select-none">
                   {t('commission')} <span className="text-[var(--text-faint)]">₹{fmt(tot.comm)}</span>
                 </label>
               </div>
