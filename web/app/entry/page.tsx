@@ -10,6 +10,8 @@ import Autocomplete from '../components/Autocomplete';
 import { printFarmerPatti, type FarmerPattiData, type ShopProfile } from '@/lib/billPrint';
 import { PrinterIcon } from '../components/Icons';
 import PrintShareMenu from '../components/PrintShareMenu';
+import { recognizeBill, type OcrProgress } from '@/lib/ocr';
+import { parseBillText } from '@/lib/parser';
 import {
   generateOutstandingListPdf,
   generateCreditLedgerPdf,
@@ -223,7 +225,7 @@ const smInput =
   'min-h-9 w-full rounded border border-[var(--border-input)] bg-[var(--bg-base)] px-1.5 py-1 text-xs text-[var(--text-primary)] tabular-nums';
 
 export default function EntryPage() {
-  const { t, lang } = useI18n();
+  const { t, lang, ocrLangs } = useI18n();
   const uiLang = getUiLang(lang);
   const [date, setDate] = usePersistentState('entry-date', today(), (loaded) => {
     // Day rollover: if the persisted date is before today, reset to today.
@@ -256,6 +258,8 @@ export default function EntryPage() {
   const [newFarmerName, setNewFarmerName] = useState('');
   const [newFarmerPhone, setNewFarmerPhone] = useState('');
   const [addingFarmer, setAddingFarmer] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Day rollover for when the app is left open overnight: check when the
   // page regains focus and reset the date + form if a new day has started.
@@ -796,6 +800,85 @@ export default function EntryPage() {
     setSaveError('');
   };
 
+  // Upload bill → Tesseract OCR → parse → fill form fields
+  const handleBillUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setOcrProgress(t('ocrLocal'));
+    setSaveError('');
+    try {
+      const text = await recognizeBill(f, ocrLangs, (m: OcrProgress) => {
+        setOcrProgress(`${t('ocrLocal')} — ${Math.round((m.progress || 0) * 100)}%`);
+      });
+      const parsed = parseBillText(text);
+      // Set date if found
+      if (parsed.date) setDate(parsed.date);
+      // Map parsed items into the first farmer block
+      // Group items by commodity (confirmed_name) into lots
+      const items = parsed.items.filter((it) => it.amount > 0 || it.qty);
+      if (items.length === 0) {
+        setOcrProgress(null);
+        setSaveError(t('ocrCouldNotRead'));
+        return;
+      }
+      // Group by commodity name
+      const byCommodity = new Map<string, typeof items>();
+      for (const it of items) {
+        const name = it.confirmed_name || it.raw_text || 'Item';
+        if (!byCommodity.has(name)) byCommodity.set(name, []);
+        byCommodity.get(name)!.push(it);
+      }
+      // Build lots from grouped items
+      const lots: Lot[] = [];
+      for (const [commodity, groupItems] of byCommodity) {
+        const lines: Line[] = groupItems.map((it) => {
+          const qtyStr = it.qty || '';
+          const bagsMatch = qtyStr.match(/(\d+)\s*bag/i);
+          const kgMatch = qtyStr.match(/([\d.]+)\s*kg/i);
+          return {
+            id: newId(),
+            commodity,
+            bags: bagsMatch ? bagsMatch[1] : '',
+            bagWeights: [],
+            customerName: '',
+            customerId: null,
+            weightKg: kgMatch ? kgMatch[1] : '',
+            weightMode: 'per_bag' as const,
+            pricePerKg: it.rate || '',
+            amount: String(it.amount || ''),
+            cash: false,
+            hamali: '',
+          };
+        });
+        lots.push({
+          id: newId(),
+          commodity,
+          bags: '',
+          kg: '',
+          avg: '',
+          lines,
+        });
+      }
+      // Set into the first farmer block (or replace blocks with one farmer)
+      setBlocks((prev) => {
+        if (prev.length === 0 || (prev.length === 1 && !prev[0].farmerName.trim() && prev[0].lots.length === 0)) {
+          return [{ ...emptyFarmer(commissionPct), lots }];
+        }
+        // Append lots to the first block
+        const next = [...prev];
+        next[0] = { ...next[0], lots: [...next[0].lots, ...lots] };
+        return next;
+      });
+      setOcrProgress(null);
+      // Reset file input so the same file can be uploaded again
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    } catch (err: any) {
+      setOcrProgress(null);
+      setSaveError(err.message || t('ocrFailedError'));
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   const anySales = blocks.some((b) => totalsOf(b).validLines.length > 0);
 
   return (
@@ -836,6 +919,37 @@ export default function EntryPage() {
           </button>
           <span className="w-full text-xs text-[var(--text-muted)] sm:w-auto">{t('wholesaleHint')}</span>
         </div>
+        {/* Upload bill — Tesseract OCR (free, local, no Gemini) */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleBillUpload}
+          className="hidden"
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={!!ocrProgress}
+          className="flex min-h-11 items-center gap-1.5 rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] px-3 text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] disabled:opacity-40"
+        >
+          {ocrProgress ? (
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-[var(--text-muted)] border-t-transparent" />
+              {ocrProgress}
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              {t('uploadBill')}
+            </span>
+          )}
+        </button>
         <PrintShareMenu
           options={[
             {
