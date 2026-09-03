@@ -272,6 +272,7 @@ export default function EntryPage() {
   const [showCommissionEditor, setShowCommissionEditor] = useState(false);
   const [commissionEditName, setCommissionEditName] = useState('');
   const [commissionEditValue, setCommissionEditValue] = useState('');
+  const [showHamaliBreakdown, setShowHamaliBreakdown] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formTopRef = useRef<HTMLDivElement>(null);
   // Self-learning: track OCR-imported lines so we can auto-save corrections
@@ -509,6 +510,7 @@ export default function EntryPage() {
     // Hamali is charged per bag/box received from the farmer.
     // Use LOT stock bags/kg if entered; otherwise fall back to sale line bags/weight.
     let hamali = num(block.hamaliTotal) || lineHamali;
+    let hamaliBreakdown: { commodity: string; bags: number; weightKg: number | null; perBag: number; total: number; label: string }[] = [];
     if (!hamali && hamaliRates.length > 0 && validLines.length > 0) {
       // Group sale lines by commodity to sum up bags and weight
       const saleByCommodity = new Map<string, { bags: number; weightKg: number; commodity: string }>();
@@ -535,6 +537,7 @@ export default function EntryPage() {
         if (bags <= 0 && (weight == null || weight <= 0)) continue;
         const calc = calculateHamali(lot.commodity, weight, hamaliRates, bags > 0 ? bags : 1);
         autoHamali += calc.total;
+        hamaliBreakdown.push({ commodity: lot.commodity, bags, weightKg: weight, perBag: calc.total / (bags > 0 ? bags : 1), total: calc.total, label: calc.label });
       }
       // Handle commodities that only exist on sale lines (no lot stock row with data)
       for (const [key, data] of saleByCommodity) {
@@ -542,6 +545,7 @@ export default function EntryPage() {
         if (data.bags <= 0 && data.weightKg <= 0) continue;
         const calc = calculateHamali(data.commodity, data.weightKg > 0 ? data.weightKg : null, hamaliRates, data.bags > 0 ? data.bags : 1);
         autoHamali += calc.total;
+        hamaliBreakdown.push({ commodity: data.commodity, bags: data.bags, weightKg: data.weightKg > 0 ? data.weightKg : null, perBag: calc.total / (data.bags > 0 ? data.bags : 1), total: calc.total, label: calc.label });
       }
       hamali = autoHamali;
     }
@@ -568,7 +572,7 @@ export default function EntryPage() {
         oversold: (inBags > 0 && soldBags > inBags) || (inKg > 0 && soldKg > inKg),
       };
     });
-    return { validLines, gross, comm, hamali, exp, nett: gross - exp, tally };
+    return { validLines, gross, comm, hamali, hamaliBreakdown, exp, nett: gross - exp, tally };
   };
 
   // Warn user before leaving/refreshing if there's unsaved data
@@ -2078,46 +2082,50 @@ export default function EntryPage() {
             {/* Charges — compact single row */}
             <div className="flex flex-wrap items-end gap-1.5 rounded-lg bg-[var(--bg-base)] p-1.5 text-xs">
               {/* Hamali — auto-calculated from Bowenpally market rates.
-                  Shows the auto value as placeholder; owner can override by typing. */}
-              <ChargeBox
-                label={t('hamali')}
-                value={block.hamaliTotal}
-                onChange={(v) => patchBlock(block.id, (b) => ({ ...b, hamaliTotal: v }))}
-                placeholder={
-                  !num(block.hamaliTotal) && hamaliRates.length > 0 && tot.validLines.length > 0
-                    ? String(Math.round((() => {
-                        const saleMap = new Map<string, { bags: number; weightKg: number; commodity: string }>();
-                        for (const l of tot.validLines) {
-                          const key = itemKey(l.commodity);
-                          const cur = saleMap.get(key) || { bags: 0, weightKg: 0, commodity: l.commodity };
-                          cur.bags += num(l.bags);
-                          cur.weightKg += num(l.weightKg);
-                          saleMap.set(key, cur);
-                        }
-                        let total = 0;
-                        const covered = new Set<string>();
-                        for (const lot of block.lots) {
-                          if (!lot.commodity.trim()) continue;
-                          const key = itemKey(lot.commodity);
-                          covered.add(key);
-                          const lotBags = num(lot.bags);
-                          const lotKg = num(lot.kg);
-                          const sd = saleMap.get(key);
-                          const bags = lotBags > 0 ? lotBags : (sd?.bags || 0);
-                          const weight = lotKg > 0 ? lotKg : (sd?.weightKg || null);
-                          if (bags <= 0 && (weight == null || weight <= 0)) continue;
-                          total += calculateHamali(lot.commodity, weight, hamaliRates, bags > 0 ? bags : 1).total;
-                        }
-                        for (const [key, data] of saleMap) {
-                          if (covered.has(key)) continue;
-                          if (data.bags <= 0 && data.weightKg <= 0) continue;
-                          total += calculateHamali(data.commodity, data.weightKg > 0 ? data.weightKg : null, hamaliRates, data.bags > 0 ? data.bags : 1).total;
-                        }
-                        return total;
-                      })()))
-                    : '0'
-                }
-              />
+                  Shows the auto value as placeholder; owner can override by typing.
+                  Click the label to see per-commodity breakdown. */}
+              <div className="relative flex flex-col gap-0.5">
+                <button
+                  type="button"
+                  className="text-[10px] text-[var(--text-muted)] text-left hover:text-[var(--text-primary)]"
+                  onClick={() => setShowHamaliBreakdown(showHamaliBreakdown === block.id ? null : block.id)}
+                >
+                  {t('hamali')} {tot.hamaliBreakdown.length > 0 && <span className="text-[var(--text-faint)]">ⓘ</span>}
+                </button>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={block.hamaliTotal}
+                  placeholder={
+                    !num(block.hamaliTotal) && hamaliRates.length > 0 && tot.validLines.length > 0
+                      ? String(Math.round(tot.hamali))
+                      : '0'
+                  }
+                  onChange={(e) => patchBlock(block.id, (b) => ({ ...b, hamaliTotal: e.target.value }))}
+                  className="h-7 w-16 rounded border border-[var(--border-input)] bg-[var(--bg-base)] px-1 text-center text-xs text-[var(--text-primary)] tabular-nums"
+                />
+                {showHamaliBreakdown === block.id && tot.hamaliBreakdown.length > 0 && (
+                  <div className="absolute top-full left-0 z-20 mt-1 w-64 rounded-lg border border-[var(--border-card)] bg-[var(--bg-card)] p-2 shadow-lg">
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="text-[10px] font-semibold text-[var(--text-primary)]">Hamali Breakdown</span>
+                      <button type="button" className="text-[10px] text-[var(--text-muted)]" onClick={() => setShowHamaliBreakdown(null)}>✕</button>
+                    </div>
+                    {tot.hamaliBreakdown.map((h, i) => (
+                      <div key={i} className="flex items-center justify-between gap-2 border-t border-[var(--border-input)] py-0.5 text-[10px]">
+                        <div className="flex-1">
+                          <div className="text-[var(--text-primary)]">{h.commodity}</div>
+                          <div className="text-[var(--text-muted)]">{h.bags} bags × ₹{h.perBag.toFixed(2)}/bag</div>
+                        </div>
+                        <div className="font-medium text-[var(--text-primary)]">₹{h.total.toFixed(2)}</div>
+                      </div>
+                    ))}
+                    <div className="mt-1 flex items-center justify-between border-t-2 border-[var(--border-card)] pt-1 text-[11px] font-bold">
+                      <span className="text-[var(--text-primary)]">Total</span>
+                      <span className="text-[var(--text-primary)]">₹{tot.hamali.toFixed(2)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
               <ChargeBox label={t('chargesBardan')} value={block.bardan} onChange={(v) => patchBlock(block.id, (b) => ({ ...b, bardan: v }))} />
               <ChargeBox label={t('chargesFreight')} value={block.freight} onChange={(v) => patchBlock(block.id, (b) => ({ ...b, freight: v }))} />
               <ChargeBox label={t('chargesAdvance')} value={block.advance} onChange={(v) => patchBlock(block.id, (b) => ({ ...b, advance: v }))} />
