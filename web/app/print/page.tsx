@@ -145,7 +145,7 @@ export default function PrintPage() {
         shop,
       );
     } catch (err: unknown) {
-      setStatus(err instanceof Error ? err.message : 'Could not print detailed bill');
+      setStatus(err instanceof Error ? err.message : 'Could not print Farmer Patti');
     }
   };
 
@@ -156,7 +156,7 @@ export default function PrintPage() {
           .filter((tx) => tx.type === 'bill')
           .map((tx) => txnToBillData(tx, formatCustomerName(c, uiLang))),
       );
-      if (allBills.length === 0) throw new Error('No customer patti in this date range');
+      if (allBills.length === 0) throw new Error('No customer bill in this date range');
       return generateBillsPdf(allBills, shop, 'patti');
     });
 
@@ -173,7 +173,7 @@ export default function PrintPage() {
       onClick: printBills,
       icon: PrinterIcon,
       title: t('printCustomerBills'),
-      help: 'Customer patti, 6 to a page.',
+      help: 'Customer Bill, 6 to a page.',
     },
     {
       key: 'ledger',

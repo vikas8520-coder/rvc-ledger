@@ -245,7 +245,7 @@ export default function CustomersPage() {
     setLedgerStatus('generating');
     try {
       const { blob, filename } = generateLedgerPdf(format);
-      const shareText = `${shopSettings.shopName || 'RVC'} — Customer Outstanding List`;
+      const shareText = `${shopSettings.shopName || 'RVC'} — Dues List`;
       const file = new File([blob], filename, { type: 'application/pdf' });
 
       // Use native share sheet on mobile AND Windows desktop
@@ -470,7 +470,7 @@ export default function CustomersPage() {
                 </div>
               </div>
               <div className="border-t border-[var(--border-light)] px-2 py-1.5">
-                <p className="text-xs font-semibold text-[var(--text-secondary)]">Dues Summary</p>
+                <p className="text-xs font-semibold text-[var(--text-secondary)]">Dues List</p>
                 <div className="mt-1 flex gap-1">
                   <button onClick={() => printLedgerFormat('outstanding')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
                     🖨 Print
@@ -481,7 +481,7 @@ export default function CustomersPage() {
                 </div>
               </div>
               <div className="border-t border-[var(--border-light)] px-2 py-1.5">
-                <p className="text-xs font-semibold text-[var(--text-secondary)]">Patti (6 per page)</p>
+                <p className="text-xs font-semibold text-[var(--text-secondary)]">Customer Bill (6 per page)</p>
                 <div className="mt-1 flex gap-1">
                   <button onClick={() => printLedgerFormat('patti')} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">
                     🖨 Print
@@ -603,7 +603,7 @@ export default function CustomersPage() {
                           </div>
                         )}
                         <div className="border-t border-[var(--border-light)] px-2 py-1.5">
-                          <p className="text-xs font-semibold text-[var(--text-secondary)]">Patti</p>
+                          <p className="text-xs font-semibold text-[var(--text-secondary)]">Customer Bill</p>
                           <div className="mt-1 flex gap-1">
                             <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); printCustomerPdf(c, 'patti'); }} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">🖨 Print</button>
                             <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); shareCustomerPdf(c, 'patti'); }} className="flex-1 rounded-md bg-[var(--bg-card)] px-2 py-1 text-[11px] hover:bg-[var(--bg-card-hover)]">📤 Share</button>

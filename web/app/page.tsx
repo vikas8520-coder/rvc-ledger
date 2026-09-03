@@ -128,7 +128,7 @@ export default function Home() {
       const bills = sliced.flatMap((c) =>
         c.txns.filter((tx) => tx.type === 'bill').map((tx) => txnToBillData(tx, formatCustomerName(c, uiLang))),
       );
-      if (bills.length === 0) throw new Error('No customer patti in this date range');
+      if (bills.length === 0) throw new Error('No customer bill in this date range');
       printPdfBlob(generateBillsPdf(bills, shop, 'patti'));
     } catch (err: unknown) {
       setPrintError(err instanceof Error ? err.message : 'Print failed');
@@ -165,7 +165,7 @@ export default function Home() {
       const bills = sliced.flatMap((c) =>
         c.txns.filter((tx) => tx.type === 'bill').map((tx) => txnToBillData(tx, formatCustomerName(c, uiLang))),
       );
-      if (bills.length === 0) throw new Error('No customer patti in this date range');
+      if (bills.length === 0) throw new Error('No customer bill in this date range');
       const blob = generateBillsPdf(bills, shop, 'patti');
       await sharePdfViaWhatsApp(blob, `customer-patti-${period}.pdf`, `${shopName} — Customer Patti (${period})`);
     } catch (err: unknown) {

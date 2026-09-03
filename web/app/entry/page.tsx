@@ -636,7 +636,7 @@ export default function EntryPage() {
       const bills = sliced.flatMap((c) =>
         c.txns.filter((tx) => tx.type === 'bill').map((tx) => txnToBillData(tx, formatCustomerName(c, uiLang))),
       );
-      if (bills.length === 0) throw new Error('No customer patti on this date');
+      if (bills.length === 0) throw new Error('No customer bill on this date');
       printPdfBlob(generateBillsPdf(bills, shop, 'patti'));
     } catch (err: unknown) {
       setSaveError(err instanceof Error ? err.message : 'Print failed');
@@ -656,7 +656,7 @@ export default function EntryPage() {
       const bills = sliced.flatMap((c) =>
         c.txns.filter((tx) => tx.type === 'bill').map((tx) => txnToBillData(tx, formatCustomerName(c, uiLang))),
       );
-      if (bills.length === 0) throw new Error('No customer patti on this date');
+      if (bills.length === 0) throw new Error('No customer bill on this date');
       const blob = generateBillsPdf(bills, shop, 'patti');
       await sharePdfViaWhatsApp(blob, `customer-patti-${date}.pdf`, `${shop.shopName || 'RVC'} — Customer Patti (${date})`);
     } catch (err: unknown) {
