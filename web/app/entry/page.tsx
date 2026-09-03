@@ -2015,13 +2015,6 @@ export default function EntryPage() {
 
             {/* Charges — compact single row */}
             <div className="flex flex-wrap items-end gap-1.5 rounded-lg bg-[var(--bg-base)] p-1.5 text-xs">
-              {/* Commission — read-only label showing calculated amount.
-                  The percentage is hidden, set via double-clicking the farmer tab. */}
-              <div className="flex flex-col gap-0.5">
-                <label className="text-[10px] text-[var(--text-muted)] select-none">
-                  {t('commission')} <span className="text-[var(--text-faint)]">₹{fmt(tot.comm)}</span>
-                </label>
-              </div>
               <ChargeBox label={t('hamali')} value={block.hamaliTotal} onChange={(v) => patchBlock(block.id, (b) => ({ ...b, hamaliTotal: v }))} placeholder={tot.validLines.length ? String(tot.validLines.reduce((s, l) => s + num(l.hamali), 0) || '') : '0'} />
               <ChargeBox label={t('chargesBardan')} value={block.bardan} onChange={(v) => patchBlock(block.id, (b) => ({ ...b, bardan: v }))} />
               <ChargeBox label={t('chargesFreight')} value={block.freight} onChange={(v) => patchBlock(block.id, (b) => ({ ...b, freight: v }))} />
