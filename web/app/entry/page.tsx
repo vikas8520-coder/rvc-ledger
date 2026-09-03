@@ -21,7 +21,7 @@ import {
   printPdfBlob,
   sharePdfViaWhatsApp,
 } from '@/lib/pdfShare';
-import { txnToBillData, type CreditLedgerEntry } from '@/lib/billPrint';
+import { txnToBillData, type CreditLedgerEntry, type BillPrintData } from '@/lib/billPrint';
 import { sliceCustomer, rangeLabel } from '@/lib/dateRange';
 import type { Customer } from '@/lib/types';
 
@@ -609,6 +609,14 @@ export default function EntryPage() {
 
   const printBills = async () => {
     try {
+      // Use savedSales directly — this is the most reliable source
+      // of today's data on the entry page
+      if (savedSales.length > 0) {
+        const bills = savedSales.map(saleToBillData);
+        printPdfBlob(generateBillsPdf(bills, shop, 'patti'));
+        return;
+      }
+      // Fallback: fetch from dashboard API
       const fullCustomers = await fetchDashboardCustomers();
       const sliced = fullCustomers.map((c) => sliceCustomer(c, date, date));
       const bills = sliced.flatMap((c) =>
@@ -623,6 +631,12 @@ export default function EntryPage() {
 
   const shareBills = async () => {
     try {
+      if (savedSales.length > 0) {
+        const bills = savedSales.map(saleToBillData);
+        const blob = generateBillsPdf(bills, shop, 'patti');
+        await sharePdfViaWhatsApp(blob, `customer-patti-${date}.pdf`, `${shop.shopName || 'RVC'} — Customer Patti (${date})`);
+        return;
+      }
       const fullCustomers = await fetchDashboardCustomers();
       const sliced = fullCustomers.map((c) => sliceCustomer(c, date, date));
       const bills = sliced.flatMap((c) =>
@@ -639,6 +653,88 @@ export default function EntryPage() {
   const printAllPattis = () => {
     for (const p of savedPattis) {
       printFarmerPatti(p, shop);
+    }
+  };
+
+  // ── Per-sale print/share ──────────────────────────────────────────
+  // Convert a SavedSale to BillPrintData for individual printing
+  const saleToBillData = (s: SavedSale): BillPrintData => ({
+    customerName: s.customerName,
+    date,
+    billNo: null,
+    total: s.amount,
+    items: [
+      {
+        raw_text: s.commodity,
+        confirmed_name: s.commodity,
+        qty: s.weightKg || s.bags || null,
+        rate: s.rate || null,
+        amount: s.amount,
+        display: `${s.bags || 0} bags${s.weightKg ? `, ${s.weightKg} kg` : ''} @ ₹${s.rate}`,
+        kind: 'item' as const,
+        chargeCode: null,
+        farmer: s.farmer,
+        hamali: num(s.hamali) || null,
+        bags: num(s.bags) || null,
+      } as any,
+    ],
+  });
+
+  const printSale = (s: SavedSale) => {
+    try {
+      const bill = saleToBillData(s);
+      printPdfBlob(generateBillsPdf([bill], shop, 'patti'));
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : 'Print failed');
+    }
+  };
+
+  const shareSale = async (s: SavedSale) => {
+    try {
+      const bill = saleToBillData(s);
+      const blob = generateBillsPdf([bill], shop, 'patti');
+      const filename = `patti-${s.customerName.replace(/\s+/g, '-')}-${date}.pdf`;
+      const text = `${shop.shopName || 'RVC Ledger'} — ${s.customerName} — ${s.commodity} — ₹${s.amount}`;
+      await sharePdfViaWhatsApp(blob, filename, text);
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : 'Share failed');
+    }
+  };
+
+  // Group sales by customer for per-customer print/share
+  const salesByCustomer = useMemo(() => {
+    const map = new Map<string, SavedSale[]>();
+    for (const s of savedSales) {
+      const key = s.customerName.trim().toLowerCase();
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(s);
+    }
+    return map;
+  }, [savedSales]);
+
+  const printCustomerSales = (customerName: string) => {
+    const sales = salesByCustomer.get(customerName.trim().toLowerCase()) || [];
+    if (sales.length === 0) return;
+    const bills = sales.map(saleToBillData);
+    try {
+      printPdfBlob(generateBillsPdf(bills, shop, 'patti'));
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : 'Print failed');
+    }
+  };
+
+  const shareCustomerSales = async (customerName: string) => {
+    const sales = salesByCustomer.get(customerName.trim().toLowerCase()) || [];
+    if (sales.length === 0) return;
+    const bills = sales.map(saleToBillData);
+    const total = sales.reduce((s, x) => s + x.amount, 0);
+    try {
+      const blob = generateBillsPdf(bills, shop, 'patti');
+      const filename = `patti-${customerName.replace(/\s+/g, '-')}-${date}.pdf`;
+      const text = `${shop.shopName || 'RVC Ledger'} — ${customerName} — ${date} — ₹${total}`;
+      await sharePdfViaWhatsApp(blob, filename, text);
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : 'Share failed');
     }
   };
 
@@ -1102,33 +1198,6 @@ export default function EntryPage() {
             </span>
           )}
         </button>
-        <PrintShareMenu
-          options={[
-            {
-              key: 'patti',
-              label: `${t('printFarmerPatti')} (${date})`,
-              onPrint: printAllPattis,
-            },
-            {
-              key: 'bills',
-              label: `${t('printCustomerBills')} (${date})`,
-              onPrint: printBills,
-              onShare: shareBills,
-            },
-            {
-              key: 'dues',
-              label: `${t('printDues')} (${date})`,
-              onPrint: printDues,
-              onShare: shareDues,
-            },
-            {
-              key: 'ledger',
-              label: `${t('printLedger')} (${date})`,
-              onPrint: printLedger,
-              onShare: shareLedger,
-            },
-          ]}
-        />
       </div>
 
       {/* Farmer tabs — browser-style */}
@@ -1716,6 +1785,7 @@ export default function EntryPage() {
               <PrintShareMenu
                 label={t('printShare')}
                 options={[
+                  // Per-farmer patti
                   ...savedPattis.map((p) => ({
                     key: `patti-${p.farmer}`,
                     label: `${t('printFarmerPatti')} — ${p.farmer}`,
@@ -1726,9 +1796,21 @@ export default function EntryPage() {
                     label: t('printAllPattis'),
                     onPrint: printAllPattis,
                   },
+                  // Per-customer patti (all sales for that customer today)
+                  ...Array.from(salesByCustomer.keys()).map((custKey) => {
+                    const sales = salesByCustomer.get(custKey)!;
+                    const custName = sales[0].customerName;
+                    return {
+                      key: `cust-${custKey}`,
+                      label: `${t('printCustomerBills')} — ${custName} (${sales.length})`,
+                      onPrint: () => printCustomerSales(custName),
+                      onShare: () => shareCustomerSales(custName),
+                    };
+                  }),
+                  // All customer patti for today
                   {
                     key: 'bills',
-                    label: `${t('printCustomerBills')} (${date})`,
+                    label: `${t('printCustomerBills')} — ALL (${date})`,
                     onPrint: printBills,
                     onShare: shareBills,
                   },
@@ -1800,10 +1882,28 @@ export default function EntryPage() {
                     <td className="py-1.5 pr-2 text-xs text-[var(--text-muted)]">{s.farmer}</td>
                     <td className="py-1.5 pr-2">
                       <div className="flex items-center justify-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => printSale(s)}
+                          className="rounded px-1.5 py-0.5 text-xs text-[var(--bg-primary)] hover:bg-[var(--bg-base)]"
+                          title={t('print')}
+                        >
+                          🖨
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => shareSale(s)}
+                          className="rounded px-1.5 py-0.5 text-xs text-[#25D366] hover:bg-[var(--bg-base)]"
+                          title="WhatsApp"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{display:'inline-block',verticalAlign:'middle'}}>
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51l-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                          </svg>
+                        </button>
                         {s.customerId && (
                           <Link
                             href={`/customers/${s.customerId}`}
-                            className="rounded px-2 py-0.5 text-xs text-[var(--bg-primary)] hover:bg-[var(--bg-base)]"
+                            className="rounded px-1.5 py-0.5 text-xs text-[var(--bg-primary)] hover:bg-[var(--bg-base)]"
                             title={t('edit')}
                           >
                             ✎
@@ -1813,7 +1913,7 @@ export default function EntryPage() {
                           <button
                             type="button"
                             onClick={() => deleteSavedSale(s.txnId)}
-                            className="rounded px-2 py-0.5 text-xs text-red-500 hover:bg-red-50"
+                            className="rounded px-1.5 py-0.5 text-xs text-red-500 hover:bg-red-50"
                             title={t('delete')}
                           >
                             ✕
