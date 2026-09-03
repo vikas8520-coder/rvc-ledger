@@ -618,3 +618,115 @@ function parseAmount(str: string): number {
   cleaned = cleaned.replace(/,/g, '');
   return parseFloat(cleaned) || 0;
 }
+
+// ── Credit-ledger PDF parser (Mandi Ledger format) ───────────────────
+
+export interface ParsedLedgerEntry {
+  customerName: string;
+  amount: number;
+}
+
+/**
+ * Parse a credit-ledger (Mandi Ledger) PDF using text positions.
+ * Format: two columns, each row has a serial number, customer name,
+ * and amount. Header has shop name, "ALL", and date.
+ * Total at the bottom.
+ */
+export function parseCreditLedgerPdf(items: PdfTextItem[]): ParsedLedgerEntry[] {
+  if (items.length === 0) return [];
+
+  // Group by page
+  const byPage = new Map<number, PdfTextItem[]>();
+  for (const item of items) {
+    if (!byPage.has(item.page)) byPage.set(item.page, []);
+    byPage.get(item.page)!.push(item);
+  }
+
+  const entries: ParsedLedgerEntry[] = [];
+
+  for (const [, pageItems] of byPage) {
+    // Sort top to bottom, left to right
+    const sorted = [...pageItems].sort((a, b) => {
+      const yDiff = b.y - a.y;
+      if (Math.abs(yDiff) > 5) return yDiff;
+      return a.x - b.x;
+    });
+
+    // Find the page midpoint X to split into left/right columns
+    const maxX = Math.max(...sorted.map((i) => i.x));
+    const midX = maxX / 2;
+
+    // Skip header items (shop name, "ALL", "Date:", horizontal lines)
+    // and footer items (Total, footer text)
+    // Header is at the top (high Y), footer at the bottom (low Y)
+    const ys = sorted.map((i) => i.y);
+    const maxY = Math.max(...ys);
+    const minY = Math.min(...ys);
+
+    // Data rows are between header (top ~10%) and footer (bottom ~10%)
+    const headerCutoff = maxY - (maxY - minY) * 0.08;
+    const footerCutoff = minY + (maxY - minY) * 0.08;
+
+    // Group items by Y position (rows)
+    const rowMap = new Map<number, PdfTextItem[]>();
+    for (const item of sorted) {
+      if (item.y > headerCutoff || item.y < footerCutoff) continue;
+      // Skip "Total" and footer text
+      if (/^total/i.test(item.text)) continue;
+      if (/generated|customers|rvc vegetable/i.test(item.text)) continue;
+      if (/^date\s*:/i.test(item.text)) continue;
+      if (item.text === 'ALL') continue;
+
+      // Find existing row within 5pt Y tolerance
+      let rowY: number | null = null;
+      for (const y of rowMap.keys()) {
+        if (Math.abs(y - item.y) < 5) { rowY = y; break; }
+      }
+      if (rowY === null) {
+        rowY = item.y;
+        rowMap.set(rowY, []);
+      }
+      rowMap.get(rowY)!.push(item);
+    }
+
+    // Parse each row
+    for (const [, rowItems] of rowMap) {
+      // Sort by X position
+      const rowSorted = [...rowItems].sort((a, b) => a.x - b.x);
+      // A row looks like: "1" "AKULA VINOD" "4160"
+      // Or: "1" "AKULA VINOD" "9848012345" "4160" (with phone)
+      // Filter out serial numbers (short numeric at start)
+      const texts = rowSorted.map((i) => i.text);
+
+      // Find the amount — last numeric value in the row
+      let amount = 0;
+      let amountIdx = -1;
+      for (let i = texts.length - 1; i >= 0; i--) {
+        const num = parseAmount(texts[i]);
+        if (num > 0 && /^[\d,]+$/.test(texts[i].replace(/[^\d,]/g, ''))) {
+          amount = num;
+          amountIdx = i;
+          break;
+        }
+      }
+      if (amount === 0) continue;
+
+      // Customer name is everything between the serial number and the amount
+      const nameParts = texts.slice(1, amountIdx);
+      // Filter out phone numbers from the name
+      const name = nameParts.filter((t) => !/^\d{10,}$/.test(t)).join(' ').trim();
+      if (!name || name.length < 2) continue;
+
+      entries.push({ customerName: name, amount });
+    }
+  }
+
+  // Deduplicate
+  const seen = new Set<string>();
+  return entries.filter((e) => {
+    const key = `${e.customerName}|${e.amount}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}

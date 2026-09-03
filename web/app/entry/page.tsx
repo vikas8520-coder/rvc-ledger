@@ -12,7 +12,7 @@ import { PrinterIcon } from '../components/Icons';
 import PrintShareMenu from '../components/PrintShareMenu';
 import { recognizeBill, type OcrProgress } from '@/lib/ocr';
 import { recognizeWithPaddle, type PaddleProgress, type OcrLine as PaddleOcrLine, extractPdfTextDirect } from '@/lib/paddleOcr';
-import { parseBillSmart, parseMultiBillPdf, type SmartBillItem, type ParsedBill } from '@/lib/billParser';
+import { parseBillSmart, parseMultiBillPdf, parseCreditLedgerPdf, type SmartBillItem, type ParsedBill, type ParsedLedgerEntry } from '@/lib/billParser';
 import { setRuntimeAliases } from '@/lib/catalog';
 import {
   generateOutstandingListPdf,
@@ -263,8 +263,10 @@ export default function EntryPage() {
   const [newFarmerPhone, setNewFarmerPhone] = useState('');
   const [addingFarmer, setAddingFarmer] = useState(false);
   const [ocrProgress, setOcrProgress] = useState<string | null>(null);
+  const [ocrSuccess, setOcrSuccess] = useState<string | null>(null);
   const [showShareFor, setShowShareFor] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const formTopRef = useRef<HTMLDivElement>(null);
   // Self-learning: track OCR-imported lines so we can auto-save corrections
   const ocrImportRef = useRef<{
     commodityRawToConfirmed: Map<string, string>; // raw → confirmed name
@@ -1004,34 +1006,52 @@ export default function EntryPage() {
     if (!f) return;
     setOcrProgress(t('ocrLocal'));
     setSaveError('');
+    setOcrSuccess(null);
     try {
       // ── Step 1: For PDFs, try direct text extraction first (no OCR needed) ──
-      // Generated PDFs (like our own patti/bill PDFs) have embedded text.
-      // This is faster and more accurate than OCR.
       const isPdf = f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf');
       if (isPdf) {
         setOcrProgress(`${t('ocrLocal')} — reading PDF...`);
         try {
           const pdfResult = await extractPdfTextDirect(f);
           if (pdfResult.hasText && pdfResult.items.length > 10) {
-            // Check if this is a multi-bill patti PDF (has "No:" markers)
             const hasNoMarkers = pdfResult.items.some((i) => /^no\s*[:.]/i.test(i.text));
-            if (hasNoMarkers) {
-              // Parse as multi-bill patti PDF
+            const hasTotalMarker = pdfResult.items.some((i) => /^total\s*[:.]/i.test(i.text));
+            const hasItemLabel = pdfResult.items.some((i) => /^item$/i.test(i.text));
+
+            // Multi-bill patti PDF (has "No:" markers and "Item" labels)
+            if (hasNoMarkers && hasItemLabel) {
               const bills = parseMultiBillPdf(pdfResult.items);
               if (bills.length > 0) {
-                // Fill the form with all parsed bills
                 fillFormFromBills(bills);
                 setOcrProgress(null);
+                setOcrSuccess(`Extracted ${bills.length} bills from PDF — review and save below.`);
+                scrollToForm();
                 if (fileInputRef.current) fileInputRef.current.value = '';
                 return;
               }
             }
-            // Not a multi-bill PDF — use the extracted text with the smart parser
+
+            // Credit-ledger PDF (has "Total :" but no "Item" labels)
+            if (hasTotalMarker && !hasItemLabel) {
+              const entries = parseCreditLedgerPdf(pdfResult.items);
+              if (entries.length > 0) {
+                fillFormFromLedger(entries);
+                setOcrProgress(null);
+                setOcrSuccess(`Extracted ${entries.length} customer entries from Mandi Ledger — review and save below.`);
+                scrollToForm();
+                if (fileInputRef.current) fileInputRef.current.value = '';
+                return;
+              }
+            }
+
+            // Generic PDF with text — try smart parser
             const parsed = parseBillSmart(pdfResult.text);
             if (parsed.items.length > 0) {
               fillFormFromParsed(parsed);
               setOcrProgress(null);
+              setOcrSuccess(`Extracted ${parsed.items.length} items from PDF — review and save below.`);
+              scrollToForm();
               if (fileInputRef.current) fileInputRef.current.value = '';
               return;
             }
@@ -1045,7 +1065,6 @@ export default function EntryPage() {
       let ocrText = '';
       let ocrLines: PaddleOcrLine[] | undefined;
 
-      // Try PaddleOCR first (PP-OCRv6, supports Telugu/Hindi/English)
       try {
         const result = await recognizeWithPaddle(f, (p: PaddleProgress) => {
           if (p.status === 'loading_model') {
@@ -1062,7 +1081,6 @@ export default function EntryPage() {
         ocrText = result.text;
         ocrLines = result.lines;
       } catch (paddleErr) {
-        // Fallback to Tesseract if PaddleOCR fails
         console.warn('PaddleOCR failed, falling back to Tesseract:', paddleErr);
         setOcrProgress(`${t('ocrLocal')} (Tesseract) — 0%`);
         ocrText = await recognizeBill(f, ocrLangs, (m: OcrProgress) => {
@@ -1070,12 +1088,17 @@ export default function EntryPage() {
         });
       }
 
-      // Smart parse — understands bill structure, extracts customer names,
-      // commodities, bags/kg, rates, amounts, charges
       const parsed = parseBillSmart(ocrText, ocrLines);
-      fillFormFromParsed(parsed);
+      if (parsed.items.length > 0) {
+        fillFormFromParsed(parsed);
+        setOcrProgress(null);
+        setOcrSuccess(`Extracted ${parsed.items.length} items from bill — review and save below.`);
+        scrollToForm();
+      } else {
+        setOcrProgress(null);
+        setSaveError(t('ocrCouldNotRead'));
+      }
 
-      setOcrProgress(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
     } catch (err: any) {
       setOcrProgress(null);
@@ -1083,6 +1106,12 @@ export default function EntryPage() {
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
+
+  function scrollToForm() {
+    setTimeout(() => {
+      formTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  }
 
   // ── Helper: match a customer name to existing DB customers ──
   function matchCustomer(name: string, phone?: string | null): string | null {
@@ -1269,6 +1298,50 @@ export default function EntryPage() {
     };
   }
 
+  // ── Fill form from credit-ledger entries (Mandi Ledger PDF) ──
+  function fillFormFromLedger(entries: ParsedLedgerEntry[]) {
+    // Each entry becomes a sale line with customer name + amount
+    const lines: Line[] = entries.map((e) => {
+      const matchedId = matchCustomer(e.customerName);
+      return {
+        id: newId(),
+        commodity: 'Produce',
+        bags: '',
+        bagWeights: [],
+        customerName: e.customerName,
+        customerId: matchedId,
+        weightKg: '',
+        weightMode: 'per_bag' as const,
+        pricePerKg: '',
+        amount: String(e.amount),
+        cash: false,
+        hamali: '',
+      };
+    });
+
+    // Group into one lot
+    const lots: Lot[] = [{ id: newId(), commodity: 'Produce', bags: '', kg: '', avg: '', lines }];
+
+    setBlocks((prev) => {
+      if (prev.length === 0 || (prev.length === 1 && !prev[0].farmerName.trim() && prev[0].lots.length === 0)) {
+        return [{ ...emptyFarmer(commissionPct), lots }];
+      }
+      const next = [...prev];
+      next[0] = { ...next[0], lots: [...next[0].lots, ...lots] };
+      return next;
+    });
+
+    ocrImportRef.current = {
+      commodityRawToConfirmed: new Map(),
+      customerRawToConfirmed: new Map(
+        entries.map((e) => [e.customerName.toLowerCase().trim(), {
+          name: e.customerName,
+          id: matchCustomer(e.customerName),
+        }]),
+      ),
+    };
+  }
+
   const anySales = blocks.some((b) => totalsOf(b).validLines.length > 0);
 
   return (
@@ -1340,6 +1413,22 @@ export default function EntryPage() {
           )}
         </button>
       </div>
+
+      {/* OCR success notification */}
+      {ocrSuccess && (
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--bg-success)] bg-[var(--bg-success)]/10 px-3 py-2 text-sm text-[var(--text-primary)]">
+          <span className="flex items-center gap-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--bg-success)]">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+            {ocrSuccess}
+          </span>
+          <button type="button" onClick={() => setOcrSuccess(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">✕</button>
+        </div>
+      )}
+
+      <div ref={formTopRef} />
 
       {/* Farmer tabs — browser-style */}
       <div className="flex items-center gap-1 overflow-x-auto border-b border-[var(--border-light)] pb-0">
