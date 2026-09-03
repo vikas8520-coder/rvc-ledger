@@ -1474,13 +1474,19 @@ export default function EntryPage() {
               <button
                 type="button"
                 onClick={() => setActiveTabId(block.id)}
-                onDoubleClick={() => {
-                  // Hidden: double-click the farmer tab name to open commission editor
+                onPointerDown={(e) => {
+                  // Hidden: long-press (600ms) the farmer tab name to open commission editor
                   const name = block.farmerName.trim();
                   if (!name) return;
-                  setCommissionEditName(name);
-                  setCommissionEditValue(block.commissionPct);
-                  setShowCommissionEditor(true);
+                  const target = e.currentTarget;
+                  const timer = setTimeout(() => {
+                    setCommissionEditName(name);
+                    setCommissionEditValue(block.commissionPct);
+                    setShowCommissionEditor(true);
+                  }, 600);
+                  const cancel = () => clearTimeout(timer);
+                  target.addEventListener('pointerup', cancel, { once: true });
+                  target.addEventListener('pointerleave', cancel, { once: true });
                 }}
                 className="max-w-[8rem] truncate text-left"
                 title={label}
