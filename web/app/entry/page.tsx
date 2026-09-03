@@ -11,8 +11,8 @@ import { printFarmerPatti, type FarmerPattiData, type ShopProfile } from '@/lib/
 import { PrinterIcon } from '../components/Icons';
 import PrintShareMenu from '../components/PrintShareMenu';
 import { recognizeBill, type OcrProgress } from '@/lib/ocr';
-import { recognizeWithPaddle, type PaddleProgress } from '@/lib/paddleOcr';
-import { parseBillText } from '@/lib/parser';
+import { recognizeWithPaddle, type PaddleProgress, type OcrLine as PaddleOcrLine } from '@/lib/paddleOcr';
+import { parseBillSmart, type SmartBillItem } from '@/lib/billParser';
 import {
   generateOutstandingListPdf,
   generateCreditLedgerPdf,
@@ -801,14 +801,16 @@ export default function EntryPage() {
     setSaveError('');
   };
 
-  // Upload bill → PaddleOCR (primary) / Tesseract (fallback) → parse → fill form
+  // Upload bill → PaddleOCR (primary) / Tesseract (fallback) → smart parse → fill form
   const handleBillUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
     setOcrProgress(t('ocrLocal'));
     setSaveError('');
     try {
-      let text = '';
+      let ocrText = '';
+      let ocrLines: PaddleOcrLine[] | undefined;
+
       // Try PaddleOCR first (PP-OCRv6, supports Telugu/Hindi/English)
       try {
         const result = await recognizeWithPaddle(f, (p: PaddleProgress) => {
@@ -818,55 +820,58 @@ export default function EntryPage() {
             setOcrProgress(`${t('ocrLocal')} — reading bill...`);
           }
         });
-        text = result.text;
+        ocrText = result.text;
+        ocrLines = result.lines;
       } catch (paddleErr) {
         // Fallback to Tesseract if PaddleOCR fails
         console.warn('PaddleOCR failed, falling back to Tesseract:', paddleErr);
         setOcrProgress(`${t('ocrLocal')} (Tesseract) — 0%`);
-        text = await recognizeBill(f, ocrLangs, (m: OcrProgress) => {
+        ocrText = await recognizeBill(f, ocrLangs, (m: OcrProgress) => {
           setOcrProgress(`${t('ocrLocal')} (Tesseract) — ${Math.round((m.progress || 0) * 100)}%`);
         });
       }
 
-      const parsed = parseBillText(text);
+      // Smart parse — understands bill structure, extracts customer names,
+      // commodities, bags/kg, rates, amounts, charges
+      const parsed = parseBillSmart(ocrText, ocrLines);
+
       // Set date if found
       if (parsed.date) setDate(parsed.date);
-      // Map parsed items into the first farmer block
-      const items = parsed.items.filter((it) => it.amount > 0 || it.qty);
-      if (items.length === 0) {
+
+      // Set customer name into the first sale line if found
+      const customerName = parsed.customerName;
+
+      if (parsed.items.length === 0) {
         setOcrProgress(null);
         setSaveError(t('ocrCouldNotRead'));
         return;
       }
-      // Group by commodity name
-      const byCommodity = new Map<string, typeof items>();
-      for (const it of items) {
-        const name = it.confirmed_name || it.raw_text || 'Item';
+
+      // Group items by commodity into lots
+      const byCommodity = new Map<string, SmartBillItem[]>();
+      for (const it of parsed.items) {
+        const name = it.commodityConfirmed || it.commodity || 'Item';
         if (!byCommodity.has(name)) byCommodity.set(name, []);
         byCommodity.get(name)!.push(it);
       }
+
       // Build lots from grouped items
       const lots: Lot[] = [];
       for (const [commodity, groupItems] of byCommodity) {
-        const lines: Line[] = groupItems.map((it) => {
-          const qtyStr = it.qty || '';
-          const bagsMatch = qtyStr.match(/(\d+)\s*bag/i);
-          const kgMatch = qtyStr.match(/([\d.]+)\s*kg/i);
-          return {
-            id: newId(),
-            commodity,
-            bags: bagsMatch ? bagsMatch[1] : '',
-            bagWeights: [],
-            customerName: '',
-            customerId: null,
-            weightKg: kgMatch ? kgMatch[1] : '',
-            weightMode: 'per_bag' as const,
-            pricePerKg: it.rate || '',
-            amount: String(it.amount || ''),
-            cash: false,
-            hamali: '',
-          };
-        });
+        const lines: Line[] = groupItems.map((it) => ({
+          id: newId(),
+          commodity,
+          bags: it.bags !== null ? String(it.bags) : '',
+          bagWeights: [],
+          customerName: customerName || '',
+          customerId: null,
+          weightKg: it.weightKg !== null ? String(it.weightKg) : '',
+          weightMode: 'per_bag' as const,
+          pricePerKg: it.rate !== null ? String(it.rate) : '',
+          amount: String(it.amount || ''),
+          cash: false,
+          hamali: '',
+        }));
         lots.push({
           id: newId(),
           commodity,
@@ -876,6 +881,7 @@ export default function EntryPage() {
           lines,
         });
       }
+
       // Set into the first farmer block (or replace blocks with one farmer)
       setBlocks((prev) => {
         if (prev.length === 0 || (prev.length === 1 && !prev[0].farmerName.trim() && prev[0].lots.length === 0)) {
@@ -886,6 +892,34 @@ export default function EntryPage() {
         next[0] = { ...next[0], lots: [...next[0].lots, ...lots] };
         return next;
       });
+
+      // Apply charges if found (hamali, commission, etc.)
+      if (parsed.charges.length > 0) {
+        setBlocks((prev) => {
+          if (prev.length === 0) return prev;
+          const next = [...prev];
+          const block = { ...next[0] };
+          for (const ch of parsed.charges) {
+            const lowName = ch.name.toLowerCase();
+            if (lowName.includes('hamali') || lowName.includes('loading')) {
+              block.hamaliTotal = String(ch.amount);
+            } else if (lowName.includes('commission')) {
+              block.commissionPct = String(ch.amount);
+            } else if (lowName.includes('bardan') || lowName.includes('bardana')) {
+              block.bardan = String(ch.amount);
+            } else if (lowName.includes('freight') || lowName.includes('transport')) {
+              block.freight = String(ch.amount);
+            } else if (lowName.includes('advance')) {
+              block.advance = String(ch.amount);
+            } else {
+              block.other = String(ch.amount);
+            }
+          }
+          next[0] = block;
+          return next;
+        });
+      }
+
       setOcrProgress(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
     } catch (err: any) {
