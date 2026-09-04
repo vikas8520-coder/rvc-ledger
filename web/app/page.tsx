@@ -7,6 +7,7 @@ import { formatCustomerName, getUiLang } from '@/lib/i18n';
 import { useDashboard } from './components/useDashboard';
 import TxnCard from './components/TxnCard';
 import AgingBadge from './components/AgingBadge';
+import ProfileGuard from './components/ProfileGuard';
 import { Card, SectionHeader, StatCard, EmptyState, StatSkeleton, ListSkeleton } from './components/ui';
 import { UsersIcon, DollarIcon, PackageIcon, CalendarIcon, TrendingIcon } from './components/Icons';
 import { fmt } from '@/lib/format';
@@ -194,6 +195,7 @@ export default function Home() {
   }
 
   return (
+    <ProfileGuard>
     <div className="space-y-5">
       <p className="text-xs text-[var(--text-faint)]">{configured ? t('liveFrom') : 'Preview from local CSV'}</p>
 
@@ -438,5 +440,6 @@ export default function Home() {
         </Card>
       </section>
     </div>
+    </ProfileGuard>
   );
 }

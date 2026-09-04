@@ -8,6 +8,7 @@ import { ChartIcon, DownloadIcon, TrendingIcon, DollarIcon, PackageIcon } from '
 import { fmt } from '@/lib/format';
 import { Customer, PurchaseView, WastageEntry, ExpenseEntry } from '@/lib/types';
 import { monthlySummary, itemStats, topCustomers } from '@/lib/reports';
+import ProfileGuard from '../components/ProfileGuard';
 
 function monthLabel(ym: string): string {
   const [y, m] = ym.split('-').map(Number);
@@ -123,6 +124,7 @@ export default function ReportsPage() {
   }
 
   return (
+    <ProfileGuard>
     <div className="space-y-5">
       <PageHeader title={t('navReports')} subtitle={t('reportsHelp')} />
 
@@ -303,5 +305,6 @@ export default function ReportsPage() {
         )}
       </Card>
     </div>
+    </ProfileGuard>
   );
 }

@@ -45,8 +45,15 @@ const SECONDARY_NAV: NavItem[] = [
 ];
 
 // Mobile bottom bar — daily work: patti, print, collect
-const MOBILE_ACTIONS: NavItem[] = [
+const MOBILE_ACTIONS_OWNER: NavItem[] = [
   { href: '/', label: 'navOverview', icon: HomeIcon },
+  { href: '/entry', label: 'navDataEntry', icon: FileIcon },
+  { href: '/print', label: 'navPrint', icon: PrinterIcon },
+  { href: '/payment', label: 'recordPayment', icon: DollarIcon },
+];
+
+// Data entry profile: only entry, print, payment
+const MOBILE_ACTIONS_DATA_ENTRY: NavItem[] = [
   { href: '/entry', label: 'navDataEntry', icon: FileIcon },
   { href: '/print', label: 'navPrint', icon: PrinterIcon },
   { href: '/payment', label: 'recordPayment', icon: DollarIcon },
@@ -58,6 +65,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { isLoaded, user, signOut } = useClerkSafe();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [userProfile, setUserProfile] = useState<'owner' | 'data_entry'>('owner');
 
   const isAuthPage = path === '/sign-in' || path === '/sign-up' || path === '/onboarding' || path === '/user-profile';
   const isAdminPage = path === '/admin' || path.startsWith('/admin/');
@@ -68,6 +76,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       .then((r) => r.json())
       .then((d) => {
         if (!d.authenticated) return;
+        if (d.profile) setUserProfile(d.profile);
         if (!d.shopId && d.role !== 'superadmin') {
           router.push('/onboarding');
         }
@@ -109,21 +118,26 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     })
   );
 
+  const isDataEntry = userProfile === 'data_entry';
+  const mobileActions = isDataEntry ? MOBILE_ACTIONS_DATA_ENTRY : MOBILE_ACTIONS_OWNER;
+
   const Shell = ({ children: shellChildren }: { children: React.ReactNode }) => (
     <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] flex flex-col">
       <header className="sticky top-0 z-30 border-b border-[var(--border-light)] bg-[var(--bg-base)]/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-5">
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-            <Link href="/" className="flex shrink-0 items-center gap-2 text-lg font-bold">
+            <Link href={isDataEntry ? '/entry' : '/'} className="flex shrink-0 items-center gap-2 text-lg font-bold">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--bg-primary)] text-xs font-bold text-[var(--text-on-primary)]">
                 RVC
               </span>
               <span className="hidden sm:inline">{t('appTitle')}</span>
             </Link>
-            {/* Desktop nav */}
-            <nav className="hidden lg:flex gap-0.5 text-sm">
-              {renderNav(PRIMARY_NAV, true)}
-            </nav>
+            {/* Desktop nav — owner only */}
+            {!isDataEntry && (
+              <nav className="hidden lg:flex gap-0.5 text-sm">
+                {renderNav(PRIMARY_NAV, true)}
+              </nav>
+            )}
           </div>
 
           <div className="flex shrink-0 items-center justify-end gap-1 sm:gap-1.5">
@@ -150,14 +164,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <DollarIcon size={14} />
               {t('recordPayment')}
             </Link>
-            {/* Mobile menu toggle */}
-            <button
-              onClick={() => setMenuOpen((v) => !v)}
-              className="lg:hidden flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] text-[var(--text-secondary)]"
-              aria-label="Menu"
-            >
-              {menuOpen ? <XIcon size={18} /> : <MenuIcon size={18} />}
-            </button>
+            {/* Mobile menu toggle — owner only */}
+            {!isDataEntry && (
+              <button
+                onClick={() => setMenuOpen((v) => !v)}
+                className="lg:hidden flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] text-[var(--text-secondary)]"
+                aria-label="Menu"
+              >
+                {menuOpen ? <XIcon size={18} /> : <MenuIcon size={18} />}
+              </button>
+            )}
             {CLERK_CONFIGURED && (
               <UserButton>
                 <UserButton.MenuItems>
@@ -174,15 +190,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
-        {/* Secondary desktop nav row */}
-        <div className="hidden lg:block border-t border-[var(--border-light)]">
-          <div className="mx-auto flex max-w-6xl items-center gap-0.5 px-3 py-1 sm:px-5">
-            {renderNav(SECONDARY_NAV, false)}
+        {/* Secondary desktop nav row — owner only */}
+        {!isDataEntry && (
+          <div className="hidden lg:block border-t border-[var(--border-light)]">
+            <div className="mx-auto flex max-w-6xl items-center gap-0.5 px-3 py-1 sm:px-5">
+              {renderNav(SECONDARY_NAV, false)}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Mobile dropdown menu */}
-        {menuOpen && (
+        {/* Mobile dropdown menu — owner only */}
+        {menuOpen && !isDataEntry && (
           <div className="lg:hidden border-t border-[var(--border-light)] bg-[var(--bg-base)]">
             <div className="mx-auto max-w-6xl px-3 py-3 sm:px-5 space-y-1">
               <p className="text-[10px] uppercase tracking-wide text-[var(--text-faint)] px-2.5 py-1">Main</p>
@@ -204,7 +222,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         className="lg:hidden fixed bottom-0 left-0 right-0 z-30 border-t border-[var(--border-light)] bg-[var(--bg-base)]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
       >
         <div className="flex items-stretch justify-around">
-          {MOBILE_ACTIONS.map((item) => {
+          {mobileActions.map((item) => {
             const Icon = item.icon;
             const active = item.href === '/' ? path === '/' : path === item.href || path.startsWith(`${item.href}/`);
             return (

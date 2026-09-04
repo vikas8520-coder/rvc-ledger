@@ -12,6 +12,7 @@ import {
   SettingsIcon,
   CalendarIcon,
 } from '../components/Icons';
+import ProfileGuard from '../components/ProfileGuard';
 
 export default function MiscPage() {
   const { t } = useI18n();
@@ -28,6 +29,7 @@ export default function MiscPage() {
   ];
 
   return (
+    <ProfileGuard>
     <div className="space-y-4">
       <div>
         <h1 className="text-lg font-bold">{t('navMisc')}</h1>
@@ -52,5 +54,6 @@ export default function MiscPage() {
         })}
       </div>
     </div>
+    </ProfileGuard>
   );
 }

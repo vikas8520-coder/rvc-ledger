@@ -6,6 +6,7 @@ import { useI18n } from '../components/I18nProvider';
 import { Card, SectionHeader, StatCard, EmptyState, ListSkeleton, PageHeader } from '../components/ui';
 import { StoreIcon, SearchIcon, TrendingIcon, DollarIcon, PackageIcon } from '../components/Icons';
 import { fmt } from '@/lib/format';
+import ProfileGuard from '../components/ProfileGuard';
 
 interface FarmerSummary {
   farmer: string;
@@ -93,6 +94,7 @@ export default function FarmersPage() {
   }
 
   return (
+    <ProfileGuard>
     <div className="space-y-4">
       <PageHeader
         title={t('navFarmers')}
@@ -201,5 +203,6 @@ export default function FarmersPage() {
         </Card>
       )}
     </div>
+    </ProfileGuard>
   );
 }

@@ -5,6 +5,7 @@ import { getOrCreateShop, linkUserToDefaultShop, ensureDefaultShop, isDbConfigur
 export type AuthResult = {
   shopId: string | null;
   role: 'superadmin' | 'owner' | 'staff';
+  profile: 'owner' | 'data_entry';
   userId: string;
   email: string;
   name: string;
@@ -90,7 +91,7 @@ export async function getAuth(): Promise<AuthResult | null> {
         shopId = await ensureDefaultShop();
       } catch {}
     }
-    return { shopId, role: 'superadmin', userId: 'admin', email: '', name: 'Admin' };
+    return { shopId, role: 'superadmin', profile: 'owner', userId: 'admin', email: '', name: 'Admin' };
   }
 
   // If Clerk isn't configured at all, return null (no access)
@@ -108,18 +109,18 @@ export async function getAuth(): Promise<AuthResult | null> {
   const isSuperadmin = SUPERADMIN_IDS.includes(userId);
 
   if (!isDbConfigured()) {
-    return { shopId: null, role: isSuperadmin ? 'superadmin' : 'owner', userId, email, name };
+    return { shopId: null, role: isSuperadmin ? 'superadmin' : 'owner', profile: 'owner', userId, email, name };
   }
 
   // For superadmin: link them to the default RVC shop so they can use the app too
   if (isSuperadmin) {
     const shopId = await linkUserToDefaultShop(userId, email, name);
-    return { shopId, role: 'superadmin', userId, email, name };
+    return { shopId, role: 'superadmin', profile: 'owner', userId, email, name };
   }
 
   // For regular users, look up their shop
-  const { shopId, role } = await getOrCreateShop(userId, email, name);
-  return { shopId, role: role as 'owner' | 'staff', userId, email, name };
+  const { shopId, role, profile } = await getOrCreateShop(userId, email, name);
+  return { shopId, role: role as 'owner' | 'staff', profile: profile as 'owner' | 'data_entry', userId, email, name };
 }
 
 // Require auth + shop — returns AuthResult or throws

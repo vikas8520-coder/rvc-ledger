@@ -273,6 +273,7 @@ export default function EntryPage() {
   const [commissionEditName, setCommissionEditName] = useState('');
   const [commissionEditValue, setCommissionEditValue] = useState('');
   const [showHamaliBreakdown, setShowHamaliBreakdown] = useState<string | null>(null);
+  const [userProfile, setUserProfile] = useState<'owner' | 'data_entry'>('owner');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formTopRef = useRef<HTMLDivElement>(null);
   // Self-learning: track OCR-imported lines so we can auto-save corrections
@@ -298,6 +299,14 @@ export default function EntryPage() {
     };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
+  }, []);
+
+  // Fetch user profile (owner vs data_entry)
+  useEffect(() => {
+    fetch('/api/me')
+      .then((r) => r.json())
+      .then((d) => { if (d.profile) setUserProfile(d.profile); })
+      .catch(() => {});
   }, []);
 
   // Close per-transaction share dropdown when clicking outside
@@ -1528,6 +1537,8 @@ export default function EntryPage() {
                 onClick={() => setActiveTabId(block.id)}
                 onPointerDown={(e) => {
                   // Hidden: long-press (600ms) the farmer tab name to open commission editor
+                  // Only available to owner profile — data entry users cannot access this
+                  if (userProfile !== 'owner') return;
                   const name = block.farmerName.trim();
                   if (!name) return;
                   const target = e.currentTarget;
@@ -2088,9 +2099,9 @@ export default function EntryPage() {
                 <button
                   type="button"
                   className="text-[10px] text-[var(--text-muted)] text-left hover:text-[var(--text-primary)]"
-                  onClick={() => setShowHamaliBreakdown(showHamaliBreakdown === block.id ? null : block.id)}
+                  onClick={() => userProfile === 'owner' && setShowHamaliBreakdown(showHamaliBreakdown === block.id ? null : block.id)}
                 >
-                  {t('hamali')} {tot.hamaliBreakdown.length > 0 && <span className="text-[var(--text-faint)]">ⓘ</span>}
+                  {t('hamali')} {userProfile === 'owner' && tot.hamaliBreakdown.length > 0 && <span className="text-[var(--text-faint)]">ⓘ</span>}
                 </button>
                 <input
                   type="text"

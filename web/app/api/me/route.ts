@@ -13,6 +13,7 @@ export async function GET() {
       authenticated: true,
       userId: authResult.userId,
       role: authResult.role,
+      profile: authResult.profile,
       shopId: authResult.shopId,
       name: authResult.name,
       email: authResult.email,

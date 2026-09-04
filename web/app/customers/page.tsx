@@ -17,6 +17,7 @@ import { generateOutstandingListPdf, generateCreditLedgerPdf, generateBillsPdf, 
 import { txnToBillData, printBill, BillFormat } from '@/lib/billPrint';
 import DateRangeBar from '../components/DateRangeBar';
 import { fyStartISO, fyEndISO, currentFyStartYear, sliceCustomer, rangeLabel } from '@/lib/dateRange';
+import ProfileGuard from '../components/ProfileGuard';
 
 export default function CustomersPage() {
   const { t, lang } = useI18n();
@@ -375,6 +376,7 @@ export default function CustomersPage() {
   const currentFY = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
 
   return (
+    <ProfileGuard>
     <div className="space-y-4">
       <PageHeader
         title={t('navCustomers')}
@@ -831,5 +833,6 @@ export default function CustomersPage() {
         )
       )}
     </div>
+    </ProfileGuard>
   );
 }

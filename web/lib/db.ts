@@ -150,11 +150,13 @@ async function ensureSchema() {
       clerk_user_id TEXT UNIQUE NOT NULL,
       shop_id UUID REFERENCES shops(id) ON DELETE CASCADE,
       role TEXT NOT NULL DEFAULT 'owner',
+      profile TEXT NOT NULL DEFAULT 'owner',
       name TEXT,
       email TEXT,
       created_at TIMESTAMPTZ DEFAULT now()
     )
   `;
+  await sql`ALTER TABLE shop_users ADD COLUMN IF NOT EXISTS profile TEXT NOT NULL DEFAULT 'owner'`;
   await sql`ALTER TABLE customers ADD COLUMN IF NOT EXISTS shop_id UUID`;
   await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS shop_id UUID`;
   await sql`ALTER TABLE bill_items ADD COLUMN IF NOT EXISTS shop_id UUID`;
@@ -890,13 +892,13 @@ export async function linkUserToDefaultShop(
   const existing = await sql`SELECT id FROM shop_users WHERE clerk_user_id = ${clerkUserId} LIMIT 1`;
   if (existing.length > 0) {
     // Update their shop_id to the default shop
-    await sql`UPDATE shop_users SET shop_id = ${shopId}, role = 'owner', name = ${name || null}, email = ${email || null} WHERE clerk_user_id = ${clerkUserId}`;
+    await sql`UPDATE shop_users SET shop_id = ${shopId}, role = 'owner', profile = 'owner', name = ${name || null}, email = ${email || null} WHERE clerk_user_id = ${clerkUserId}`;
     return shopId;
   }
 
   await sql`
-    INSERT INTO shop_users (clerk_user_id, shop_id, role, name, email)
-    VALUES (${clerkUserId}, ${shopId}, 'owner', ${name || null}, ${email || null})
+    INSERT INTO shop_users (clerk_user_id, shop_id, role, profile, name, email)
+    VALUES (${clerkUserId}, ${shopId}, 'owner', 'owner', ${name || null}, ${email || null})
   `;
   return shopId;
 }
@@ -905,17 +907,21 @@ export async function getOrCreateShop(
   clerkUserId: string,
   email: string,
   name: string,
-): Promise<{ shopId: string | null; role: string }> {
+): Promise<{ shopId: string | null; role: string; profile: string }> {
   await ensureSchema();
   const sql = getSql();
   const rows = await sql`
-    SELECT shop_id, role FROM shop_users WHERE clerk_user_id = ${clerkUserId} LIMIT 1
+    SELECT shop_id, role, profile FROM shop_users WHERE clerk_user_id = ${clerkUserId} LIMIT 1
   `;
   if (rows.length > 0) {
     const r = rows[0] as any;
-    return { shopId: (r.shop_id as string) ?? null, role: (r.role as string) ?? 'owner' };
+    return {
+      shopId: (r.shop_id as string) ?? null,
+      role: (r.role as string) ?? 'owner',
+      profile: (r.profile as string) ?? 'owner',
+    };
   }
-  return { shopId: null, role: 'owner' };
+  return { shopId: null, role: 'owner', profile: 'owner' };
 }
 
 export async function createShop(
@@ -936,10 +942,55 @@ export async function createShop(
   if (!shop) throw new Error('Could not create shop');
   const shopId = (shop as any).id as string;
   await sql`
-    INSERT INTO shop_users (clerk_user_id, shop_id, role, name, email)
-    VALUES (${clerkUserId}, ${shopId}, 'owner', ${name || null}, ${email || null})
+    INSERT INTO shop_users (clerk_user_id, shop_id, role, profile, name, email)
+    VALUES (${clerkUserId}, ${shopId}, 'owner', 'owner', ${name || null}, ${email || null})
   `;
   return shopId;
+}
+
+// ── Data-entry account management ──
+
+// Link a Clerk user (created via Backend API) to a shop as data_entry profile
+export async function linkDataEntryUser(
+  shopId: string,
+  clerkUserId: string,
+  email: string,
+  name: string,
+): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`
+    INSERT INTO shop_users (clerk_user_id, shop_id, role, profile, name, email)
+    VALUES (${clerkUserId}, ${shopId}, 'staff', 'data_entry', ${name || null}, ${email || null})
+    ON CONFLICT (clerk_user_id) DO UPDATE
+      SET shop_id = ${shopId}, profile = 'data_entry', role = 'staff',
+          name = ${name || null}, email = ${email || null}
+  `;
+}
+
+// Get the data-entry user for a shop (if exists)
+export async function getDataEntryUser(shopId: string): Promise<{ clerkUserId: string; email: string; name: string } | null> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql`
+    SELECT clerk_user_id, email, name FROM shop_users
+    WHERE shop_id = ${shopId} AND profile = 'data_entry'
+    LIMIT 1
+  `;
+  if (rows.length === 0) return null;
+  const r = rows[0] as any;
+  return {
+    clerkUserId: r.clerk_user_id as string,
+    email: (r.email as string) || '',
+    name: (r.name as string) || '',
+  };
+}
+
+// Remove the data-entry user link for a shop
+export async function removeDataEntryUser(shopId: string): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`DELETE FROM shop_users WHERE shop_id = ${shopId} AND profile = 'data_entry'`;
 }
 
 export async function getAllShops(): Promise<any[]> {

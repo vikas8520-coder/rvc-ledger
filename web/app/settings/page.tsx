@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useI18n } from '../components/I18nProvider';
+import ProfileGuard from '../components/ProfileGuard';
 
 export default function SettingsPage() {
   const { t } = useI18n();
@@ -47,6 +48,15 @@ export default function SettingsPage() {
   const [subPayments, setSubPayments] = useState<any[]>([]);
   const [subPlans, setSubPlans] = useState<any[]>([]);
 
+  // User profile (owner vs data_entry)
+  const [userProfile, setUserProfile] = useState<'owner' | 'data_entry'>('owner');
+
+  // Data entry account
+  const [deAccount, setDeAccount] = useState<{ exists: boolean; email: string | null } | null>(null);
+  const [deStatus, setDeStatus] = useState<'idle' | 'creating' | 'created' | 'changing' | 'changed' | 'deleting' | 'error'>('idle');
+  const [deCredentials, setDeCredentials] = useState<{ email: string; password: string } | null>(null);
+  const [deError, setDeError] = useState('');
+
   useEffect(() => {
     fetch('/api/settings')
       .then((r) => r.json())
@@ -72,7 +82,74 @@ export default function SettingsPage() {
         if (d.plans) setSubPlans(d.plans);
       })
       .catch(() => {});
+
+    // Load user profile and data-entry account info
+    fetch('/api/me')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.profile) setUserProfile(d.profile);
+        if (d.profile === 'owner' || d.role === 'superadmin') {
+          fetchDeAccount();
+        }
+      })
+      .catch(() => {});
   }, []);
+
+  const fetchDeAccount = () => {
+    fetch('/api/data-entry-account')
+      .then((r) => r.json())
+      .then((d) => setDeAccount({ exists: d.exists, email: d.email }))
+      .catch(() => {});
+  };
+
+  const createDeAccount = async () => {
+    setDeStatus('creating');
+    setDeError('');
+    try {
+      const res = await fetch('/api/data-entry-account', { method: 'POST' });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Failed to create');
+      setDeCredentials({ email: d.email, password: d.password });
+      setDeStatus('created');
+      fetchDeAccount();
+    } catch (e: any) {
+      setDeError(e.message);
+      setDeStatus('error');
+    }
+  };
+
+  const changeDePassword = async () => {
+    setDeStatus('changing');
+    setDeError('');
+    try {
+      const res = await fetch('/api/data-entry-account', { method: 'PATCH' });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Failed to change password');
+      setDeCredentials({ email: deAccount?.email || '', password: d.password });
+      setDeStatus('changed');
+    } catch (e: any) {
+      setDeError(e.message);
+      setDeStatus('error');
+    }
+  };
+
+  const deleteDeAccount = async () => {
+    setDeStatus('deleting');
+    setDeError('');
+    try {
+      const res = await fetch('/api/data-entry-account', { method: 'DELETE' });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || 'Failed to delete');
+      }
+      setDeCredentials(null);
+      setDeStatus('idle');
+      fetchDeAccount();
+    } catch (e: any) {
+      setDeError(e.message);
+      setDeStatus('error');
+    }
+  };
 
   const saveProfile = async () => {
     setProfileStatus('saving');
@@ -190,6 +267,7 @@ export default function SettingsPage() {
   }
 
   return (
+    <ProfileGuard>
     <div className="space-y-5">
       <h1 className="text-lg font-semibold">{t('settings')}</h1>
 
@@ -259,6 +337,76 @@ export default function SettingsPage() {
               )}
             </div>
           )}
+        </section>
+      )}
+
+      {/* Data Entry Account — owner only */}
+      {userProfile === 'owner' && (
+        <section className="rounded-lg bg-[var(--bg-card)] p-4">
+          <h2 className="text-sm font-semibold">Data Entry Account</h2>
+          <p className="mt-1 text-xs text-[var(--text-faint)]">
+            Create a shared login for employees. They can only access Data Entry, Print, and Payment.
+          </p>
+
+          <div className="mt-3 space-y-3">
+            {/* No account yet */}
+            {!deAccount?.exists && deStatus !== 'creating' && (
+              <button
+                onClick={createDeAccount}
+                className="rounded-md bg-[var(--bg-primary)] px-4 py-2 text-sm font-semibold text-[var(--text-on-primary)]"
+              >
+                Create Data Entry Account
+              </button>
+            )}
+
+            {deStatus === 'creating' && (
+              <p className="text-xs text-[var(--text-muted)]">Creating…</p>
+            )}
+
+            {/* Account exists — show credentials */}
+            {deAccount?.exists && (
+              <div className="rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] p-3">
+                <p className="text-xs text-[var(--text-muted)]">Login email:</p>
+                <p className="text-sm font-medium break-all">{deAccount.email}</p>
+
+                {deCredentials && (
+                  <>
+                    <p className="mt-2 text-xs text-[var(--text-muted)]">Password:</p>
+                    <p className="text-sm font-medium font-mono break-all">{deCredentials.password}</p>
+                    <p className="mt-2 text-[11px] text-[var(--text-faint)]">
+                      Share these credentials with your employee. They can log in at the sign-in page.
+                    </p>
+                  </>
+                )}
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    onClick={changeDePassword}
+                    disabled={deStatus === 'changing'}
+                    className="rounded-md bg-[var(--bg-secondary)] px-3 py-1.5 text-xs font-semibold text-[var(--text-on-primary)] disabled:opacity-50"
+                  >
+                    {deStatus === 'changing' ? 'Generating…' : 'Reset Password'}
+                  </button>
+                  <button
+                    onClick={deleteDeAccount}
+                    disabled={deStatus === 'deleting'}
+                    className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-600 disabled:opacity-50"
+                  >
+                    {deStatus === 'deleting' ? 'Deleting…' : 'Delete Account'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {deStatus === 'changed' && deCredentials && (
+              <p className="text-xs text-[var(--bg-success)]">
+                ✓ New password: <span className="font-mono">{deCredentials.password}</span>
+              </p>
+            )}
+            {deError && (
+              <p className="text-xs text-red-500">✗ {deError}</p>
+            )}
+          </div>
         </section>
       )}
 
@@ -489,5 +637,6 @@ export default function SettingsPage() {
         </div>
       </section>
     </div>
+    </ProfileGuard>
   );
 }
