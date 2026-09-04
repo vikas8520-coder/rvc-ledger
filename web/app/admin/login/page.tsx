@@ -43,15 +43,15 @@ export default function AdminLoginPage() {
             <svg className="h-3.5 w-3.5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300">Admin Only</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300">Super Admin Only</span>
           </div>
-          <h1 className="text-xl font-bold text-white">RVC Ledger Admin</h1>
-          <p className="text-sm text-gray-400 mt-1">Superadmin Control Panel</p>
+          <h1 className="text-xl font-bold text-white">RVC Ledger Super Admin</h1>
+          <p className="text-sm text-gray-400 mt-1">Platform Control Panel</p>
         </div>
 
         <form onSubmit={login} className="space-y-4">
           <div>
-            <label className="text-xs text-gray-400">Admin Username</label>
+            <label className="text-xs text-gray-400">Super Admin Username</label>
             <input
               type="text"
               value={username}
@@ -59,11 +59,11 @@ export default function AdminLoginPage() {
               autoComplete="username"
               required
               className="mt-1 w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
-              placeholder="Enter admin username"
+              placeholder="Enter super admin username"
             />
           </div>
           <div>
-            <label className="text-xs text-gray-400">Admin Password</label>
+            <label className="text-xs text-gray-400">Super Admin Password</label>
             <input
               type="password"
               value={password}
@@ -71,7 +71,7 @@ export default function AdminLoginPage() {
               autoComplete="current-password"
               required
               className="mt-1 w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
-              placeholder="Enter admin password"
+              placeholder="Enter super admin password"
             />
           </div>
 
@@ -86,7 +86,7 @@ export default function AdminLoginPage() {
             disabled={loading}
             className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {loading ? 'Logging in…' : 'Admin Login'}
+            {loading ? 'Logging in…' : 'Super Admin Login'}
           </button>
         </form>
 
@@ -96,8 +96,8 @@ export default function AdminLoginPage() {
             This is <strong className="text-gray-400">not</strong> the shop login.
           </p>
           <p className="mt-1 text-[11px] text-gray-500">
-            Shop staff?{' '}
-            <a href="/" className="font-semibold text-blue-400 underline">Click here for Shop Ledger →</a>
+            Shop admin or data entry?{' '}
+            <a href="/sign-in" className="font-semibold text-blue-400 underline">Click here for Shop Login →</a>
           </p>
         </div>
       </div>

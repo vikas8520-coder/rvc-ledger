@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 /**
- * Redirects data-entry users to /entry if they try to access an owner-only page.
- * Usage: wrap owner-only page content with <ProfileGuard>...</ProfileGuard>
+ * Redirects data-entry users to /entry if they try to access an admin-only page.
+ * Usage: wrap admin-only page content with <ProfileGuard>...</ProfileGuard>
  */
 export default function ProfileGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();

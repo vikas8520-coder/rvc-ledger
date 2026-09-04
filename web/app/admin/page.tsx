@@ -107,14 +107,14 @@ export default function AdminPage() {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
         <div className="rounded-xl bg-[var(--bg-card)] p-6 text-center shadow-sm">
-          <h2 className="text-base font-semibold text-[var(--text-primary)]">Admin Access Required</h2>
-          <p className="mt-2 text-sm text-[var(--text-faint)]">This is the admin panel for managing all shops.</p>
+          <h2 className="text-base font-semibold text-[var(--text-primary)]">Super Admin Access Required</h2>
+          <p className="mt-2 text-sm text-[var(--text-faint)]">This is the super admin panel for managing all shops.</p>
           <div className="mt-4 flex flex-col gap-2">
             <button
               onClick={() => router.push('/admin/login')}
               className="rounded-lg bg-[var(--bg-primary)] px-6 py-2.5 text-sm font-semibold text-[var(--text-on-primary)] hover:bg-[var(--bg-primary-hover)]"
             >
-              Login as Admin
+              Login as Super Admin
             </button>
             <Link
               href="/"
@@ -137,7 +137,7 @@ export default function AdminPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Admin Dashboard</h1>
+        <h1 className="text-lg font-semibold">Super Admin Dashboard</h1>
         <button
           onClick={logout}
           className="rounded-md bg-[var(--bg-card)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-card-hover)]"
@@ -343,7 +343,7 @@ function ShopsTab({ shops, plans, onReload, fmtINR }: {
                     {shop.address || 'No address'}{shop.phone ? ` · ${shop.phone}` : ''}
                   </p>
                   <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                    Owner: {shop.owner_name || 'Unknown'} {shop.owner_email ? `· ${shop.owner_email}` : ''}
+                    Admin: {shop.owner_name || 'Unknown'} {shop.owner_email ? `· ${shop.owner_email}` : ''}
                   </p>
                   <p className="text-xs text-[var(--text-muted)] mt-0.5">
                     {shop.customer_count} customers · {shop.txn_count} transactions

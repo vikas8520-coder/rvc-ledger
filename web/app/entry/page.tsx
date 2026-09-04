@@ -301,7 +301,7 @@ export default function EntryPage() {
     return () => window.removeEventListener('focus', onFocus);
   }, []);
 
-  // Fetch user profile (owner vs data_entry)
+  // Fetch user profile (admin vs data_entry)
   useEffect(() => {
     fetch('/api/me')
       .then((r) => r.json())
@@ -1537,7 +1537,7 @@ export default function EntryPage() {
                 onClick={() => setActiveTabId(block.id)}
                 onPointerDown={(e) => {
                   // Hidden: long-press (600ms) the farmer tab name to open commission editor
-                  // Only available to owner profile — data entry users cannot access this
+                  // Only available to admin profile — data entry users cannot access this
                   if (userProfile !== 'owner') return;
                   const name = block.farmerName.trim();
                   if (!name) return;
@@ -2093,7 +2093,7 @@ export default function EntryPage() {
             {/* Charges — compact single row */}
             <div className="flex flex-wrap items-end gap-1.5 rounded-lg bg-[var(--bg-base)] p-1.5 text-xs">
               {/* Hamali — auto-calculated from Bowenpally market rates.
-                  Shows the auto value as placeholder; owner can override by typing.
+                  Shows the auto value as placeholder; admin can override by typing.
                   Click the label to see per-commodity breakdown. */}
               <div className="relative flex flex-col gap-0.5">
                 <button

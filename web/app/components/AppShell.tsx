@@ -146,7 +146,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 Data Entry
               </span>
             )}
-            {/* Desktop nav — owner only */}
+            {/* Desktop nav — admin only */}
             {!isDataEntry && (
               <nav className="hidden lg:flex gap-0.5 text-sm">
                 {renderNav(PRIMARY_NAV, true)}
@@ -157,7 +157,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex shrink-0 items-center justify-end gap-1 sm:gap-1.5">
             <LanguageSwitcher />
             <ThemeToggle />
-            {/* Desktop quick links — owner sees all, data entry sees none (they use bottom bar) */}
+            {/* Desktop quick links — admin sees all, data entry sees none (they use bottom bar) */}
             {!isDataEntry && (
               <>
                 <Link
@@ -183,7 +183,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 </Link>
               </>
             )}
-            {/* Mobile menu toggle — owner only */}
+            {/* Mobile menu toggle — admin only */}
             {!isDataEntry && (
               <button
                 onClick={() => setMenuOpen((v) => !v)}
@@ -222,7 +222,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
-        {/* Secondary desktop nav row — owner only */}
+        {/* Secondary desktop nav row — admin only */}
         {!isDataEntry && (
           <div className="hidden lg:block border-t border-[var(--border-light)]">
             <div className="mx-auto flex max-w-6xl items-center gap-0.5 px-3 py-1 sm:px-5">
@@ -231,7 +231,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         )}
 
-        {/* Mobile dropdown menu — owner only */}
+        {/* Mobile dropdown menu — admin only */}
         {menuOpen && !isDataEntry && (
           <div className="lg:hidden border-t border-[var(--border-light)] bg-[var(--bg-base)]">
             <div className="mx-auto max-w-6xl px-3 py-3 sm:px-5 space-y-1">

@@ -59,7 +59,7 @@ export default function SignInPage() {
                 : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
             }`}
           >
-            Owner Login
+            Admin Login
           </button>
           <button
             onClick={() => setTab('dataentry')}
@@ -88,7 +88,7 @@ export default function SignInPage() {
         ) : (
           <div className="rounded-xl border border-[var(--border-light)] bg-[var(--bg-input)] p-6 shadow-lg">
             <h2 className="text-lg font-semibold text-[var(--bg-primary)]">Data Entry Login</h2>
-            <p className="mt-1 text-xs text-[var(--text-muted)]">Enter the password shared by your shop owner</p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">Enter the password shared by your shop admin</p>
             <form onSubmit={dataEntryLogin} className="mt-4 space-y-4">
               <div>
                 <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Password</label>

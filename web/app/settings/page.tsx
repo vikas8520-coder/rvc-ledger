@@ -362,7 +362,7 @@ export default function SettingsPage() {
         </>
       )}
 
-      {/* Owner-only sections below */}
+      {/* Admin-only sections below */}
       {userProfile !== 'data_entry' && (
         <>
 
@@ -435,7 +435,7 @@ export default function SettingsPage() {
         </section>
       )}
 
-      {/* Data Entry Account — owner only */}
+      {/* Data Entry Account — admin only */}
       {userProfile === 'owner' && (
         <section className="rounded-lg bg-[var(--bg-card)] p-4">
           <h2 className="text-sm font-semibold">Data Entry Profile</h2>
