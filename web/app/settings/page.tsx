@@ -52,9 +52,9 @@ export default function SettingsPage() {
   const [userProfile, setUserProfile] = useState<'owner' | 'data_entry'>('owner');
 
   // Data entry account
-  const [deAccount, setDeAccount] = useState<{ exists: boolean; email: string | null } | null>(null);
+  const [deExists, setDeExists] = useState(false);
   const [deStatus, setDeStatus] = useState<'idle' | 'creating' | 'created' | 'changing' | 'changed' | 'deleting' | 'error'>('idle');
-  const [deCredentials, setDeCredentials] = useState<{ email: string; password: string } | null>(null);
+  const [dePassword, setDePassword] = useState('');
   const [deError, setDeError] = useState('');
 
   useEffect(() => {
@@ -98,7 +98,7 @@ export default function SettingsPage() {
   const fetchDeAccount = () => {
     fetch('/api/data-entry-account')
       .then((r) => r.json())
-      .then((d) => setDeAccount({ exists: d.exists, email: d.email }))
+      .then((d) => setDeExists(!!d.exists))
       .catch(() => {});
   };
 
@@ -109,7 +109,7 @@ export default function SettingsPage() {
       const res = await fetch('/api/data-entry-account', { method: 'POST' });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Failed to create');
-      setDeCredentials({ email: d.email, password: d.password });
+      setDePassword(d.password);
       setDeStatus('created');
       fetchDeAccount();
     } catch (e: any) {
@@ -125,7 +125,7 @@ export default function SettingsPage() {
       const res = await fetch('/api/data-entry-account', { method: 'PATCH' });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Failed to change password');
-      setDeCredentials({ email: deAccount?.email || '', password: d.password });
+      setDePassword(d.password);
       setDeStatus('changed');
     } catch (e: any) {
       setDeError(e.message);
@@ -142,7 +142,7 @@ export default function SettingsPage() {
         const d = await res.json();
         throw new Error(d.error || 'Failed to delete');
       }
-      setDeCredentials(null);
+      setDePassword('');
       setDeStatus('idle');
       fetchDeAccount();
     } catch (e: any) {
@@ -345,17 +345,17 @@ export default function SettingsPage() {
         <section className="rounded-lg bg-[var(--bg-card)] p-4">
           <h2 className="text-sm font-semibold">Data Entry Account</h2>
           <p className="mt-1 text-xs text-[var(--text-faint)]">
-            Create a shared login for employees. They can only access Data Entry, Print, and Payment.
+            Create a shared password for employees. They can only access Data Entry, Print, and Payment.
           </p>
 
           <div className="mt-3 space-y-3">
-            {/* No account yet */}
-            {!deAccount?.exists && deStatus !== 'creating' && (
+            {/* No password set yet */}
+            {!deExists && deStatus !== 'creating' && (
               <button
                 onClick={createDeAccount}
                 className="rounded-md bg-[var(--bg-primary)] px-4 py-2 text-sm font-semibold text-[var(--text-on-primary)]"
               >
-                Create Data Entry Account
+                Create Data Entry Password
               </button>
             )}
 
@@ -363,18 +363,20 @@ export default function SettingsPage() {
               <p className="text-xs text-[var(--text-muted)]">Creating…</p>
             )}
 
-            {/* Account exists — show credentials */}
-            {deAccount?.exists && (
+            {/* Password set — show it */}
+            {deExists && (
               <div className="rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] p-3">
-                <p className="text-xs text-[var(--text-muted)]">Login email:</p>
-                <p className="text-sm font-medium break-all">{deAccount.email}</p>
+                <p className="text-xs text-[var(--text-muted)]">Login URL:</p>
+                <p className="text-sm font-medium break-all">
+                  {typeof window !== 'undefined' ? `${window.location.origin}/data-entry-login` : '/data-entry-login'}
+                </p>
 
-                {deCredentials && (
+                {dePassword && (
                   <>
                     <p className="mt-2 text-xs text-[var(--text-muted)]">Password:</p>
-                    <p className="text-sm font-medium font-mono break-all">{deCredentials.password}</p>
+                    <p className="text-sm font-medium font-mono break-all">{dePassword}</p>
                     <p className="mt-2 text-[11px] text-[var(--text-faint)]">
-                      Share these credentials with your employee. They can log in at the sign-in page.
+                      Share this URL and password with your employee. They don't need an email — just the password.
                     </p>
                   </>
                 )}
@@ -392,15 +394,15 @@ export default function SettingsPage() {
                     disabled={deStatus === 'deleting'}
                     className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-600 disabled:opacity-50"
                   >
-                    {deStatus === 'deleting' ? 'Deleting…' : 'Delete Account'}
+                    {deStatus === 'deleting' ? 'Deleting…' : 'Remove Password'}
                   </button>
                 </div>
               </div>
             )}
 
-            {deStatus === 'changed' && deCredentials && (
+            {deStatus === 'changed' && dePassword && (
               <p className="text-xs text-[var(--bg-success)]">
-                ✓ New password: <span className="font-mono">{deCredentials.password}</span>
+                ✓ New password: <span className="font-mono">{dePassword}</span>
               </p>
             )}
             {deError && (

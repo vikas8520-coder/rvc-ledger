@@ -1,6 +1,6 @@
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { cookies } from 'next/headers';
-import { getOrCreateShop, linkUserToDefaultShop, ensureDefaultShop, isDbConfigured } from './db';
+import { getOrCreateShop, linkUserToDefaultShop, ensureDefaultShop, isDbConfigured, verifyDataEntryPassword } from './db';
 
 export type AuthResult = {
   shopId: string | null;
@@ -20,6 +20,10 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const ADMIN_COOKIE_NAME = 'rvc_admin_session';
 // Session duration: 7 days
 const ADMIN_COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
+
+// Data-entry cookie (backend-only login, no Clerk)
+const DATA_ENTRY_COOKIE_NAME = 'rvc_de_session';
+const DATA_ENTRY_COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
 
 // Check if Clerk is configured with real keys
 function isClerkConfigured(): boolean {
@@ -81,6 +85,39 @@ async function hasAdminCookie(): Promise<boolean> {
   }
 }
 
+// Set data-entry session cookie (call from API route after successful login)
+export async function setDataEntryCookie(shopId: string): Promise<void> {
+  const cookieStore = await cookies();
+  const token = Buffer.from(`${shopId}:${Date.now()}`).toString('base64');
+  cookieStore.set(DATA_ENTRY_COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: DATA_ENTRY_COOKIE_MAX_AGE,
+    path: '/',
+  });
+}
+
+// Clear data-entry session cookie
+export async function clearDataEntryCookie(): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.delete(DATA_ENTRY_COOKIE_NAME);
+}
+
+// Check if the current request has a valid data-entry session cookie
+async function getDataEntryCookieShopId(): Promise<string | null> {
+  const cookieStore = await cookies();
+  const cookie = cookieStore.get(DATA_ENTRY_COOKIE_NAME);
+  if (!cookie?.value) return null;
+  try {
+    const decoded = Buffer.from(cookie.value, 'base64').toString('utf-8');
+    const [shopId] = decoded.split(':');
+    return shopId || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getAuth(): Promise<AuthResult | null> {
   // Check admin cookie first (works with or without Clerk)
   if (await hasAdminCookie()) {
@@ -92,6 +129,19 @@ export async function getAuth(): Promise<AuthResult | null> {
       } catch {}
     }
     return { shopId, role: 'superadmin', profile: 'owner', userId: 'admin', email: '', name: 'Admin' };
+  }
+
+  // Check data-entry cookie (backend-only login, no Clerk needed)
+  const deShopId = await getDataEntryCookieShopId();
+  if (deShopId) {
+    return {
+      shopId: deShopId,
+      role: 'staff',
+      profile: 'data_entry',
+      userId: 'data_entry',
+      email: '',
+      name: 'Data Entry',
+    };
   }
 
   // If Clerk isn't configured at all, return null (no access)

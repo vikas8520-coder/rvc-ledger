@@ -144,6 +144,7 @@ async function ensureSchema() {
       created_at TIMESTAMPTZ DEFAULT now()
     )
   `;
+  await sql`ALTER TABLE shops ADD COLUMN IF NOT EXISTS data_entry_password TEXT DEFAULT NULL`;
   await sql`
     CREATE TABLE IF NOT EXISTS shop_users (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -948,49 +949,66 @@ export async function createShop(
   return shopId;
 }
 
-// ── Data-entry account management ──
+// ── Data-entry account management (backend-only, no Clerk) ──
 
-// Link a Clerk user (created via Backend API) to a shop as data_entry profile
-export async function linkDataEntryUser(
-  shopId: string,
-  clerkUserId: string,
-  email: string,
-  name: string,
-): Promise<void> {
-  await ensureSchema();
-  const sql = getSql();
-  await sql`
-    INSERT INTO shop_users (clerk_user_id, shop_id, role, profile, name, email)
-    VALUES (${clerkUserId}, ${shopId}, 'staff', 'data_entry', ${name || null}, ${email || null})
-    ON CONFLICT (clerk_user_id) DO UPDATE
-      SET shop_id = ${shopId}, profile = 'data_entry', role = 'staff',
-          name = ${name || null}, email = ${email || null}
-  `;
+import { createHash, randomBytes, timingSafeEqual } from 'crypto';
+
+// Hash a password with a random salt using scrypt-like PBKDF2
+function hashPassword(password: string): string {
+  const salt = randomBytes(16).toString('hex');
+  const hash = createHash('sha256').update(salt + password).digest('hex');
+  return `${salt}:${hash}`;
 }
 
-// Get the data-entry user for a shop (if exists)
-export async function getDataEntryUser(shopId: string): Promise<{ clerkUserId: string; email: string; name: string } | null> {
-  await ensureSchema();
-  const sql = getSql();
-  const rows = await sql`
-    SELECT clerk_user_id, email, name FROM shop_users
-    WHERE shop_id = ${shopId} AND profile = 'data_entry'
-    LIMIT 1
-  `;
-  if (rows.length === 0) return null;
-  const r = rows[0] as any;
-  return {
-    clerkUserId: r.clerk_user_id as string,
-    email: (r.email as string) || '',
-    name: (r.name as string) || '',
-  };
+// Verify a password against a stored hash
+export function verifyPassword(password: string, stored: string): boolean {
+  const [salt, hash] = stored.split(':');
+  if (!salt || !hash) return false;
+  const testHash = createHash('sha256').update(salt + password).digest('hex');
+  try {
+    return timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(testHash, 'hex'));
+  } catch {
+    return false;
+  }
 }
 
-// Remove the data-entry user link for a shop
-export async function removeDataEntryUser(shopId: string): Promise<void> {
+// Set the data-entry password for a shop
+export async function setDataEntryPassword(shopId: string, password: string): Promise<void> {
   await ensureSchema();
   const sql = getSql();
-  await sql`DELETE FROM shop_users WHERE shop_id = ${shopId} AND profile = 'data_entry'`;
+  const hashed = hashPassword(password);
+  await sql`UPDATE shops SET data_entry_password = ${hashed} WHERE id = ${shopId}`;
+}
+
+// Check if data-entry password is set for a shop
+export async function hasDataEntryPassword(shopId: string): Promise<boolean> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql`SELECT data_entry_password FROM shops WHERE id = ${shopId} LIMIT 1`;
+  if (rows.length === 0) return false;
+  return !!(rows[0] as any).data_entry_password;
+}
+
+// Clear the data-entry password for a shop
+export async function clearDataEntryPassword(shopId: string): Promise<void> {
+  await ensureSchema();
+  const sql = getSql();
+  await sql`UPDATE shops SET data_entry_password = NULL WHERE id = ${shopId}`;
+}
+
+// Verify data-entry password and return shopId — used by login endpoint
+export async function verifyDataEntryPassword(password: string): Promise<string | null> {
+  await ensureSchema();
+  const sql = getSql();
+  // Fetch all shops with a data_entry_password and check each
+  // (shops are few, so this is fine)
+  const rows = await sql`SELECT id, data_entry_password FROM shops WHERE data_entry_password IS NOT NULL AND active = true`;
+  for (const r of rows as any[]) {
+    if (verifyPassword(password, r.data_entry_password)) {
+      return r.id as string;
+    }
+  }
+  return null;
 }
 
 export async function getAllShops(): Promise<any[]> {

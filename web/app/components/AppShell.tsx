@@ -66,22 +66,29 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const { isLoaded, user, signOut } = useClerkSafe();
   const [menuOpen, setMenuOpen] = useState(false);
   const [userProfile, setUserProfile] = useState<'owner' | 'data_entry'>('owner');
+  const [authChecked, setAuthChecked] = useState(false);
+  const [isDataEntryAuthed, setIsDataEntryAuthed] = useState(false);
 
-  const isAuthPage = path === '/sign-in' || path === '/sign-up' || path === '/onboarding' || path === '/user-profile';
+  const isAuthPage = path === '/sign-in' || path === '/sign-up' || path === '/onboarding' || path === '/user-profile' || path === '/data-entry-login';
   const isAdminPage = path === '/admin' || path.startsWith('/admin/');
 
   useEffect(() => {
-    if (!CLERK_CONFIGURED || !isLoaded || !user || isAuthPage || isAdminPage) return;
+    if (isAuthPage || isAdminPage) return;
+    // Always fetch /api/me — works for both Clerk users and data-entry cookie users
     fetch('/api/me')
       .then((r) => r.json())
       .then((d) => {
-        if (!d.authenticated) return;
-        if (d.profile) setUserProfile(d.profile);
-        if (!d.shopId && d.role !== 'superadmin') {
-          router.push('/onboarding');
+        if (d.authenticated) {
+          if (d.profile) setUserProfile(d.profile);
+          if (d.profile === 'data_entry') setIsDataEntryAuthed(true);
+          // Only redirect to onboarding if no shopId AND not a data_entry user
+          if (!d.shopId && d.role !== 'superadmin' && d.profile !== 'data_entry') {
+            router.push('/onboarding');
+          }
         }
+        setAuthChecked(true);
       })
-      .catch(() => {});
+      .catch(() => setAuthChecked(true));
   }, [isLoaded, user, isAuthPage, path, router]);
 
   // Close mobile menu on route change
@@ -174,7 +181,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 {menuOpen ? <XIcon size={18} /> : <MenuIcon size={18} />}
               </button>
             )}
-            {CLERK_CONFIGURED && (
+            {CLERK_CONFIGURED && !isDataEntry && (
               <UserButton>
                 <UserButton.MenuItems>
                   <UserButton.Link
@@ -186,6 +193,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <UserButton.Action label="signOut" />
                 </UserButton.MenuItems>
               </UserButton>
+            )}
+            {isDataEntry && (
+              <button
+                onClick={async () => {
+                  await fetch('/api/data-entry-logout', { method: 'POST' });
+                  window.location.href = '/data-entry-login';
+                }}
+                className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] text-[var(--text-secondary)]"
+                aria-label="Logout"
+                title="Logout"
+              >
+                <span className="text-xs font-semibold">Logout</span>
+              </button>
             )}
           </div>
         </div>
@@ -261,7 +281,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!user) {
+  // Data-entry users are authed via cookie, not Clerk — let them through
+  if (isDataEntryAuthed) {
+    return <Shell>{children}</Shell>;
+  }
+
+  if (!user && authChecked) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--bg-base)] gap-6 px-4">
         <div className="flex flex-col items-center gap-3">
@@ -282,6 +307,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             Sign up
           </Link>
         </div>
+
+        <Link href="/data-entry-login" className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] underline">
+          Data Entry Login
+        </Link>
 
       </div>
     );
