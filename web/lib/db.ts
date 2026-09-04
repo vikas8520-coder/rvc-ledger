@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { neon, NeonQueryFunction } from '@neondatabase/serverless';
 import { Customer, BillData, BillItem, TxnView, PurchaseData, PurchaseView, Supplier, WastageEntry, CatalogItem, StockLevel, ExpenseEntry, DailySummary, ItemRateHistory, ItemRateEntry, OverdueCustomer } from './types';
 import { decodeMarketNotes, encodeMarketNotes, detectCharge, parseDisplay, type ChargeKind } from './market';
@@ -951,9 +951,7 @@ export async function createShop(
 
 // ── Data-entry account management (backend-only, no Clerk) ──
 
-import { createHash, randomBytes, timingSafeEqual } from 'crypto';
-
-// Hash a password with a random salt using scrypt-like PBKDF2
+// Hash a password with a random salt
 function hashPassword(password: string): string {
   const salt = randomBytes(16).toString('hex');
   const hash = createHash('sha256').update(salt + password).digest('hex');

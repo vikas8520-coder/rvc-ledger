@@ -108,12 +108,13 @@ export default function SettingsPage() {
     try {
       const res = await fetch('/api/data-entry-account', { method: 'POST' });
       const d = await res.json();
-      if (!res.ok) throw new Error(d.error || 'Failed to create');
+      if (!res.ok) throw new Error(d.error || `Failed (HTTP ${res.status})`);
       setDePassword(d.password);
       setDeStatus('created');
       fetchDeAccount();
     } catch (e: any) {
-      setDeError(e.message);
+      const msg = e?.message || String(e) || 'Failed to create';
+      setDeError(msg);
       setDeStatus('error');
     }
   };
@@ -343,7 +344,7 @@ export default function SettingsPage() {
       {/* Data Entry Account — owner only */}
       {userProfile === 'owner' && (
         <section className="rounded-lg bg-[var(--bg-card)] p-4">
-          <h2 className="text-sm font-semibold">Data Entry Account</h2>
+          <h2 className="text-sm font-semibold">Data Entry Profile</h2>
           <p className="mt-1 text-xs text-[var(--text-faint)]">
             Create a shared password for employees. They can only access Data Entry, Print, and Payment.
           </p>
@@ -355,12 +356,16 @@ export default function SettingsPage() {
                 onClick={createDeAccount}
                 className="rounded-md bg-[var(--bg-primary)] px-4 py-2 text-sm font-semibold text-[var(--text-on-primary)]"
               >
-                Create Data Entry Password
+                Create Data Entry Profile
               </button>
             )}
 
             {deStatus === 'creating' && (
               <p className="text-xs text-[var(--text-muted)]">Creating…</p>
+            )}
+
+            {deStatus === 'error' && deError && (
+              <p className="text-xs text-red-500">✗ {deError}</p>
             )}
 
             {/* Password set — show it */}

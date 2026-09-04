@@ -35,7 +35,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, password });
   } catch (e: any) {
     console.error('Set data-entry password error:', e);
-    return NextResponse.json({ error: e.message || 'Failed to set password' }, { status: 500 });
+    const errMsg = e?.message || String(e) || 'Failed to set password';
+    return NextResponse.json({ error: errMsg }, { status: 500 });
   }
 }
 
