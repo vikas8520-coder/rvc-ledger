@@ -126,7 +126,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     })
   );
 
-  const isDataEntry = userProfile === 'data_entry';
+  const isDataEntry = userProfile === 'data_entry' || isDataEntryAuthed;
   const mobileActions = isDataEntry ? MOBILE_ACTIONS_DATA_ENTRY : MOBILE_ACTIONS_OWNER;
 
   const Shell = ({ children: shellChildren }: { children: React.ReactNode }) => (
@@ -140,6 +140,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               </span>
               <span className="hidden sm:inline">{t('appTitle')}</span>
             </Link>
+            {/* Data entry profile badge */}
+            {isDataEntry && (
+              <span className="inline-flex items-center rounded-full bg-[var(--bg-secondary)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--text-on-primary)]">
+                Data Entry
+              </span>
+            )}
             {/* Desktop nav — owner only */}
             {!isDataEntry && (
               <nav className="hidden lg:flex gap-0.5 text-sm">
@@ -151,27 +157,32 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex shrink-0 items-center justify-end gap-1 sm:gap-1.5">
             <LanguageSwitcher />
             <ThemeToggle />
-            <Link
-              href="/entry"
-              className="hidden sm:flex items-center gap-1.5 rounded-lg bg-[var(--bg-primary)] px-3 py-1.5 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-primary-hover)]"
-            >
-              <FileIcon size={14} />
-              {t('navDataEntry')}
-            </Link>
-            <Link
-              href="/print"
-              className="hidden sm:flex items-center gap-1.5 rounded-lg bg-[var(--bg-secondary)] px-3 py-1.5 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-secondary-hover)]"
-            >
-              <PrinterIcon size={14} />
-              {t('navPrint')}
-            </Link>
-            <Link
-              href="/payment"
-              className="hidden sm:flex items-center gap-1.5 rounded-lg bg-[var(--bg-success)] px-3 py-1.5 text-sm text-[var(--text-on-success)] hover:bg-[var(--bg-success-hover)]"
-            >
-              <DollarIcon size={14} />
-              {t('recordPayment')}
-            </Link>
+            {/* Desktop quick links — owner sees all, data entry sees none (they use bottom bar) */}
+            {!isDataEntry && (
+              <>
+                <Link
+                  href="/entry"
+                  className="hidden sm:flex items-center gap-1.5 rounded-lg bg-[var(--bg-primary)] px-3 py-1.5 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-primary-hover)]"
+                >
+                  <FileIcon size={14} />
+                  {t('navDataEntry')}
+                </Link>
+                <Link
+                  href="/print"
+                  className="hidden sm:flex items-center gap-1.5 rounded-lg bg-[var(--bg-secondary)] px-3 py-1.5 text-sm text-[var(--text-on-primary)] hover:bg-[var(--bg-secondary-hover)]"
+                >
+                  <PrinterIcon size={14} />
+                  {t('navPrint')}
+                </Link>
+                <Link
+                  href="/payment"
+                  className="hidden sm:flex items-center gap-1.5 rounded-lg bg-[var(--bg-success)] px-3 py-1.5 text-sm text-[var(--text-on-success)] hover:bg-[var(--bg-success-hover)]"
+                >
+                  <DollarIcon size={14} />
+                  {t('recordPayment')}
+                </Link>
+              </>
+            )}
             {/* Mobile menu toggle — owner only */}
             {!isDataEntry && (
               <button
@@ -201,7 +212,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   await fetch('/api/data-entry-logout', { method: 'POST' });
                   window.location.href = '/data-entry-login';
                 }}
-                className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] text-[var(--text-secondary)]"
+                className="flex min-h-11 items-center justify-center rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] px-3 text-[var(--text-secondary)]"
                 aria-label="Logout"
                 title="Logout"
               >
