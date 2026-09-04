@@ -152,6 +152,14 @@ export async function getAuth(): Promise<AuthResult | null> {
   const { userId, isAuthenticated } = await auth();
   if (!isAuthenticated || !userId) return null;
 
+  // Clerk user is authenticated — clear any stale data-entry cookie
+  // (mutual exclusion: can't be both owner and data-entry at the same time)
+  const cookieStore = await cookies();
+  const deCookie = cookieStore.get('rvc_de_session');
+  if (deCookie?.value) {
+    cookieStore.delete('rvc_de_session');
+  }
+
   const user = await currentUser();
   const email = user?.emailAddresses?.[0]?.emailAddress || '';
   const name = user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username || '';

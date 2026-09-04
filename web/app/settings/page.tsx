@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useI18n } from '../components/I18nProvider';
-import ProfileGuard from '../components/ProfileGuard';
 
 export default function SettingsPage() {
   const { t } = useI18n();
@@ -56,6 +55,12 @@ export default function SettingsPage() {
   const [deStatus, setDeStatus] = useState<'idle' | 'creating' | 'created' | 'changing' | 'changed' | 'deleting' | 'error'>('idle');
   const [dePassword, setDePassword] = useState('');
   const [deError, setDeError] = useState('');
+
+  // Data entry user self-service password change
+  const [deCurrentPw, setDeCurrentPw] = useState('');
+  const [deNewPw, setDeNewPw] = useState('');
+  const [deChangeStatus, setDeChangeStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [deChangeMsg, setDeChangeMsg] = useState('');
 
   useEffect(() => {
     fetch('/api/settings')
@@ -149,6 +154,28 @@ export default function SettingsPage() {
     } catch (e: any) {
       setDeError(e.message);
       setDeStatus('error');
+    }
+  };
+
+  const changeDeOwnPassword = async () => {
+    setDeChangeStatus('saving');
+    setDeChangeMsg('');
+    try {
+      const res = await fetch('/api/data-entry-change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword: deCurrentPw, newPassword: deNewPw }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Failed to change password');
+      setDeChangeStatus('saved');
+      setDeChangeMsg('Password changed successfully');
+      setDeCurrentPw('');
+      setDeNewPw('');
+      setTimeout(() => { setDeChangeStatus('idle'); setDeChangeMsg(''); }, 2000);
+    } catch (e: any) {
+      setDeChangeMsg(e.message);
+      setDeChangeStatus('error');
     }
   };
 
@@ -268,9 +295,76 @@ export default function SettingsPage() {
   }
 
   return (
-    <ProfileGuard>
     <div className="space-y-5">
       <h1 className="text-lg font-semibold">{t('settings')}</h1>
+
+      {/* Data Entry user — self-service password change + logout */}
+      {userProfile === 'data_entry' && (
+        <>
+          <section className="rounded-lg bg-[var(--bg-card)] p-4">
+            <h2 className="text-sm font-semibold">Change Password</h2>
+            <p className="mt-1 text-xs text-[var(--text-faint)]">Change the password you use to log in</p>
+            <div className="mt-3 space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Current Password</label>
+                <input
+                  type="password"
+                  value={deCurrentPw}
+                  onChange={(e) => setDeCurrentPw(e.target.value)}
+                  className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2 text-sm"
+                  placeholder="Enter current password"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">New Password</label>
+                <input
+                  type="password"
+                  value={deNewPw}
+                  onChange={(e) => setDeNewPw(e.target.value)}
+                  className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2 text-sm"
+                  placeholder="Enter new password (min 4 chars)"
+                />
+              </div>
+              <button
+                onClick={changeDeOwnPassword}
+                disabled={deChangeStatus === 'saving' || !deCurrentPw || !deNewPw || deNewPw.length < 4}
+                className="rounded-md bg-[var(--bg-primary)] px-4 py-2 text-sm font-semibold text-[var(--text-on-primary)] disabled:opacity-50"
+              >
+                {deChangeStatus === 'saving' ? 'Saving…' : 'Change Password'}
+              </button>
+              {deChangeStatus === 'saved' && (
+                <p className="text-xs text-[var(--bg-success)]">✓ {deChangeMsg}</p>
+              )}
+              {deChangeStatus === 'error' && (
+                <p className="text-xs text-red-500">✗ {deChangeMsg}</p>
+              )}
+            </div>
+          </section>
+
+          <section className="rounded-lg bg-[var(--bg-card)] p-4">
+            <h2 className="text-sm font-semibold">Language & Theme</h2>
+            <p className="mt-1 text-xs text-[var(--text-faint)]">Use the buttons in the top bar to switch language and theme</p>
+          </section>
+
+          <section className="rounded-lg border border-red-200 bg-red-50 p-4 dark:bg-red-950/20">
+            <h2 className="text-sm font-semibold text-red-600">Logout</h2>
+            <p className="mt-1 text-xs text-[var(--text-faint)]">Sign out of your data entry account</p>
+            <button
+              onClick={async () => {
+                await fetch('/api/data-entry-logout', { method: 'POST' });
+                window.location.href = '/sign-in';
+              }}
+              className="mt-3 rounded-md border border-red-300 px-4 py-2 text-sm font-semibold text-red-600"
+            >
+              Logout
+            </button>
+          </section>
+        </>
+      )}
+
+      {/* Owner-only sections below */}
+      {userProfile !== 'data_entry' && (
+        <>
 
       {/* Subscription Status */}
       {subStatus && (
@@ -643,7 +737,8 @@ export default function SettingsPage() {
           )}
         </div>
       </section>
+        </>
+      )}
     </div>
-    </ProfileGuard>
   );
 }

@@ -210,7 +210,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <button
                 onClick={async () => {
                   await fetch('/api/data-entry-logout', { method: 'POST' });
-                  window.location.href = '/data-entry-login';
+                  window.location.href = '/sign-in';
                 }}
                 className="flex min-h-11 items-center justify-center rounded-lg border border-[var(--border-input)] bg-[var(--bg-card)] px-3 text-[var(--text-secondary)]"
                 aria-label="Logout"
@@ -334,10 +334,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             Sign up
           </Link>
         </div>
-
-        <Link href="/data-entry-login" className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] underline">
-          Data Entry Login
-        </Link>
 
       </div>
     );

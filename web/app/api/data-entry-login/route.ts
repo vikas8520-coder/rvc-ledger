@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { setDataEntryCookie } from '@/lib/auth';
+import { cookies } from 'next/headers';
+import { setDataEntryCookie, clearAdminCookie } from '@/lib/auth';
 import { verifyDataEntryPassword, isDbConfigured } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -21,6 +22,16 @@ export async function POST(req: Request) {
     if (!shopId) {
       console.error('Data-entry login: no shop matched for provided password');
       return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
+    }
+
+    // Clear admin cookie (mutual exclusion)
+    await clearAdminCookie();
+
+    // Clear Clerk session cookie by setting it to expire immediately
+    // Clerk uses __clerk_db_jwt and __clerk_jwt cookies
+    const cookieStore = await cookies();
+    for (const name of ['__clerk_db_jwt', '__clerk_jwt', '__client_uat']) {
+      cookieStore.set(name, '', { maxAge: 0, path: '/' });
     }
 
     await setDataEntryCookie(shopId);
