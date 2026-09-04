@@ -105,12 +105,6 @@ export default function FarmersPage() {
         <StatCard label={t('totalBags')} value={String(totalBags)} icon={<PackageIcon size={14} />} />
       </div>
 
-      {commissionPct != null && (
-        <p className="text-xs text-[var(--text-muted)]">
-          {t('commissionEarned')}: {commissionPct}% · {t('netPayable')} = {t('fySales')} − {t('commissionEarned')} − {t('hamali')}
-        </p>
-      )}
-
       {/* Search + Add */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
