@@ -13,8 +13,8 @@ import { fmt } from '@/lib/format';
 import { computeAging, customersCsv, downloadCsv, reminderText, statementText, waLink } from '@/lib/statement';
 import { printCreditLedger, CreditLedgerEntry, ShopProfile } from '@/lib/billPrint';
 import { OverdueCustomer } from '@/lib/types';
-import { generateOutstandingListPdf, generateCreditLedgerPdf, generateBillsPdf, generateStatementPdf, printPdfBlob } from '@/lib/pdfShare';
-import { txnToBillData } from '@/lib/billPrint';
+import { generateOutstandingListPdf, generateCreditLedgerPdf, generateBillsPdf, generateStatementPdf, printPdfBlob, sharePdfViaWhatsApp } from '@/lib/pdfShare';
+import { txnToBillData, printBill, BillFormat } from '@/lib/billPrint';
 import DateRangeBar from '../components/DateRangeBar';
 import { fyStartISO, fyEndISO, currentFyStartYear, sliceCustomer, rangeLabel } from '@/lib/dateRange';
 
@@ -32,6 +32,7 @@ export default function CustomersPage() {
   const [showLedgerMenu, setShowLedgerMenu] = useState(false);
   const [ledgerStatus, setLedgerStatus] = useState<'idle' | 'generating' | 'sharing'>('idle');
   const [openCustomerMenu, setOpenCustomerMenu] = useState<string | null>(null);
+  const [shareTxnId, setShareTxnId] = useState<string | null>(null);
   const fyYear = currentFyStartYear();
   const [from, setFrom] = useState(fyStartISO(fyYear));
   const [to, setTo] = useState(fyEndISO(fyYear));
@@ -654,6 +655,7 @@ export default function CustomersPage() {
                     <th className="px-2 py-2 pr-2 text-right">Rate</th>
                     <th className="px-2 py-2 pr-2 text-right">Amount</th>
                     <th className="px-2 py-2 pr-2">Type</th>
+                    <th className="px-2 py-2 pr-2"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -686,6 +688,51 @@ export default function CustomersPage() {
                             </span>
                           </td>
                         ) : null}
+                        {i === 0 ? (
+                          <td className="px-2 py-2 pr-2" rowSpan={items.length}>
+                            <span className="relative">
+                              <button
+                                onClick={(e) => { e.preventDefault(); setShareTxnId(shareTxnId === txn.id ? null : txn.id); }}
+                                className="text-[var(--bg-primary)] hover:bg-[var(--bg-base)] rounded p-0.5"
+                                title="Print / Share"
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline-block',verticalAlign:'middle'}}>
+                                  <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                                </svg>
+                              </button>
+                              {shareTxnId === txn.id && (
+                                <span className="absolute right-0 top-4 z-10 flex max-w-[min(12rem,90vw)] flex-col gap-0.5 rounded-md border border-[var(--border-light)] bg-[var(--bg-input)] p-1 shadow-lg" onClick={(e) => e.preventDefault()}>
+                                  {(['simple', 'itemized', 'market', 'patti'] as BillFormat[]).map((f) => (
+                                    <div key={f} className="flex gap-0.5">
+                                      <button
+                                        onClick={(e) => { e.preventDefault(); printBill(txnToBillData(txn, displayName), shopSettings, f); setShareTxnId(null); }}
+                                        className="flex-1 whitespace-nowrap rounded px-2 py-1 text-left text-[10px] hover:bg-[var(--bg-card)]"
+                                      >
+                                        🖳 {f}
+                                      </button>
+                                      <button
+                                        onClick={async (e) => {
+                                          e.preventDefault();
+                                          const bill = txnToBillData(txn, displayName);
+                                          const pdfFormat = (f === 'market' ? 'itemized' : f) as 'simple' | 'itemized' | 'patti';
+                                          const blob = generateBillsPdf([bill], shopSettings, pdfFormat);
+                                          await sharePdfViaWhatsApp(blob, `${f}-${txn.id}.pdf`, `${shopSettings.shopName || 'RVC'} — ${displayName} — ₹${txn.amount}`);
+                                          setShareTxnId(null);
+                                        }}
+                                        className="whitespace-nowrap rounded px-2 py-1 text-left text-[10px] hover:bg-[var(--bg-card)]"
+                                        style={{color:'#25D366'}}
+                                      >
+                                        WA
+                                      </button>
+                                    </div>
+                                  ))}
+                                  <button onClick={(e) => { e.preventDefault(); setShareTxnId(null); }} className="whitespace-nowrap rounded px-2 py-1 text-left text-[10px] text-[var(--text-muted)] hover:bg-[var(--bg-card)]">✕ Cancel</button>
+                                </span>
+                              )}
+                            </span>
+                          </td>
+                        ) : null}
                       </tr>
                     )) : (
                       <tr key={txn.id} className="border-b border-[var(--border-light)] hover:bg-[var(--bg-card-hover)] transition-colors">
@@ -703,6 +750,75 @@ export default function CustomersPage() {
                         <td className="px-2 py-2 pr-2">
                           <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${txn.type === 'payment' ? 'bg-[var(--bg-success)] text-[var(--text-on-primary)]' : isCash ? 'bg-[var(--bg-card-hover)] text-[var(--text-muted)]' : 'bg-[var(--bg-primary)] text-[var(--text-on-primary)]'}`}>
                             {txn.type === 'payment' ? 'Payment' : isCash ? 'Cash' : 'Credit'}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 pr-2">
+                          <span className="relative">
+                            <button
+                              onClick={(e) => { e.preventDefault(); setShareTxnId(shareTxnId === txn.id ? null : txn.id); }}
+                              className="text-[var(--bg-primary)] hover:bg-[var(--bg-base)] rounded p-0.5"
+                              title="Print / Share"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline-block',verticalAlign:'middle'}}>
+                                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                              </svg>
+                            </button>
+                            {shareTxnId === txn.id && (
+                              <span className="absolute right-0 top-4 z-10 flex max-w-[min(12rem,90vw)] flex-col gap-0.5 rounded-md border border-[var(--border-light)] bg-[var(--bg-input)] p-1 shadow-lg" onClick={(e) => e.preventDefault()}>
+                                {txn.type === 'payment' ? (
+                                  <>
+                                    <button
+                                      onClick={(e) => { e.preventDefault(); printBill(txnToBillData(txn, displayName), shopSettings, 'simple'); setShareTxnId(null); }}
+                                      className="flex-1 whitespace-nowrap rounded px-2 py-1 text-left text-[10px] hover:bg-[var(--bg-card)]"
+                                    >
+                                      🖳 Print Receipt
+                                    </button>
+                                    <button
+                                      onClick={async (e) => {
+                                        e.preventDefault();
+                                        const bill = txnToBillData(txn, displayName);
+                                        const blob = generateBillsPdf([bill], shopSettings, 'simple');
+                                        await sharePdfViaWhatsApp(blob, `receipt-${txn.id}.pdf`, `${shopSettings.shopName || 'RVC'} — ${displayName} — Payment ₹${txn.amount}`);
+                                        setShareTxnId(null);
+                                      }}
+                                      className="flex-1 whitespace-nowrap rounded px-2 py-1 text-left text-[10px] hover:bg-[var(--bg-card)]"
+                                      style={{color:'#25D366'}}
+                                    >
+                                      WhatsApp
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    {(['simple', 'itemized', 'market', 'patti'] as BillFormat[]).map((f) => (
+                                      <div key={f} className="flex gap-0.5">
+                                        <button
+                                          onClick={(e) => { e.preventDefault(); printBill(txnToBillData(txn, displayName), shopSettings, f); setShareTxnId(null); }}
+                                          className="flex-1 whitespace-nowrap rounded px-2 py-1 text-left text-[10px] hover:bg-[var(--bg-card)]"
+                                        >
+                                          🖳 {f}
+                                        </button>
+                                        <button
+                                          onClick={async (e) => {
+                                            e.preventDefault();
+                                            const bill = txnToBillData(txn, displayName);
+                                            const pdfFormat = (f === 'market' ? 'itemized' : f) as 'simple' | 'itemized' | 'patti';
+                                            const blob = generateBillsPdf([bill], shopSettings, pdfFormat);
+                                            await sharePdfViaWhatsApp(blob, `${f}-${txn.id}.pdf`, `${shopSettings.shopName || 'RVC'} — ${displayName} — ₹${txn.amount}`);
+                                            setShareTxnId(null);
+                                          }}
+                                          className="whitespace-nowrap rounded px-2 py-1 text-left text-[10px] hover:bg-[var(--bg-card)]"
+                                          style={{color:'#25D366'}}
+                                        >
+                                          WA
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </>
+                                )}
+                                <button onClick={(e) => { e.preventDefault(); setShareTxnId(null); }} className="whitespace-nowrap rounded px-2 py-1 text-left text-[10px] text-[var(--text-muted)] hover:bg-[var(--bg-card)]">✕ Cancel</button>
+                              </span>
+                            )}
                           </span>
                         </td>
                       </tr>
