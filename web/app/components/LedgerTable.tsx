@@ -189,6 +189,7 @@ export default function LedgerTable({
             <th className="w-[70px] px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">{t('rate')}</th>
             <th className="w-[90px] px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">{t('debit')}</th>
             <th className="w-[90px] px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">{t('credit')}</th>
+            <th className="w-[35px] px-1 py-2.5"></th>
             <th className="w-[100px] px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide">{t('balanceAfter')}</th>
             <th className="w-[45px] px-2 py-2.5"></th>
           </tr>
@@ -216,12 +217,9 @@ export default function LedgerTable({
                   <td className="px-3 py-1.5 text-right tabular-nums text-[var(--bg-success)]">
                     {r.credit > 0 ? fmt(r.credit) : ''}
                   </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-[var(--text-secondary)]">
-                    {r.balance !== null ? fmt(r.balance) : ''}
-                  </td>
-                  <td className="px-2 py-1.5 text-right whitespace-nowrap">
-                    {isLastOfTxn && !r.isPayment && !r.isOpening && shop && (
-                      <span className="relative mr-1">
+                  <td className="px-1 py-1.5 text-center whitespace-nowrap">
+                    {isLastOfTxn && !r.isOpening && shop && (
+                      <span className="relative">
                         <button
                           onClick={() => setPrintMenuTxn(printMenuTxn === r.txnId ? null : r.txnId)}
                           className="text-[var(--bg-primary)] hover:bg-[var(--bg-base)] rounded p-0.5"
@@ -234,38 +232,75 @@ export default function LedgerTable({
                         </button>
                         {printMenuTxn === r.txnId && (
                           <span className="absolute right-0 top-4 z-10 flex max-w-[min(12rem,90vw)] flex-col gap-0.5 rounded-md border border-[var(--border-light)] bg-[var(--bg-input)] p-1 shadow-lg">
-                            {(['simple', 'itemized', 'market', 'patti'] as BillFormat[]).map((f) => (
-                              <div key={f} className="flex gap-0.5">
+                            {r.isPayment ? (
+                              <>
                                 <button
                                   onClick={() => {
                                     const txn = customer.txns.find((tx) => tx.id === r.txnId);
-                                    if (txn) printBill(txnToBillData(txn, formatCustomerName(customer, uiLang)), shop, f);
+                                    if (txn) {
+                                      const bill = txnToBillData(txn, formatCustomerName(customer, uiLang));
+                                      printBill(bill, shop, 'simple');
+                                    }
                                     setPrintMenuTxn(null);
                                   }}
                                   className="flex-1 whitespace-nowrap rounded px-2 py-1 text-left text-[10px] hover:bg-[var(--bg-card)]"
                                 >
-                                  🖨 {t(`billFormat${f.charAt(0).toUpperCase() + f.slice(1)}` as any)}
+                                  🖳 Print Receipt
                                 </button>
                                 <button
                                   onClick={async () => {
                                     const txn = customer.txns.find((tx) => tx.id === r.txnId);
                                     if (txn) {
                                       const bill = txnToBillData(txn, formatCustomerName(customer, uiLang));
-                                      const pdfFormat = (f === 'market' ? 'itemized' : f) as 'simple' | 'itemized' | 'patti';
-                                      const blob = generateBillsPdf([bill], shop, pdfFormat);
-                                      const filename = `${f}-${r.txnId}.pdf`;
-                                      const text = `${shop.shopName || 'RVC'} — ${formatCustomerName(customer, uiLang)} — ₹${txn.amount}`;
+                                      const blob = generateBillsPdf([bill], shop, 'simple');
+                                      const filename = `receipt-${r.txnId}.pdf`;
+                                      const text = `${shop.shopName || 'RVC'} — ${formatCustomerName(customer, uiLang)} — Payment ₹${txn.amount}`;
                                       await sharePdfViaWhatsApp(blob, filename, text);
                                     }
                                     setPrintMenuTxn(null);
                                   }}
-                                  className="whitespace-nowrap rounded px-2 py-1 text-left text-[10px] hover:bg-[var(--bg-card)]"
+                                  className="flex-1 whitespace-nowrap rounded px-2 py-1 text-left text-[10px] hover:bg-[var(--bg-card)]"
                                   style={{color:'#25D366'}}
                                 >
-                                  WA
+                                  WhatsApp
                                 </button>
-                              </div>
-                            ))}
+                              </>
+                            ) : (
+                              <>
+                                {(['simple', 'itemized', 'market', 'patti'] as BillFormat[]).map((f) => (
+                                  <div key={f} className="flex gap-0.5">
+                                    <button
+                                      onClick={() => {
+                                        const txn = customer.txns.find((tx) => tx.id === r.txnId);
+                                        if (txn) printBill(txnToBillData(txn, formatCustomerName(customer, uiLang)), shop, f);
+                                        setPrintMenuTxn(null);
+                                      }}
+                                      className="flex-1 whitespace-nowrap rounded px-2 py-1 text-left text-[10px] hover:bg-[var(--bg-card)]"
+                                    >
+                                      🖳 {t(`billFormat${f.charAt(0).toUpperCase() + f.slice(1)}` as any)}
+                                    </button>
+                                    <button
+                                      onClick={async () => {
+                                        const txn = customer.txns.find((tx) => tx.id === r.txnId);
+                                        if (txn) {
+                                          const bill = txnToBillData(txn, formatCustomerName(customer, uiLang));
+                                          const pdfFormat = (f === 'market' ? 'itemized' : f) as 'simple' | 'itemized' | 'patti';
+                                          const blob = generateBillsPdf([bill], shop, pdfFormat);
+                                          const filename = `${f}-${r.txnId}.pdf`;
+                                          const text = `${shop.shopName || 'RVC'} — ${formatCustomerName(customer, uiLang)} — ₹${txn.amount}`;
+                                          await sharePdfViaWhatsApp(blob, filename, text);
+                                        }
+                                        setPrintMenuTxn(null);
+                                      }}
+                                      className="whitespace-nowrap rounded px-2 py-1 text-left text-[10px] hover:bg-[var(--bg-card)]"
+                                      style={{color:'#25D366'}}
+                                    >
+                                      WA
+                                    </button>
+                                  </div>
+                                ))}
+                              </>
+                            )}
                             <button
                               onClick={() => setPrintMenuTxn(null)}
                               className="whitespace-nowrap rounded px-2 py-1 text-left text-[10px] text-[var(--text-muted)] hover:bg-[var(--bg-card)]"
@@ -276,6 +311,11 @@ export default function LedgerTable({
                         )}
                       </span>
                     )}
+                  </td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-[var(--text-secondary)]">
+                    {r.balance !== null ? fmt(r.balance) : ''}
+                  </td>
+                  <td className="px-2 py-1.5 text-right whitespace-nowrap">
                     {isLastOfTxn && !r.isOpening && !readOnly && <DeleteButton id={r.txnId} />}
                   </td>
                 </tr>
@@ -295,6 +335,7 @@ export default function LedgerTable({
                 <td className="px-3 py-1 text-right tabular-nums text-[var(--text-muted)]">{r.rate}</td>
                 <td className="px-3 py-1 text-right tabular-nums">{fmt(r.debit)}</td>
                 <td className="px-3 py-1 text-right tabular-nums text-[var(--bg-success)]"></td>
+                <td className="px-1 py-1"></td>
                 <td className="px-3 py-1 text-right tabular-nums text-[var(--border-input)]"></td>
                 <td className="px-2 py-1"></td>
               </tr>
@@ -304,11 +345,12 @@ export default function LedgerTable({
         {/* Footer totals */}
         <tfoot>
           <tr className="border-t-2 border-[var(--bg-primary)] bg-[var(--bg-base)] font-bold">
-            <td colSpan={4} className="px-3 py-2 text-right text-xs uppercase tracking-wide text-[var(--text-muted)]">
+            <td colSpan={5} className="px-3 py-2 text-right text-xs uppercase tracking-wide text-[var(--text-muted)]">
               {t('total')}
             </td>
             <td className="px-3 py-2 text-right tabular-nums text-[var(--text-primary)]">{fmt(totalDebit)}</td>
             <td className="px-3 py-2 text-right tabular-nums text-[var(--bg-success)]">{fmt(totalCredit)}</td>
+            <td></td>
             <td className="px-3 py-2 text-right tabular-nums text-[var(--bg-primary)]">{fmt(closingBalance)}</td>
             <td></td>
           </tr>
