@@ -30,7 +30,13 @@ export async function POST(req: Request) {
     const customPassword = body.password as string | undefined;
 
     const password = customPassword || generatePassword(8);
+    console.log('Setting data-entry password for shop:', auth.shopId, 'password length:', password.length);
     await setDataEntryPassword(auth.shopId!, password);
+    console.log('Data-entry password set successfully');
+
+    // Verify it was saved
+    const saved = await hasDataEntryPassword(auth.shopId!);
+    console.log('Verification — password exists in DB:', saved);
 
     return NextResponse.json({ success: true, password });
   } catch (e: any) {
