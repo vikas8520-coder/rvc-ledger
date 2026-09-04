@@ -75,6 +75,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isAuthPage || isAdminPage) return;
     // Always fetch /api/me — works for both Clerk users and data-entry cookie users
+    // Don't wait for Clerk isLoaded — data-entry users don't have Clerk sessions
     fetch('/api/me')
       .then((r) => r.json())
       .then((d) => {
@@ -89,7 +90,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         setAuthChecked(true);
       })
       .catch(() => setAuthChecked(true));
-  }, [isLoaded, user, isAuthPage, path, router]);
+  }, [isAuthPage, isAdminPage, path, router]);
 
   // Close mobile menu on route change
   useEffect(() => {
@@ -268,7 +269,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return <Shell>{children}</Shell>;
   }
 
-  if (!isLoaded) {
+  // Wait for /api/me to complete before deciding what to show
+  // (data-entry users don't have a Clerk user, so we need the cookie check first)
+  if (!authChecked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--bg-base)]">
         <div className="flex flex-col items-center gap-3">
@@ -286,7 +289,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return <Shell>{children}</Shell>;
   }
 
-  if (!user && authChecked) {
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-base)]">
+        <div className="flex flex-col items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--bg-primary)] text-sm font-bold text-[var(--text-on-primary)] animate-pulse">
+            RVC
+          </span>
+          <p className="text-sm text-[var(--text-faint)]">Loading…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--bg-base)] gap-6 px-4">
         <div className="flex flex-col items-center gap-3">
