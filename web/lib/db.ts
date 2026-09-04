@@ -1,4 +1,4 @@
-import { randomUUID, createHash, randomBytes, timingSafeEqual } from 'crypto';
+import { randomUUID, createHash, randomBytes } from 'crypto';
 import { neon, NeonQueryFunction } from '@neondatabase/serverless';
 import { Customer, BillData, BillItem, TxnView, PurchaseData, PurchaseView, Supplier, WastageEntry, CatalogItem, StockLevel, ExpenseEntry, DailySummary, ItemRateHistory, ItemRateEntry, OverdueCustomer } from './types';
 import { decodeMarketNotes, encodeMarketNotes, detectCharge, parseDisplay, type ChargeKind } from './market';
@@ -960,14 +960,12 @@ function hashPassword(password: string): string {
 
 // Verify a password against a stored hash
 export function verifyPassword(password: string, stored: string): boolean {
+  if (!stored) return false;
   const [salt, hash] = stored.split(':');
   if (!salt || !hash) return false;
   const testHash = createHash('sha256').update(salt + password).digest('hex');
-  try {
-    return timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(testHash, 'hex'));
-  } catch {
-    return false;
-  }
+  // Simple string comparison — timingSafeEqual throws on different-length buffers
+  return hash === testHash;
 }
 
 // Set the data-entry password for a shop
