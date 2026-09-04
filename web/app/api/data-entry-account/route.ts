@@ -36,12 +36,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Data entry account already exists. Use PATCH to change password.' }, { status: 409 });
     }
 
-    // Auto-generate email: dataentry.<shopId-prefix>@rvc-ledger.app
+    // Auto-generate email using the owner's email domain
+    // Clerk requires a valid-looking email; use gmail.com as fallback
     const shopPrefix = auth.shopId!.slice(0, 8).toLowerCase();
-    const email = `dataentry.${shopPrefix}@rvc-ledger.app`;
+    const ownerDomain = auth.email.split('@')[1] || 'gmail.com';
+    const email = `rvc.dataentry.${shopPrefix}@${ownerDomain}`;
 
-    // Auto-generate password if not provided: 8 chars, alphanumeric
-    const password = customPassword || generatePassword(10);
+    // Auto-generate password if not provided: 12 chars, mixed case + digits
+    // Clerk requires min 8 chars, not in hacked passwords list
+    const password = customPassword || generatePassword(12);
 
     // Create Clerk user via Backend API
     const client = await clerkClient();
@@ -64,7 +67,9 @@ export async function POST(req: Request) {
     });
   } catch (e: any) {
     console.error('Create data-entry account error:', e);
-    return NextResponse.json({ error: e.message || 'Failed to create data entry account' }, { status: 500 });
+    // Extract the most useful error message from Clerk's error structure
+    const errMsg = e?.errors?.[0]?.message || e?.message || 'Failed to create data entry account';
+    return NextResponse.json({ error: errMsg }, { status: 500 });
   }
 }
 
@@ -93,7 +98,8 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ success: true, password });
   } catch (e: any) {
     console.error('Change data-entry password error:', e);
-    return NextResponse.json({ error: e.message || 'Failed to change password' }, { status: 500 });
+    const errMsg = e?.errors?.[0]?.message || e?.message || 'Failed to change password';
+    return NextResponse.json({ error: errMsg }, { status: 500 });
   }
 }
 
@@ -124,12 +130,20 @@ export async function DELETE() {
   }
 }
 
-// Generate a random password: lowercase + digits, easy to share verbally
+// Generate a random password: mixed case + digits, easy to share verbally
 function generatePassword(length: number): string {
-  const chars = 'abcdefghijkmnpqrstuvwxyz23456789';
+  const lower = 'abcdefghijkmnpqrstuvwxyz';
+  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const digits = '23456789';
+  const all = lower + upper + digits;
   let result = '';
-  for (let i = 0; i < length; i++) {
-    result += chars[Math.floor(Math.random() * chars.length)];
+  // Ensure at least one of each type for password requirements
+  result += lower[Math.floor(Math.random() * lower.length)];
+  result += upper[Math.floor(Math.random() * upper.length)];
+  result += digits[Math.floor(Math.random() * digits.length)];
+  for (let i = 3; i < length; i++) {
+    result += all[Math.floor(Math.random() * all.length)];
   }
-  return result;
+  // Shuffle
+  return result.split('').sort(() => Math.random() - 0.5).join('');
 }
