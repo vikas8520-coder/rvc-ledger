@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import { requireShopAuth, AuthError } from '@/lib/auth';
-import { setDataEntryPassword, hasDataEntryPassword, clearDataEntryPassword } from '@/lib/db';
+import { setDataEntryPassword, hasDataEntryPassword, clearDataEntryPassword, getShopNumber } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-// GET — check if data-entry password is set for this shop
+// GET — check if data-entry password is set, and return shop number
 export async function GET() {
   try {
     const auth = await requireShopAuth();
@@ -12,13 +12,14 @@ export async function GET() {
       return NextResponse.json({ error: 'Owner access required' }, { status: 403 });
     }
     const exists = await hasDataEntryPassword(auth.shopId!);
-    return NextResponse.json({ exists });
+    const shopNumber = await getShopNumber(auth.shopId!);
+    return NextResponse.json({ exists, shopNumber });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: e instanceof AuthError ? e.status : 500 });
   }
 }
 
-// POST — set data-entry password (auto-generate if not provided)
+// POST — set data-entry password (admin must provide shop number + password manually)
 export async function POST(req: Request) {
   try {
     const auth = await requireShopAuth();
@@ -27,18 +28,19 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const customPassword = body.password as string | undefined;
+    const shopNumber = (body.shopNumber as string || '').trim();
+    const password = (body.password as string || '').trim();
 
-    const password = customPassword || generatePassword(8);
-    console.log('Setting data-entry password for shop:', auth.shopId, 'password length:', password.length);
-    await setDataEntryPassword(auth.shopId!, password);
-    console.log('Data-entry password set successfully');
+    if (!shopNumber) {
+      return NextResponse.json({ error: 'Shop number is required (e.g. B-11)' }, { status: 400 });
+    }
+    if (!password || password.length < 4) {
+      return NextResponse.json({ error: 'Password is required (min 4 characters)' }, { status: 400 });
+    }
 
-    // Verify it was saved
-    const saved = await hasDataEntryPassword(auth.shopId!);
-    console.log('Verification — password exists in DB:', saved);
+    await setDataEntryPassword(auth.shopId!, password, shopNumber);
 
-    return NextResponse.json({ success: true, password });
+    return NextResponse.json({ success: true, shopNumber, password });
   } catch (e: any) {
     console.error('Set data-entry password error:', e);
     const errMsg = e?.message || String(e) || 'Failed to set password';
@@ -46,7 +48,7 @@ export async function POST(req: Request) {
   }
 }
 
-// PATCH — change data-entry password (auto-generate if not provided)
+// PATCH — change data-entry password (admin must provide shop number + new password)
 export async function PATCH(req: Request) {
   try {
     const auth = await requireShopAuth();
@@ -55,12 +57,19 @@ export async function PATCH(req: Request) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const customPassword = body.password as string | undefined;
+    const shopNumber = (body.shopNumber as string || '').trim();
+    const password = (body.password as string || '').trim();
 
-    const password = customPassword || generatePassword(8);
-    await setDataEntryPassword(auth.shopId!, password);
+    if (!shopNumber) {
+      return NextResponse.json({ error: 'Shop number is required' }, { status: 400 });
+    }
+    if (!password || password.length < 4) {
+      return NextResponse.json({ error: 'Password is required (min 4 characters)' }, { status: 400 });
+    }
 
-    return NextResponse.json({ success: true, password });
+    await setDataEntryPassword(auth.shopId!, password, shopNumber);
+
+    return NextResponse.json({ success: true, shopNumber, password });
   } catch (e: any) {
     console.error('Change data-entry password error:', e);
     return NextResponse.json({ error: e.message || 'Failed to change password' }, { status: 500 });
@@ -81,14 +90,4 @@ export async function DELETE() {
     console.error('Delete data-entry password error:', e);
     return NextResponse.json({ error: e.message || 'Failed to delete' }, { status: 500 });
   }
-}
-
-// Generate a random password: lowercase + digits, easy to share verbally
-function generatePassword(length: number): string {
-  const chars = 'abcdefghijkmnpqrstuvwxyz23456789';
-  let result = '';
-  for (let i = 0; i < length; i++) {
-    result += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return result;
 }

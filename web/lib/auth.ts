@@ -1,6 +1,6 @@
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { cookies } from 'next/headers';
-import { getOrCreateShop, linkUserToDefaultShop, ensureDefaultShop, isDbConfigured, verifyDataEntryPassword } from './db';
+import { getOrCreateShop, linkUserToDefaultShop, ensureDefaultShop, isDbConfigured } from './db';
 
 export type AuthResult = {
   shopId: string | null;

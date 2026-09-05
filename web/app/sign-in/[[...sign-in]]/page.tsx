@@ -2,11 +2,10 @@
 
 import { useState } from 'react';
 import { SignIn } from '@clerk/nextjs';
-import { useRouter } from 'next/navigation';
 
 export default function SignInPage() {
-  const router = useRouter();
   const [tab, setTab] = useState<'owner' | 'dataentry'>('owner');
+  const [deShopNumber, setDeShopNumber] = useState('');
   const [dePassword, setDePassword] = useState('');
   const [deError, setDeError] = useState('');
   const [deLoading, setDeLoading] = useState(false);
@@ -16,13 +15,10 @@ export default function SignInPage() {
     setDeLoading(true);
     setDeError('');
     try {
-      // Clear any existing Clerk session first
-      // (can't call signOut here since we're not in Clerk context,
-      // but the API will set the data-entry cookie which takes priority)
       const r = await fetch('/api/data-entry-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: dePassword }),
+        body: JSON.stringify({ shopNumber: deShopNumber, password: dePassword }),
       });
       const d = await r.json();
       if (d.error) {
@@ -88,15 +84,26 @@ export default function SignInPage() {
         ) : (
           <div className="rounded-xl border border-[var(--border-light)] bg-[var(--bg-input)] p-6 shadow-lg">
             <h2 className="text-lg font-semibold text-[var(--bg-primary)]">Data Entry Login</h2>
-            <p className="mt-1 text-xs text-[var(--text-muted)]">Enter the password shared by your shop admin</p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">Enter your Shop ID and password given by the admin</p>
             <form onSubmit={dataEntryLogin} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Shop ID</label>
+                <input
+                  type="text"
+                  value={deShopNumber}
+                  onChange={(e) => setDeShopNumber(e.target.value)}
+                  autoFocus
+                  required
+                  className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--bg-primary)]"
+                  placeholder="e.g. B-11"
+                />
+              </div>
               <div>
                 <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Password</label>
                 <input
                   type="password"
                   value={dePassword}
                   onChange={(e) => setDePassword(e.target.value)}
-                  autoFocus
                   required
                   className="w-full rounded-lg border border-[var(--border-input)] bg-[var(--bg-base)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--bg-primary)]"
                   placeholder="Enter password"
@@ -105,7 +112,7 @@ export default function SignInPage() {
               {deError && <p className="text-sm text-red-500">{deError}</p>}
               <button
                 type="submit"
-                disabled={deLoading || !dePassword}
+                disabled={deLoading || !deShopNumber || !dePassword}
                 className="w-full rounded-lg bg-[var(--bg-primary)] px-4 py-2.5 text-sm font-semibold text-[var(--text-on-primary)] disabled:opacity-50"
               >
                 {deLoading ? 'Logging in…' : 'Log In'}

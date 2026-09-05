@@ -147,6 +147,7 @@ async function ensureSchema() {
     )
   `;
   await sql`ALTER TABLE shops ADD COLUMN IF NOT EXISTS data_entry_password TEXT DEFAULT NULL`;
+  await sql`ALTER TABLE shops ADD COLUMN IF NOT EXISTS shop_number TEXT DEFAULT NULL`;
   await sql`
     CREATE TABLE IF NOT EXISTS shop_users (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -989,12 +990,25 @@ export function verifyPassword(password: string, stored: string): boolean {
   return hash === testHash;
 }
 
-// Set the data-entry password for a shop
-export async function setDataEntryPassword(shopId: string, password: string): Promise<void> {
+// Set the data-entry password and shop number for a shop
+export async function setDataEntryPassword(shopId: string, password: string, shopNumber?: string): Promise<void> {
   await ensureSchema();
   const sql = getSql();
   const hashed = hashPassword(password);
-  await sql`UPDATE shops SET data_entry_password = ${hashed} WHERE id = ${shopId}`;
+  if (shopNumber !== undefined) {
+    await sql`UPDATE shops SET data_entry_password = ${hashed}, shop_number = ${shopNumber.trim()} WHERE id = ${shopId}`;
+  } else {
+    await sql`UPDATE shops SET data_entry_password = ${hashed} WHERE id = ${shopId}`;
+  }
+}
+
+// Get the shop number for a shop
+export async function getShopNumber(shopId: string): Promise<string | null> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql`SELECT shop_number FROM shops WHERE id = ${shopId} LIMIT 1`;
+  if (rows.length === 0) return null;
+  return (rows[0] as any).shop_number || null;
 }
 
 // Check if data-entry password is set for a shop
@@ -1013,19 +1027,33 @@ export async function clearDataEntryPassword(shopId: string): Promise<void> {
   await sql`UPDATE shops SET data_entry_password = NULL WHERE id = ${shopId}`;
 }
 
-// Verify data-entry password and return shopId — used by login endpoint
-export async function verifyDataEntryPassword(password: string): Promise<string | null> {
+// Verify data-entry login by shop number + password, return shopId
+export async function verifyDataEntryPassword(shopNumber: string, password: string): Promise<string | null> {
   await ensureSchema();
   const sql = getSql();
-  // Fetch all shops with a data_entry_password and check each
-  // (shops are few, so this is fine)
-  const rows = await sql`SELECT id, data_entry_password FROM shops WHERE data_entry_password IS NOT NULL AND active = true`;
-  for (const r of rows as any[]) {
-    if (verifyPassword(password, r.data_entry_password)) {
-      return r.id as string;
-    }
-  }
-  return null;
+  // Find the shop by shop_number (case-insensitive, trimmed)
+  const rows = await sql`
+    SELECT id, data_entry_password FROM shops
+    WHERE LOWER(TRIM(shop_number)) = LOWER(TRIM(${shopNumber}))
+    AND data_entry_password IS NOT NULL
+    AND active = true
+    LIMIT 1
+  `;
+  if (rows.length === 0) return null;
+  const shop = rows[0] as any;
+  if (!verifyPassword(password, shop.data_entry_password)) return null;
+  return shop.id as string;
+}
+
+// Verify data-entry password for a specific shopId (used by change-password)
+export async function verifyDataEntryPasswordForShop(shopId: string, password: string): Promise<boolean> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = await sql`SELECT data_entry_password FROM shops WHERE id = ${shopId} LIMIT 1`;
+  if (rows.length === 0) return false;
+  const stored = (rows[0] as any).data_entry_password;
+  if (!stored) return false;
+  return verifyPassword(password, stored);
 }
 
 export async function getAllShops(): Promise<any[]> {

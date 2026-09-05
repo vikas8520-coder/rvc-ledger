@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireShopAuth, AuthError } from '@/lib/auth';
-import { setDataEntryPassword, verifyDataEntryPassword } from '@/lib/db';
+import { setDataEntryPassword, verifyDataEntryPasswordForShop } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,13 +21,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'New password must be at least 4 characters' }, { status: 400 });
     }
 
-    // Verify current password
-    const shopId = await verifyDataEntryPassword(currentPassword);
-    if (!shopId || shopId !== auth.shopId) {
+    // Verify current password against this shop's stored hash
+    const ok = await verifyDataEntryPasswordForShop(auth.shopId!, currentPassword);
+    if (!ok) {
       return NextResponse.json({ error: 'Current password is incorrect' }, { status: 401 });
     }
 
-    // Set new password
+    // Set new password (preserve existing shop_number)
     await setDataEntryPassword(auth.shopId!, newPassword);
     return NextResponse.json({ success: true });
   } catch (e: any) {

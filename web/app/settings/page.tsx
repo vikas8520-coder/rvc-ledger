@@ -55,6 +55,9 @@ export default function SettingsPage() {
   const [deStatus, setDeStatus] = useState<'idle' | 'creating' | 'created' | 'changing' | 'changed' | 'deleting' | 'error'>('idle');
   const [dePassword, setDePassword] = useState('');
   const [deError, setDeError] = useState('');
+  const [deShopNumber, setDeShopNumber] = useState('');
+  const [deNewPassword, setDeNewPassword] = useState('');
+  const [deExistingShopNumber, setDeExistingShopNumber] = useState('');
 
   // Data entry user self-service password change
   const [deCurrentPw, setDeCurrentPw] = useState('');
@@ -103,19 +106,34 @@ export default function SettingsPage() {
   const fetchDeAccount = () => {
     fetch('/api/data-entry-account')
       .then((r) => r.json())
-      .then((d) => setDeExists(!!d.exists))
+      .then((d) => {
+        setDeExists(!!d.exists);
+        if (d.shopNumber) setDeExistingShopNumber(d.shopNumber);
+      })
       .catch(() => {});
   };
 
   const createDeAccount = async () => {
+    if (!deShopNumber.trim() || !deNewPassword.trim()) {
+      setDeError('Shop number and password are both required');
+      setDeStatus('error');
+      return;
+    }
     setDeStatus('creating');
     setDeError('');
     try {
-      const res = await fetch('/api/data-entry-account', { method: 'POST' });
+      const res = await fetch('/api/data-entry-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shopNumber: deShopNumber.trim(), password: deNewPassword.trim() }),
+      });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || `Failed (HTTP ${res.status})`);
       setDePassword(d.password);
+      setDeExistingShopNumber(d.shopNumber);
       setDeStatus('created');
+      setDeShopNumber('');
+      setDeNewPassword('');
       fetchDeAccount();
     } catch (e: any) {
       const msg = e?.message || String(e) || 'Failed to create';
@@ -125,14 +143,26 @@ export default function SettingsPage() {
   };
 
   const changeDePassword = async () => {
+    if (!deShopNumber.trim() || !deNewPassword.trim()) {
+      setDeError('Shop number and new password are both required');
+      setDeStatus('error');
+      return;
+    }
     setDeStatus('changing');
     setDeError('');
     try {
-      const res = await fetch('/api/data-entry-account', { method: 'PATCH' });
+      const res = await fetch('/api/data-entry-account', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shopNumber: deShopNumber.trim(), password: deNewPassword.trim() }),
+      });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Failed to change password');
       setDePassword(d.password);
+      setDeExistingShopNumber(d.shopNumber);
       setDeStatus('changed');
+      setDeShopNumber('');
+      setDeNewPassword('');
     } catch (e: any) {
       setDeError(e.message);
       setDeStatus('error');
@@ -440,71 +470,110 @@ export default function SettingsPage() {
         <section className="rounded-lg bg-[var(--bg-card)] p-4">
           <h2 className="text-sm font-semibold">Data Entry Profile</h2>
           <p className="mt-1 text-xs text-[var(--text-faint)]">
-            Create a shared password for employees. They can only access Data Entry, Print, and Payment.
+            Set a Shop ID (e.g. B-11) and password. Share both with your employee — they log in with these on the Data Entry Login tab.
           </p>
 
           <div className="mt-3 space-y-3">
-            {/* No password set yet */}
-            {!deExists && deStatus !== 'creating' && (
-              <button
-                onClick={createDeAccount}
-                className="rounded-md bg-[var(--bg-primary)] px-4 py-2 text-sm font-semibold text-[var(--text-on-primary)]"
-              >
-                Create Data Entry Profile
-              </button>
-            )}
-
-            {deStatus === 'creating' && (
-              <p className="text-xs text-[var(--text-muted)]">Creating…</p>
-            )}
-
-            {deStatus === 'error' && deError && (
-              <p className="text-xs text-red-500">✗ {deError}</p>
-            )}
-
-            {/* Password set — show it */}
+            {/* Existing account info */}
             {deExists && (
               <div className="rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] p-3">
-                <p className="text-xs text-[var(--text-muted)]">Login URL:</p>
-                <p className="text-sm font-medium break-all">
-                  {typeof window !== 'undefined' ? `${window.location.origin}/data-entry-login` : '/data-entry-login'}
+                <p className="text-xs text-[var(--text-muted)]">Current Shop ID:</p>
+                <p className="text-sm font-medium font-mono break-all">{deExistingShopNumber || '(not set)'}</p>
+                <p className="mt-2 text-[11px] text-[var(--text-faint)]">
+                  The data entry person uses this Shop ID + the password you set to log in.
                 </p>
-
-                {dePassword && (
-                  <>
-                    <p className="mt-2 text-xs text-[var(--text-muted)]">Password:</p>
-                    <p className="text-sm font-medium font-mono break-all">{dePassword}</p>
-                    <p className="mt-2 text-[11px] text-[var(--text-faint)]">
-                      Share this URL and password with your employee. They don't need an email — just the password.
-                    </p>
-                  </>
-                )}
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    onClick={changeDePassword}
-                    disabled={deStatus === 'changing'}
-                    className="rounded-md bg-[var(--bg-secondary)] px-3 py-1.5 text-xs font-semibold text-[var(--text-on-primary)] disabled:opacity-50"
-                  >
-                    {deStatus === 'changing' ? 'Generating…' : 'Reset Password'}
-                  </button>
+                <div className="mt-3">
                   <button
                     onClick={deleteDeAccount}
                     disabled={deStatus === 'deleting'}
                     className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-600 disabled:opacity-50"
                   >
-                    {deStatus === 'deleting' ? 'Deleting…' : 'Remove Password'}
+                    {deStatus === 'deleting' ? 'Removing…' : 'Remove Data Entry Access'}
                   </button>
                 </div>
               </div>
             )}
 
-            {deStatus === 'changed' && dePassword && (
-              <p className="text-xs text-[var(--bg-success)]">
-                ✓ New password: <span className="font-mono">{dePassword}</span>
-              </p>
+            {/* Shop number + password input form (for create or change) */}
+            <div className="rounded-md border border-[var(--border-input)] bg-[var(--bg-base)] p-3 space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">
+                  Shop ID {deExists ? '(update)' : ''}
+                </label>
+                <input
+                  type="text"
+                  value={deShopNumber}
+                  onChange={(e) => setDeShopNumber(e.target.value)}
+                  className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2 text-sm"
+                  placeholder="e.g. B-11"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">
+                  Password {deExists ? '(new)' : '(min 4 chars)'}
+                </label>
+                <input
+                  type="text"
+                  value={deNewPassword}
+                  onChange={(e) => setDeNewPassword(e.target.value)}
+                  className="w-full rounded-md border border-[var(--border-input)] bg-[var(--bg-input)] px-3 py-2 text-sm font-mono"
+                  placeholder="Enter password"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {!deExists ? (
+                  <button
+                    onClick={createDeAccount}
+                    disabled={deStatus === 'creating' || !deShopNumber.trim() || !deNewPassword.trim()}
+                    className="rounded-md bg-[var(--bg-primary)] px-4 py-2 text-sm font-semibold text-[var(--text-on-primary)] disabled:opacity-50"
+                  >
+                    {deStatus === 'creating' ? 'Creating…' : 'Create Data Entry Profile'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={changeDePassword}
+                    disabled={deStatus === 'changing' || !deShopNumber.trim() || !deNewPassword.trim()}
+                    className="rounded-md bg-[var(--bg-secondary)] px-4 py-2 text-sm font-semibold text-[var(--text-on-primary)] disabled:opacity-50"
+                  >
+                    {deStatus === 'changing' ? 'Updating…' : 'Update Shop ID / Password'}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Success message after create/change */}
+            {deStatus === 'created' && dePassword && (
+              <div className="rounded-md border border-green-300 bg-green-50 p-3 dark:bg-green-950/20">
+                <p className="text-xs font-semibold text-green-700 dark:text-green-400">
+                  ✓ Data Entry profile created!
+                </p>
+                <p className="mt-1 text-xs text-[var(--text-muted)]">
+                  Shop ID: <span className="font-mono font-medium">{deExistingShopNumber}</span>
+                </p>
+                <p className="text-xs text-[var(--text-muted)]">
+                  Password: <span className="font-mono font-medium">{dePassword}</span>
+                </p>
+                <p className="mt-1 text-[11px] text-[var(--text-faint)]">
+                  Share this Shop ID and password with your employee.
+                </p>
+              </div>
             )}
-            {deError && (
+
+            {deStatus === 'changed' && dePassword && (
+              <div className="rounded-md border border-green-300 bg-green-50 p-3 dark:bg-green-950/20">
+                <p className="text-xs font-semibold text-green-700 dark:text-green-400">
+                  ✓ Data Entry profile updated!
+                </p>
+                <p className="mt-1 text-xs text-[var(--text-muted)]">
+                  Shop ID: <span className="font-mono font-medium">{deExistingShopNumber}</span>
+                </p>
+                <p className="text-xs text-[var(--text-muted)]">
+                  Password: <span className="font-mono font-medium">{dePassword}</span>
+                </p>
+              </div>
+            )}
+
+            {deStatus === 'error' && deError && (
               <p className="text-xs text-red-500">✗ {deError}</p>
             )}
           </div>
