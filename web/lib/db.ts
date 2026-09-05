@@ -2157,11 +2157,99 @@ export async function deleteWastage(shopId: string, id: string): Promise<void> {
 
 /* ---- Item catalog ---- */
 
+// Default vegetable catalog — seeded into the database for every shop.
+// Each entry: English name, Telugu name, Hindi name, and known aliases.
+const DEFAULT_VEGETABLES: { name: string; telugu: string; hindi: string; aliases: string[] }[] = [
+  { name: 'Tomato', telugu: 'టమాటో', hindi: 'टमाटर', aliases: ['tomata', 'tamata', 'tamatar', 'tamaatar'] },
+  { name: 'Onion', telugu: 'ఉల్లిపాయ', hindi: 'प्याज़', aliases: ['ulli', 'ullipaya', 'pyaz', 'pyaaj', 'pyaaz'] },
+  { name: 'Potato', telugu: 'ఆలుగడ్డ', hindi: 'आलू', aliases: ['aloo', 'aaloo', 'aalu', 'alugadda', 'bangaladumpa'] },
+  { name: 'Okra', telugu: 'బెండకాయ', hindi: 'भिंडी', aliases: ['bendi', 'bendakaya', 'bhindi', 'bhendi'] },
+  { name: 'Chili', telugu: 'మిర్చి', hindi: 'मिर्च', aliases: ['mirchi', 'mirapakaya', 'mirch'] },
+  { name: 'Green chili', telugu: '', hindi: 'हरी मिर्च', aliases: ['harimirch'] },
+  { name: 'Red chili', telugu: '', hindi: 'लाल मिर्च', aliases: ['lalmirch'] },
+  { name: 'Spinach', telugu: 'పాలకూర', hindi: 'पालक', aliases: ['palakura', 'palak', 'bachchali'] },
+  { name: 'Coriander', telugu: 'కొత్తిమీర', hindi: 'धनिया', aliases: ['kothimeera', 'kothimir', 'kothimira', 'dhaniya', 'dhania'] },
+  { name: 'Mint', telugu: 'పుదీనా', hindi: 'मेथी', aliases: ['pudeena', 'pudina'] },
+  { name: 'Curry leaves', telugu: 'కరివేపాకు', hindi: '', aliases: ['karivepak', 'karivepaku'] },
+  { name: 'Fenugreek leaves', telugu: 'మెంతికూర', hindi: 'मेथी', aliases: ['methi', 'mentikura'] },
+  { name: 'Roselle leaves', telugu: 'గోంగూర', hindi: '', aliases: ['gongura', 'puntikura'] },
+  { name: 'Amaranthus', telugu: 'తొటకూర', hindi: '', aliases: ['thotakura', 'chukkakura', 'amaranthus'] },
+  { name: 'Water amaranth', telugu: 'పొన్నగంటి', hindi: '', aliases: ['ponnaganti'] },
+  { name: 'Yellow cucumber', telugu: 'దోసకాయ', hindi: '', aliases: ['dosakaya', 'dosayaya', 'dosaaya'] },
+  { name: 'Ridge gourd', telugu: 'బీరకాయ', hindi: 'तोरई', aliases: ['beerakaya', 'torai', 'tori', 'turai'] },
+  { name: 'Bottle gourd', telugu: 'సొరకాయ', hindi: 'लौकी', aliases: ['sorakaya', 'lauki', 'loki', 'gheeya'] },
+  { name: 'Ash gourd', telugu: 'ఆనపకాయ', hindi: '', aliases: ['anapakaya', 'gummadikaya'] },
+  { name: 'Bitter gourd', telugu: 'కాకరకాయ', hindi: 'करेला', aliases: ['kakarkaya', 'karela'] },
+  { name: 'Pumpkin', telugu: '', hindi: 'कद्दू', aliases: ['kaddu'] },
+  { name: 'Mushroom', telugu: 'మష్రూం', hindi: 'मशरूम', aliases: ['mashroom'] },
+  { name: 'Sweet potato', telugu: 'చనగడ్డ', hindi: '', aliases: ['chanagadda', 'chagadda'] },
+  { name: 'Ginger', telugu: 'అల్లం', hindi: 'अदरक', aliases: ['allam', 'adrak', 'adarak'] },
+  { name: 'Garlic', telugu: 'వెల్లుల్లి', hindi: 'लहसुन', aliases: ['vellulli', 'lahsun', 'lehsun'] },
+  { name: 'Cabbage', telugu: 'క్యాబేజీ', hindi: 'पत्तागोभी', aliases: ['cabbage', 'pattagobhi'] },
+  { name: 'Cauliflower', telugu: 'కాలీఫ్లవర్', hindi: 'फूलगोभी', aliases: ['cauliflower', 'gobhi', 'phoolgobhi'] },
+  { name: 'Carrot', telugu: 'క్యారెట్', hindi: 'गाजर', aliases: ['carrot', 'gajar', 'gaajar'] },
+  { name: 'Beans', telugu: 'బీన్స్', hindi: '', aliases: ['beans'] },
+  { name: 'Flat beans', telugu: 'చిక్కుడు', hindi: '', aliases: ['chikkudu', 'chikkudukaya'] },
+  { name: 'Beetroot', telugu: 'బీట్రూట్', hindi: 'चुकंदर', aliases: ['beetroot', 'chukandar', 'chukandhar'] },
+  { name: 'Brinjal', telugu: 'వంకాయ', hindi: 'बैंगन', aliases: ['brinjal', 'vankaya', 'baingan'] },
+  { name: 'Capsicum', telugu: 'కాప్సికమ్', hindi: 'शिमला मिर्च', aliases: ['capsicum', 'shimlamirch'] },
+  { name: 'Drumstick', telugu: 'మునగాకు', hindi: '', aliases: ['drumstick', 'munagakaya'] },
+  { name: 'Cucumber', telugu: '', hindi: 'खीरा', aliases: ['cucumber', 'kheera', 'khira'] },
+  { name: 'Radish', telugu: 'ములంగి', hindi: 'मूली', aliases: ['radish', 'mullangi', 'mooli', 'muli', 'moolee', 'mullakada'] },
+  { name: 'Peas', telugu: 'బటానీలు', hindi: 'मटर', aliases: ['matar'] },
+  { name: 'Turnip', telugu: '', hindi: 'शलजम', aliases: ['shaljam', 'shalgam', 'soja'] },
+  { name: 'Jackfruit', telugu: 'పనసపండు', hindi: 'कथल', aliases: ['kathal', 'panasapandu'] },
+  { name: 'Taro root', telugu: 'చేమదుంప', hindi: 'अरबी', aliases: ['arbi', 'chemadumpa'] },
+  { name: 'Pointed gourd', telugu: 'ముక్కల దోసకాయ', hindi: 'परवल', aliases: ['parval'] },
+  { name: 'Tinda', telugu: '', hindi: 'टिंडा', aliases: ['tinda'] },
+];
+
+/**
+ * Seed the default vegetable catalog into the database for a shop.
+ * Idempotent: skips items that already exist (matched by name).
+ * Returns the count of newly inserted items.
+ */
+export async function seedCatalog(shopId: string): Promise<number> {
+  if (!isDbConfigured()) return 0;
+  await ensureSchema();
+  const sql = getSql();
+
+  // Check which items already exist
+  const existing = await sql`SELECT name FROM catalog_items WHERE shop_id = ${shopId}`;
+  const existingNames = new Set((existing as any[]).map((r) => (r.name as string).toLowerCase()));
+
+  let inserted = 0;
+  for (const veg of DEFAULT_VEGETABLES) {
+    if (existingNames.has(veg.name.toLowerCase())) continue;
+
+    const [row] = await sql`
+      INSERT INTO catalog_items (name, telugu_name, hindi_name, active, shop_id)
+      VALUES (${veg.name}, ${veg.telugu || null}, ${veg.hindi || null}, true, ${shopId})
+      RETURNING id
+    `;
+    if (!row) continue;
+    const itemId = (row as any).id as string;
+
+    for (const alias of veg.aliases) {
+      await sql`INSERT INTO catalog_aliases (item_id, alias, shop_id) VALUES (${itemId}, ${alias}, ${shopId}) ON CONFLICT DO NOTHING`;
+    }
+    inserted++;
+  }
+
+  return inserted;
+}
+
 export async function getCatalog(shopId: string): Promise<CatalogItem[]> {
   if (!isDbConfigured()) return [];
   await ensureSchema();
   const sql = getSql();
-  const items = await sql`SELECT * FROM catalog_items WHERE shop_id = ${shopId} ORDER BY name`;
+  let items = await sql`SELECT * FROM catalog_items WHERE shop_id = ${shopId} ORDER BY name`;
+
+  // Auto-seed the default vegetable catalog if empty
+  if (items.length === 0) {
+    await seedCatalog(shopId);
+    items = await sql`SELECT * FROM catalog_items WHERE shop_id = ${shopId} ORDER BY name`;
+  }
   const aliases = await sql`SELECT * FROM catalog_aliases WHERE shop_id = ${shopId}`;
 
   const aliasesByItem = new Map<string, string[]>();
