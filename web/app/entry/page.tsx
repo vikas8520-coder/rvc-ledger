@@ -1543,8 +1543,6 @@ export default function EntryPage() {
                 onClick={() => setActiveTabId(block.id)}
                 onPointerDown={(e) => {
                   // Hidden: long-press (600ms) the farmer tab name to open commission editor
-                  // Only available to admin profile — data entry users cannot access this
-                  if (userProfile !== 'owner') return;
                   const name = block.farmerName.trim();
                   if (!name) return;
                   const target = e.currentTarget;
@@ -2105,9 +2103,9 @@ export default function EntryPage() {
                 <button
                   type="button"
                   className="text-[10px] text-[var(--text-muted)] text-left hover:text-[var(--text-primary)]"
-                  onClick={() => userProfile === 'owner' && setShowHamaliBreakdown(showHamaliBreakdown === block.id ? null : block.id)}
+                  onClick={() => setShowHamaliBreakdown(showHamaliBreakdown === block.id ? null : block.id)}
                 >
-                  {t('hamali')} {userProfile === 'owner' && tot.hamaliBreakdown.length > 0 && <span className="text-[var(--text-faint)]">ⓘ</span>}
+                  {t('hamali')} {tot.hamaliBreakdown.length > 0 && <span className="text-[var(--text-faint)]">ⓘ</span>}
                 </button>
                 <input
                   type="text"
