@@ -175,6 +175,11 @@ async function ensureSchema() {
   // so multiple shops can each have their own "Tomato", "Onion", etc.
   await sql`ALTER TABLE catalog_items DROP CONSTRAINT IF EXISTS catalog_items_name_key`;
   await sql`DROP INDEX IF EXISTS catalog_items_name_key`;
+  // Deduplicate: if multiple rows have the same (shop_id, name), keep the newest
+  await sql`
+    DELETE FROM catalog_items a USING catalog_items b
+    WHERE a.shop_id IS NOT NULL AND a.shop_id = b.shop_id AND a.name = b.name AND a.id < b.id
+  `;
   await sql`CREATE UNIQUE INDEX IF NOT EXISTS catalog_items_shop_id_name_key ON catalog_items (shop_id, name)`;
   await sql`ALTER TABLE catalog_aliases ADD COLUMN IF NOT EXISTS shop_id UUID`;
   await sql`ALTER TABLE expenses ADD COLUMN IF NOT EXISTS shop_id UUID`;
@@ -861,16 +866,33 @@ function normalizeSeedItems(raw: unknown): Customer['txns'][number]['items'] {
 export async function ensureDefaultShop(): Promise<string> {
   await ensureSchema();
   const sql = getSql();
-  const existing = await sql`SELECT id FROM shops LIMIT 1`;
+  // Prefer the shop that has data (suppliers, customers, or a data-entry password)
+  // so we don't accidentally create/link to an empty duplicate shop.
+  const withData = await sql`
+    SELECT s.id FROM shops s
+    LEFT JOIN suppliers sup ON sup.shop_id = s.id
+    LEFT JOIN customers c ON c.shop_id = s.id
+    WHERE s.active = true
+      AND (sup.id IS NOT NULL OR c.id IS NOT NULL OR s.data_entry_password IS NOT NULL)
+    GROUP BY s.id
+    ORDER BY COUNT(sup.id) + COUNT(c.id) DESC
+    LIMIT 1
+  `;
   let shopId: string;
-  if (existing.length > 0) {
-    shopId = (existing[0] as any).id as string;
+  if (withData.length > 0) {
+    shopId = (withData[0] as any).id as string;
   } else {
-    const [row] = await sql`
-      INSERT INTO shops (name) VALUES ('RVC Vegetable Shop') RETURNING id
-    `;
-    if (!row) throw new Error('Could not create default shop');
-    shopId = (row as any).id as string;
+    // No shop with data — use any existing shop, or create one
+    const existing = await sql`SELECT id FROM shops WHERE active = true ORDER BY created_at LIMIT 1`;
+    if (existing.length > 0) {
+      shopId = (existing[0] as any).id as string;
+    } else {
+      const [row] = await sql`
+        INSERT INTO shops (name) VALUES ('RVC Vegetable Shop') RETURNING id
+      `;
+      if (!row) throw new Error('Could not create default shop');
+      shopId = (row as any).id as string;
+    }
   }
   await sql`UPDATE customers SET shop_id = ${shopId} WHERE shop_id IS NULL`;
   await sql`UPDATE transactions SET shop_id = ${shopId} WHERE shop_id IS NULL`;
@@ -930,6 +952,23 @@ export async function getOrCreateShop(
       const defaultShopId = await ensureDefaultShop();
       await sql`UPDATE shop_users SET shop_id = ${defaultShopId} WHERE clerk_user_id = ${clerkUserId}`;
       return { shopId: defaultShopId, role: (r.role as string) ?? 'owner', profile: (r.profile as string) ?? 'owner' };
+    }
+    // Check if the user's current shop has any data. If not, re-link to
+    // the shop that does (handles the case where a duplicate empty shop
+    // was created and the user got stuck on it).
+    const dataCheck = await sql`
+      SELECT
+        (SELECT COUNT(*) FROM suppliers WHERE shop_id = ${shopId}) as supplier_count,
+        (SELECT COUNT(*) FROM customers WHERE shop_id = ${shopId}) as customer_count
+    `;
+    const counts = dataCheck[0] as any;
+    const hasData = (Number(counts?.supplier_count) + Number(counts?.customer_count)) > 0;
+    if (!hasData) {
+      const defaultShopId = await ensureDefaultShop();
+      if (defaultShopId !== shopId) {
+        await sql`UPDATE shop_users SET shop_id = ${defaultShopId} WHERE clerk_user_id = ${clerkUserId}`;
+        return { shopId: defaultShopId, role: (r.role as string) ?? 'owner', profile: (r.profile as string) ?? 'owner' };
+      }
     }
     return {
       shopId,
