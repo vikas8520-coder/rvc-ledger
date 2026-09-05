@@ -2359,13 +2359,13 @@ export async function getCatalog(shopId: string): Promise<CatalogItem[]> {
   if (!isDbConfigured()) return [];
   await ensureSchema();
   const sql = getSql();
-  let items = await sql`SELECT * FROM catalog_items WHERE shop_id = ${shopId} ORDER BY name`;
 
-  // Auto-seed the default vegetable catalog if empty
-  if (items.length === 0) {
-    await seedCatalog(shopId);
-    items = await sql`SELECT * FROM catalog_items WHERE shop_id = ${shopId} ORDER BY name`;
-  }
+  // Always run seedCatalog — it's idempotent and only inserts missing items.
+  // This ensures new vegetables added to DEFAULT_VEGETABLES show up on
+  // existing shops without needing a manual migration.
+  await seedCatalog(shopId);
+
+  const items = await sql`SELECT * FROM catalog_items WHERE shop_id = ${shopId} ORDER BY name`;
   const aliases = await sql`SELECT * FROM catalog_aliases WHERE shop_id = ${shopId}`;
 
   const aliasesByItem = new Map<string, string[]>();
