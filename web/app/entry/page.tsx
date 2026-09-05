@@ -334,6 +334,10 @@ export default function EntryPage() {
     fetch('/api/suppliers')
       .then((r) => r.json())
       .then((d) => {
+        if (d.error) {
+          console.error('Entry: /api/suppliers error:', d.error);
+          return;
+        }
         const sups = d.suppliers || [];
         setFarmerNames(sups.map((s: { name: string }) => s.name).sort());
         const phoneMap: Record<string, string> = {};
@@ -348,7 +352,7 @@ export default function EntryPage() {
         setFarmerCommissions(commMap);
         setFarmerIds(idMap);
       })
-      .catch(() => {});
+      .catch((e) => console.error('Entry: suppliers fetch failed:', e));
     fetch('/api/settings')
       .then((r) => r.json())
       .then((d) => {
