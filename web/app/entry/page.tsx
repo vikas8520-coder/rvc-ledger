@@ -531,6 +531,8 @@ export default function EntryPage() {
         saleByCommodity.set(key, cur);
       }
       // For each lot, calculate hamali using lot stock data or fall back to sale line data
+      // Only the SELLER share is deducted from the farmer's gross.
+      // The PURCHASER share is paid by the buyer — not RVC's expense.
       let autoHamali = 0;
       const coveredCommodities = new Set<string>();
       for (const lot of block.lots) {
@@ -545,16 +547,16 @@ export default function EntryPage() {
         const weight = lotKg > 0 ? lotKg : (saleData?.weightKg || null);
         if (bags <= 0 && (weight == null || weight <= 0)) continue;
         const calc = calculateHamali(lot.commodity, weight, hamaliRates, bags > 0 ? bags : 1);
-        autoHamali += calc.total;
-        hamaliBreakdown.push({ commodity: lot.commodity, bags, weightKg: weight, perBag: calc.total / (bags > 0 ? bags : 1), total: calc.total, label: calc.label });
+        autoHamali += calc.seller;
+        hamaliBreakdown.push({ commodity: lot.commodity, bags, weightKg: weight, perBag: calc.seller / (bags > 0 ? bags : 1), total: calc.seller, label: calc.label });
       }
       // Handle commodities that only exist on sale lines (no lot stock row with data)
       for (const [key, data] of saleByCommodity) {
         if (coveredCommodities.has(key)) continue;
         if (data.bags <= 0 && data.weightKg <= 0) continue;
         const calc = calculateHamali(data.commodity, data.weightKg > 0 ? data.weightKg : null, hamaliRates, data.bags > 0 ? data.bags : 1);
-        autoHamali += calc.total;
-        hamaliBreakdown.push({ commodity: data.commodity, bags: data.bags, weightKg: data.weightKg > 0 ? data.weightKg : null, perBag: calc.total / (data.bags > 0 ? data.bags : 1), total: calc.total, label: calc.label });
+        autoHamali += calc.seller;
+        hamaliBreakdown.push({ commodity: data.commodity, bags: data.bags, weightKg: data.weightKg > 0 ? data.weightKg : null, perBag: calc.seller / (data.bags > 0 ? data.bags : 1), total: calc.seller, label: calc.label });
       }
       hamali = autoHamali;
     }
@@ -2118,7 +2120,7 @@ export default function EntryPage() {
                 {showHamaliBreakdown === block.id && tot.hamaliBreakdown.length > 0 && (
                   <div className="absolute top-full left-0 z-20 mt-1 w-64 rounded-lg border border-[var(--border-card)] bg-[var(--bg-card)] p-2 shadow-lg">
                     <div className="mb-1 flex items-center justify-between">
-                      <span className="text-[10px] font-semibold text-[var(--text-primary)]">Hamali Breakdown</span>
+                      <span className="text-[10px] font-semibold text-[var(--text-primary)]">Hamali Breakdown (Seller Share)</span>
                       <button type="button" className="text-[10px] text-[var(--text-muted)]" onClick={() => setShowHamaliBreakdown(null)}>✕</button>
                     </div>
                     {tot.hamaliBreakdown.map((h, i) => (
