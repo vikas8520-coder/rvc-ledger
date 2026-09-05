@@ -338,6 +338,7 @@ export default function EntryPage() {
           console.error('Entry: /api/suppliers error:', d.error);
           return;
         }
+        console.log('Entry: suppliers loaded', { shopId: d.shopId, profile: d.profile, count: (d.suppliers || []).length });
         const sups = d.suppliers || [];
         setFarmerNames(sups.map((s: { name: string }) => s.name).sort());
         const phoneMap: Record<string, string> = {};

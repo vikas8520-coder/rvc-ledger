@@ -923,13 +923,27 @@ export async function getOrCreateShop(
   `;
   if (rows.length > 0) {
     const r = rows[0] as any;
+    const shopId = (r.shop_id as string) ?? null;
+    // If the user exists but has no shop_id, link them to the default shop
+    if (!shopId) {
+      const defaultShopId = await ensureDefaultShop();
+      await sql`UPDATE shop_users SET shop_id = ${defaultShopId} WHERE clerk_user_id = ${clerkUserId}`;
+      return { shopId: defaultShopId, role: (r.role as string) ?? 'owner', profile: (r.profile as string) ?? 'owner' };
+    }
     return {
-      shopId: (r.shop_id as string) ?? null,
+      shopId,
       role: (r.role as string) ?? 'owner',
       profile: (r.profile as string) ?? 'owner',
     };
   }
-  return { shopId: null, role: 'owner', profile: 'owner' };
+  // New Clerk user — link them to the default shop so they share data
+  // with data-entry users on the same shop
+  const defaultShopId = await ensureDefaultShop();
+  await sql`
+    INSERT INTO shop_users (clerk_user_id, shop_id, role, profile, name, email)
+    VALUES (${clerkUserId}, ${defaultShopId}, 'owner', 'owner', ${name || null}, ${email || null})
+  `;
+  return { shopId: defaultShopId, role: 'owner', profile: 'owner' };
 }
 
 export async function createShop(

@@ -8,7 +8,7 @@ export async function GET() {
   try {
     const auth = await requireShopAuth();
     const suppliers = await getSuppliers(auth.shopId!);
-    return NextResponse.json({ suppliers });
+    return NextResponse.json({ suppliers, shopId: auth.shopId, profile: auth.profile });
   } catch (err: any) {
     if (err instanceof AuthError) return NextResponse.json({ error: err.message }, { status: err.status });
     console.error('Get suppliers error:', err);
