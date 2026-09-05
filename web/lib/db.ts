@@ -94,13 +94,15 @@ async function ensureSchema() {
   await sql`
     CREATE TABLE IF NOT EXISTS catalog_items (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      name TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      shop_id UUID,
       default_unit TEXT,
       default_sell_price NUMERIC(12,2),
       telugu_name TEXT,
       hindi_name TEXT,
       active BOOLEAN DEFAULT true,
-      created_at TIMESTAMPTZ DEFAULT now()
+      created_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE (shop_id, name)
     )
   `;
   await sql`
@@ -168,6 +170,11 @@ async function ensureSchema() {
   await sql`ALTER TABLE supplier_payments ADD COLUMN IF NOT EXISTS shop_id UUID`;
   await sql`ALTER TABLE wastage ADD COLUMN IF NOT EXISTS shop_id UUID`;
   await sql`ALTER TABLE catalog_items ADD COLUMN IF NOT EXISTS shop_id UUID`;
+  // Migrate from global UNIQUE(name) to tenant-scoped UNIQUE(shop_id, name)
+  // so multiple shops can each have their own "Tomato", "Onion", etc.
+  await sql`ALTER TABLE catalog_items DROP CONSTRAINT IF EXISTS catalog_items_name_key`;
+  await sql`DROP INDEX IF EXISTS catalog_items_name_key`;
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS catalog_items_shop_id_name_key ON catalog_items (shop_id, name)`;
   await sql`ALTER TABLE catalog_aliases ADD COLUMN IF NOT EXISTS shop_id UUID`;
   await sql`ALTER TABLE expenses ADD COLUMN IF NOT EXISTS shop_id UUID`;
   await sql`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS shop_id UUID`;
@@ -2298,7 +2305,6 @@ const DEFAULT_VEGETABLES: { name: string; telugu: string; hindi: string; aliases
   { name: 'Artichoke', telugu: '', hindi: 'आर्टिचोक', aliases: ['artichoke'] },
   { name: 'Leek', telugu: '', hindi: 'लीक', aliases: ['leek'] },
   { name: 'Fennel bulb', telugu: '', hindi: 'सौंफ', aliases: ['fennel', 'saunf'] },
-  { name: 'Kohlrabi', telugu: '', hindi: 'गांठ गोभी', aliases: ['kohlrabi', 'ganthgobhi'] },
   { name: 'Endive', telugu: '', hindi: '', aliases: ['endive'] },
   { name: 'Radicchio', telugu: '', hindi: '', aliases: ['radicchio'] },
   { name: 'Arugula', telugu: '', hindi: '', aliases: ['arugula', 'rocket', 'roquette'] },
@@ -2322,25 +2328,20 @@ const DEFAULT_VEGETABLES: { name: string; telugu: string; hindi: string; aliases
 
 /**
  * Seed the default vegetable catalog into the database for a shop.
- * Idempotent: skips items that already exist (matched by name).
- * Returns the count of newly inserted items.
+ * Idempotent and race-safe: uses ON CONFLICT (shop_id, name) DO NOTHING
+ * so concurrent calls won't fail. Returns the count of newly inserted items.
  */
 export async function seedCatalog(shopId: string): Promise<number> {
   if (!isDbConfigured()) return 0;
   await ensureSchema();
   const sql = getSql();
 
-  // Check which items already exist
-  const existing = await sql`SELECT name FROM catalog_items WHERE shop_id = ${shopId}`;
-  const existingNames = new Set((existing as any[]).map((r) => (r.name as string).toLowerCase()));
-
   let inserted = 0;
   for (const veg of DEFAULT_VEGETABLES) {
-    if (existingNames.has(veg.name.toLowerCase())) continue;
-
     const [row] = await sql`
       INSERT INTO catalog_items (name, telugu_name, hindi_name, active, shop_id)
       VALUES (${veg.name}, ${veg.telugu || null}, ${veg.hindi || null}, true, ${shopId})
+      ON CONFLICT (shop_id, name) DO NOTHING
       RETURNING id
     `;
     if (!row) continue;
@@ -2410,6 +2411,12 @@ export async function saveCatalogItem(shopId: string, item: Omit<CatalogItem, 'i
     const [row] = await sql`
       INSERT INTO catalog_items (name, default_unit, default_sell_price, telugu_name, hindi_name, active, shop_id)
       VALUES (${item.name}, ${item.defaultUnit || null}, ${item.defaultSellPrice || null}, ${item.teluguName || null}, ${item.hindiName || null}, ${item.active}, ${shopId})
+      ON CONFLICT (shop_id, name) DO UPDATE SET
+        default_unit = EXCLUDED.default_unit,
+        default_sell_price = EXCLUDED.default_sell_price,
+        telugu_name = EXCLUDED.telugu_name,
+        hindi_name = EXCLUDED.hindi_name,
+        active = EXCLUDED.active
       RETURNING id
     `;
     if (!row) throw new Error('Could not insert catalog item');
@@ -2468,10 +2475,17 @@ export async function saveAlias(shopId: string, alias: string, itemName: string)
     const [row] = await sql`
       INSERT INTO catalog_items (name, active, shop_id)
       VALUES (${cleanName}, true, ${shopId})
+      ON CONFLICT (shop_id, name) DO NOTHING
       RETURNING id
     `;
-    if (!row) return;
-    itemId = (row as any).id;
+    if (!row) {
+      // Item was created by a concurrent request — fetch its id
+      const [existing2] = await sql`SELECT id FROM catalog_items WHERE name = ${cleanName} AND shop_id = ${shopId} LIMIT 1`;
+      if (!existing2) return;
+      itemId = (existing2 as any).id;
+    } else {
+      itemId = (row as any).id;
+    }
   }
 
   // Check if alias already exists
